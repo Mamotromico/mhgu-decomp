@@ -13,9 +13,9 @@ contract for automated work.
 ## What this project is
 
 A **decompilation** of *Monster Hunter Generations Ultimate* (Nintendo Switch). The
-objective is a matching, buildable C++ source tree: functions translated from the
-game's executable that compile to **byte-identical** machine code under the pinned
-toolchain.
+objective is a **clean-room reconstruction**: a matching, buildable C++ source tree whose
+functions, translated from the game's executable, compile to **byte-identical** machine
+code under the pinned toolchain (or as close as that toolchain allows).
 
 This is *not* a normal software project. The original binary is the single source of
 truth, and every change to translated C++ must be validated against it (see
@@ -26,13 +26,44 @@ truth, and every change to translated C++ must be validated against it (see
 ## Core principles
 
 1. **The binary is truth.** No "cleanup", refactor, or optimization is allowed if it
-   breaks byte-matching. Readability is secondary to matching the compiler's output.
+   breaks byte-matching.
 2. **Never invent behavior.** Every function must be traced back to the
    disassembly/decompiler output. Do not guess what a function "probably" does.
 3. **One function at a time.** Small, verifiable units. Prefer matching a single
    function over touching many.
 4. **Record findings.** When you discover something (compiler idiom, symbol naming,
    data layout), write it down here or in `docs/`.
+5. **Byte-match first, readability second.** Byte-matching is the standard, but the
+   project is realistic: some functions may only reach a *behaviour* match. Readability
+   is a deliberate second goal (this is a learning project too) and becomes the focus
+   once most functions match (target: ~90%). Output from automated tooling that
+   optimises only for a byte match is allowed to be unreadable, but must stay
+   distinguishable from human-reviewed, readability-improved code (see
+   [Generated vs. reviewed code](#generated-vs-reviewed-code)).
+
+## README is human-facing — flag agent edits
+
+`README.md` is the introduction and instructions for human developers, so it should be
+written (or at least thoroughly reviewed) by a person. Any content an agent/LLM writes or
+rewrites in `README.md` must be wrapped in the review markers `>🤖` (open) and `🤖<`
+(close) until a human reviews and adopts it, at which point the markers are removed. The
+markers mean "agent-authored, not yet human-reviewed". Pure removals need no marker — they
+show up in the diff.
+
+## Generated vs. reviewed code
+
+Two tiers of translated output exist and must not be confused:
+
+- **Generated (byte-match-first).** Produced by automated / LLM-assisted tooling whose
+  only requirement is a byte match. It may be unreadable; that is acceptable.
+- **Reviewed (readability-improved).** A human has reworked generated code to make it
+  understandable *while preserving the byte match*.
+
+The tiers must be **distinguishable** so a reader never mistakes generated code for
+deliberately-written code. The leading idea under consideration is to keep them in
+**separate folders** (a machine-generated tree vs. the curated tree) with tooling to
+migrate a function across once it is manually reviewed. **Not decided yet** — see the
+Open questions.
 
 ---
 
@@ -62,6 +93,9 @@ Byte-matching (and the prebuilt loader) depend on exact versions.
 | Ghidra SHA-256 | `b62e81a0390618466c019c60d8c2f796ced2509c4c1aea4a37644a77272cf99d` | Verified in the Dockerfile. |
 | Ghidra Switch Loader | `1.6.1-c600d05-Ghidra_12.1.2` | Tag format `<ver>-<commit>-Ghidra_<ver>` — commit-specific, pin the full tag. |
 | Loader SHA-256 | `0bc6374c11cb7a1275a0eda22184b9b2efe5a9a7e415cc29361c334966c1f477` | Verified in the Dockerfile. |
+| clang | `5.0.1` | De facto pin (reproduction stand-in); installed at `/opt/clang-5.0.1`, on `PATH`. |
+| clang tarball SHA-256 | `005f21861cd2953138df7cf511f1552ef7041bafb7cfc4b172264b7ff5fe09b4` | Verified in the Dockerfile. |
+| libtinfo5 | `6.1-1ubuntu1.18.04.1` | ncurses-5 ABI the pinned clang links against; from the Ubuntu 18.04 archive. |
 | Base image | `ubuntu:24.04` | Chosen for batteries-included apt; size is not a concern for a dev image. |
 
 ### Architecture (confirmed)
@@ -78,12 +112,9 @@ Two independent sources agree:
 This corroborates the [`Fexty12573/forge`](https://github.com/Fexty12573/forge) lead
 (devkitPro/devkitARM + `switch32.ld`). Do **not** assume the AArch64 SDK default.
 
-The extracted executable is `baserom/main.nso` (git-ignored), a verified `NSO0` image:
-SHA-256 `b3935415499549adaf4c0e89822831daa175cfd456a7990791c79be3997645ef`.
-
-> **Target = the latest title update**
-> (SHA-256 `876b8587c37a7df77c40b4553dd5d7dcd0f2a898b84ca66f8ab863efbfd98b02`). See
-> [Which title version](#compiler--runtime-phase-1--partially-resolved) below.
+The extracted executable is `baserom/main.nso` (git-ignored), a verified `NSO0` image —
+the **latest title update** (`b3935415…645ef`). Base `v0` is retained as
+`baserom/main.v0.nso` (`876b8587…d98b02`). See the target-version note below.
 
 Loader-built memory map (base `0x60000000`):
 
@@ -99,18 +130,27 @@ The loader also processes the ELF dynamic relocation metadata (`.rel.dyn` at
 `0x13F206C`, `.rel.plt`, `.init_array`, and a constructed `got` from `0x1838AE8` to
 `0x1848900`), which is the basis for the Phase 3 relocation/link check.
 
-### Compiler & runtime (Phase 1 — partially resolved)
+### Compiler & runtime (Phase 1 — resolved, de facto pin)
 
-The **exact compiler version** determines whether byte-matching is possible and how
-Phase 2 is pinned. Language and runtime are settled; the compiler version is not yet
-pinned empirically:
+The toolchain is settled to a **de facto pin**, not the vendor's true toolchain (that is a
+NintendoSDK build and is not obtainable):
 
 ```text
 Architecture:  AArch32 (32-bit ARM) — confirmed, ARM:LE:32:v8, base 0x60000000
 Language std:  C++17 (-std=c++1z) — confirmed (see below)
 Runtime/libc:  NintendoSDK 4.4.x (nn:: C++ API), libc++ (-stdlib=libc++)
-Compiler:      Clang-family, upstream — version NOT yet pinned.
-               Leading candidate: clang 3.9.1 (inference, not yet proven)
+Compiler:      clang 5.0.1 — DE FACTO pin (reproduction stand-in) + two hidden
+               backend flags; no stock configuration matches (best 5/7)
+Float:         VFP-only, NEON disabled — no auto-vectorisation in .text
+```
+
+**Build flags (the de facto pin):**
+
+```text
+clang -target armv8a-none-eabi -mfpu=vfpv4-d16 \
+      -O2 -fomit-frame-pointer -fPIC -fno-exceptions -fno-rtti \
+      -ffreestanding -std=c++1z \
+      -mllvm -pre-RA-sched=source -mllvm -hoist-cheap-insts=true
 ```
 
 **C++ is the target language.** Imports are the `nn::` C++ API in Itanium mangling, and
@@ -119,27 +159,52 @@ with C-style bodies; reach for C++ features (exceptions, templates, vtables) onl
 the original forced them.
 
 **Upstream Clang, not the proprietary NX fork.** Two *matching* Switch decomps build
-against stock Clang from `releases.llvm.org`: `MonsterDruide1/OdysseyDecomp` (Super Mario
-Odyssey) and `Nintendocustom/Lego-City-Undercover-Decompilation` (Lego City) both pin
-**clang 3.9.1** under a `MATCHING_HACK_NX_CLANG` define. `open-ead/sead` (the first-party
-C++ stdlib) also matches Switch code with upstream Clang. Only some SDK *internals* are
-known to resist stock Clang (`sbergeron42/ssbu-decomp`).
+against stock Clang from `releases.llvm.org` (`OdysseyDecomp` and
+`Lego-City-Undercover-Decompilation`, both clang 3.9.1); `open-ead/sead` also matches with
+upstream Clang. Only some SDK *internals* are known to resist stock Clang
+(`sbergeron42/ssbu-decomp`).
 
-**Candidate: clang 3.9.1.** SMO (2017) and Lego City Switch (2017) both resolved to it,
-and MHGU ships the same NintendoSDK 4.4.x runtime. This is **inference, not proof** — pin
-it by compiling a known leaf function with each candidate and byte-diffing (Phase 1
-completion task). Full evidence and method:
+**Compiler: clang 5.0.1 — de facto pin.** Seven reconstructed functions all byte-match
+under **5.0.1 with no `-mcpu`** plus two hidden backend flags. **No stock config matches
+all seven** — the best stock configuration reaches 5/7, and the two that tie fail
+*different* functions. The residual gap is two independent backend heuristics:
+
+- `find_entry`'s `uxtb` **hoisting** — the `MachineLICM` cheap-instruction register-pressure
+  gate → `-mllvm -hoist-cheap-insts=true`.
+- `new_b`'s loop-body **ordering** — the SelectionDAG (ISel) list scheduler's latency model
+  → `-mllvm -pre-RA-sched=source` (the divergence is already present at
+  `Before Expand ISel Pseudo-instructions`, not in the MachineScheduler).
+
+A stock compiler that differs from *every* stock configuration in **two** separate
+scheduling heuristics is positive evidence for a **non-stock/fork AArch32 backend** (the
+SSBU precedent). Both `-mllvm` flags are **hidden diagnostics, not real build settings**;
+they make our build emit what the original emitted. Because the real NintendoSDK toolchain
+is unobtainable, the project adopts **5.0.1 + both knobs** as a **de facto pin** until
+proven otherwise.
+
+**No `-mcpu`.** `-mcpu=cortex-a57` was copied from the AArch64 reference projects and is
+**wrong** for this 32-bit target. `-mtune` is inert in clang 5.0.1's ARM32 backend. Target
+SoC is the **Tegra X1 (T210, "Erista")** (`4×Cortex-A57 + 4×Cortex-A53`; A57 cluster only).
+Dropping `-mcpu` alone raises 5.0.x from 3/5 to 4/5 on the original corpus.
+
+**VFP-only, NEON off.** The real `.text` never auto-vectorises and enabling NEON
+(`-mfpu=neon-*`) breaks the match — the build must pass `-mfpu=vfpv4-d16`. `-O2`/`-O3` are
+indistinguishable on the corpus. Full evidence and method:
 [`docs/compiler-identification.md`](docs/compiler-identification.md).
+
+> **Running clang:** the devcontainer ships the pinned compiler at `/opt/clang-5.0.1`
+> (on `PATH`, so `clang`/`clang-5.0.1` resolve to it) with the `libtinfo.so.5` it needs.
+> Note `llvm-objdump` 3.9.1 mis-decodes some instructions and emits a byte-shifted
+> stream: **read code with `clang -S` or Ghidra.**
 
 > **SDK anchor:** `SdkAddon Ver.: 4.4.1 (v67371264)`, from the Program NCA header.
 
 **Target version: the latest title update (resolved).** We target the update build rather
-than base `v0`, because there is no
-compiler reason to prefer base — both report the identical `SdkAddon Ver.: 4.4.1
-(v67371264)`, and an aligned `.text` diff shows the update is an incremental patch over an
-otherwise-identical codebase (≈81% byte overlap; the differences are a handful of replaced
-blocks plus widespread small edits, mostly embedded-address churn from the section shift). Comparison and the `.text` diff
-verdict: [`docs/compiler-identification.md`](docs/compiler-identification.md).
+than base `v0`: both report the identical `SdkAddon Ver.: 4.4.1 (v67371264)`, and an
+aligned `.text` diff shows the update is an incremental patch over an otherwise-identical
+codebase (≈81% byte overlap), so the compiler gives no reason to prefer base. Locally
+`baserom/main.nso` **is the update** (`b3935415…`). See
+[`docs/compiler-identification.md`](docs/compiler-identification.md).
 
 ### Tooling implications of the AArch32 target
 
@@ -162,8 +227,11 @@ verdict: [`docs/compiler-identification.md`](docs/compiler-identification.md).
   truth for the toolchain.
 - The compiler/SDK is **pinned** — do not "upgrade" tooling without explicit
   approval; byte-matching depends on exact versions.
-- The cross-compiler is **deliberately absent** until Phase 1 identifies it. Do not
-  add a guessed toolchain.
+- The **compiler is installed**: the Dockerfile downloads the pinned clang 5.0.1
+  tarball (SHA-256 verified) to `/opt/clang-5.0.1` on `PATH`, with the `libtinfo5` it
+  needs. It ships the *bare* compiler; the project's target flags are applied by the
+  build (see [Compiler & runtime](#compiler--runtime-phase-1--resolved-de-facto-pin)).
+  Do not add a guessed toolchain or a second clang.
 
 ---
 
@@ -177,6 +245,10 @@ Every translated function must clear the gate; nothing else counts as done.
 - [ ] The diff tool reports a **byte-for-byte match** against the original.
 - [ ] Data/BSS/address references are correctly relocated (passes the
       relocation/link check, not just the unlinked byte diff).
+
+Byte-matching is the standard, but it's possible that a small fraction of
+functions may only reach a **behaviour** match (sm64ds/SSBU precedent). Those are tracked
+in the near-miss bank and do not count as byte-matches.
 
 ---
 
@@ -243,8 +315,13 @@ Curated prior art (study for conventions; do not copy blindly):
 
 - [x] Load the executable in Ghidra; confirm **AArch32 vs AArch64** → **AArch32**
       (`ARM:LE:32:v8`, base `0x60000000`), confirmed by the loader and NPDM alike.
-- [ ] **Pin the compiler** (Phase 1 outcome). Settled: C++17, `nn::` runtime (SDK
-      4.4.x). Candidate **clang 3.9.1** — confirm by byte-diffing a leaf function.
+- [x] **Pin the compiler** (Phase 1 outcome) → **de facto pin: clang 5.0.1 + two hidden
+      backend flags** (`-mllvm -pre-RA-sched=source -mllvm -hoist-cheap-insts=true`, no
+      `-mcpu`). All seven probe functions byte-match under it; **no stock configuration**
+      does (best 5/7). The residual gap is two independent backend heuristics, positive
+      evidence for a **non-stock/fork AArch32 backend**; since the real NintendoSDK
+      toolchain is unobtainable, 5.0.1 + both knobs is adopted as the working pin.
+      Residual functions fall back to behaviour-match (sm64ds/SSBU precedent).
       Evidence in [`docs/compiler-identification.md`](docs/compiler-identification.md).
 - [x] **Choose the target title version** → **the latest title update** (CNMT `Patch`,
       version `262144`). Both builds report SDK `4.4.1` (compiler unchanged) and the
@@ -257,5 +334,6 @@ Curated prior art (study for conventions; do not copy blindly):
 - [ ] Choose the progress-tracking format (scoreboard / decomp.me / frogress).
 - [ ] Decide how much of the sm64ds automation stack (templates, near-miss bank,
       claims protocol) to adopt for the manual-first workflow.
+- [ ] Decide the generated-vs-reviewed split (separate folders + review tooling?).
 
 *(Expand this file as each item is resolved.)*
