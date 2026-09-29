@@ -1,1 +1,229 @@
 # Soaratorium
+
+A work-in-progress **decompilation of _Monster Hunter Generations Ultimate_** for the
+Nintendo Switch.
+
+The objective is to recreate a buildable C source tree from the game's shipped
+executable: functions reverse-engineered from its assembly that, compiled with the
+**exact original toolchain**, reproduce the binary **byte-for-byte**, validated
+function by function with a diff tool.
+
+> **This does not produce a playable game.** It cannot, and will not, run the game
+> for anyone who does not already own it.
+
+> **Status: early planning.** The analysis environment (Ghidra + Switch loader) is
+> set up and building in a devcontainer. The compiler/toolchain has not been
+> identified yet, so no code has been translated. This document is a living outline
+> and will be revised as the project progresses — see [AGENTS.md](AGENTS.md) for
+> agent-specific conventions.
+
+---
+
+## Table of Contents
+
+1. [Approach](#approach)
+2. [Phase 1 — Analysis tooling (Ghidra + Switch support)](#phase-1--analysis-tooling-ghidra--switch-support)
+3. [Phase 2 — Build environment](#phase-2--build-environment)
+4. [Phase 3 — Decompilation workflow](#phase-3--decompilation-workflow)
+5. [Development environment (devcontainer)](#development-environment-devcontainer)
+6. [Repository layout](#repository-layout)
+7. [References & inspiration](#references--inspiration)
+
+---
+
+## Approach
+
+The effort proceeds in three phases; each produces tooling and findings the next
+depends on.
+
+```mermaid
+graph TD
+    A[Phase 1: Ghidra + Switch loader] --> B[Identify architecture, compiler & runtime]
+    B --> C[Phase 2: Build environment / devcontainer]
+    C --> D[Phase 3: Split binary into functions/modules]
+    D --> E[Translate to C]
+    E --> F[Byte-match gate vs. original]
+    F --> E
+```
+
+**Guiding principle:** the original binary is the single source of truth.
+Readability is secondary to matching the compiler's actual output, and no function
+is considered done until it byte-matches.
+
+---
+
+## Phase 1 — Analysis tooling (Ghidra + Switch support)
+
+Set up Ghidra with Switch binary support so the game's executable can be loaded,
+navigated, and decompiled — this is how the architecture, compiler, and runtime are
+identified.
+
+- **Ghidra** — disassembler/decompiler (installed in the devcontainer).
+- **Ghidra Switch Loader** ([adubbz/ghidra-switch-loader](https://github.com/adubbz/ghidra-switch-loader)) —
+  loads the Switch executable format and auto-detects 32- vs 64-bit ARM.
+- **GhidraMCP** ([LaurieWired/GhidraMCP](https://github.com/LaurieWired/GhidraMCP)) —
+  optional MCP bridge exposing Ghidra to coding agents (evaluation pending;
+  headless scripting may suffice).
+
+**Outcomes:**
+
+1. Load the game's `main` executable into a Ghidra project.
+2. Confirm the target **architecture** (32- vs 64-bit ARM).
+3. Identify the **compiler, language standard, and runtime** (SDK version, libc,
+   allocator). This is critical: byte-matching is only possible with the exact
+   compiler, so it gates all of Phase 2.
+4. Record findings in [AGENTS.md](AGENTS.md) and/or `docs/`.
+
+> **Early lead (unverified):** the community project
+> [`Fexty12573/forge`](https://github.com/Fexty12573/forge) — an MHGU-linking,
+> hooking and patching environment — builds against **devkitPro/devkitARM** and uses
+> a `switch32.ld` linker script. That implies the executable is **32-bit ARM
+> (AArch32)**, not the more common 64-bit (AArch64) Switch target. Treat this as a
+> hint to verify against the real binary, not a conclusion. See
+> [AGENTS.md](AGENTS.md) for the tooling implications.
+
+---
+
+## Phase 2 — Build environment
+
+Assemble a reproducible environment that compiles translated C with the **exact**
+toolchain that reproduces byte-identical output.
+
+- **Devcontainer / Dockerfile** as the source of truth for the toolchain (the
+  analysis environment already lives here — see below).
+- **Pin** the compiler/SDK version identified in Phase 1; no unsanctioned upgrades.
+- Provide build scripts (make/cmake/ninja) that link translated objects against the
+  original binary's layout (addresses, sections, data/BSS placement).
+
+**Outcomes:**
+
+- A container/devcontainer that yields a working, pinned toolchain.
+- A first "hello world" object built from translated C that matches its counterpart
+  in the original binary.
+
+---
+
+## Phase 3 — Decompilation workflow
+
+Turn the monolithic binary into an incremental, per-function translation pipeline.
+
+- **Function splitting** — scripts to isolate the binary's functions into individual
+  compilation units so each can be matched in isolation.
+- **Module isolation** — group related functions into logical source modules
+  mirroring the original layout, with a consistent naming scheme.
+- **Translation** — convert assembly to C, one function at a time. Two workflows are
+  first-class:
+  - **Manual** — decompile with Ghidra, hand-write C, verify each attempt.
+  - **Automated** — template matching for common function shapes and/or LLM-assisted
+    translation. Both workflows pass the *same* verification gate.
+- **Byte-match gate** — verify each compiled function against the original with a
+  diff tool (reccmp / asm-differ / a decomp.me-style differ).
+- **Relocation check** — beyond the byte diff, verify that callee/global references
+  relocate correctly, not just the unlinked instruction bytes.
+- **Near-miss bank** — record attempts that compile to *almost* the right bytes (how
+  far off, what was tried) so dead ends aren't rediscovered.
+
+**Outcomes:**
+
+- A repeatable command that, given a function, reports "match" or "mismatch".
+- A progress tracker of matched vs. unmatched functions.
+
+---
+
+## Development environment (devcontainer)
+
+The analysis environment is reproducible via the devcontainer in `.devcontainer/`
+(also usable as a plain Docker image).
+
+**What it provides:**
+
+- **Ghidra 12.1.2** (pinned) at `/opt/ghidra`, plus a bundled **Java 21 JDK**.
+- The **Ghidra Switch Loader** extension, pre-installed under `Ghidra/Extensions`.
+- Convenience wrappers in `.devcontainer/scripts/`:
+  - `ghidra-headless.sh` — headless Analyzer (agents/automation).
+  - `ghidra-gui.sh [vnc|x11]` — Ghidra's GUI, reachable via noVNC in a browser or a
+    native X server.
+
+The cross-compiler for Phase 2 is **intentionally not** installed yet — it depends on
+the compiler identified in Phase 1.
+
+**Getting the game's executable:** you'll need the original `main` executable from
+your own copy of the game. To dump it from a Nintendo Switch, follow the instructions
+on the [smo.wiki guide](https://smo.wiki/Guide:Dumping_and_extracting_your_ROM).
+Place it under `baserom/`
+
+**Build the image:**
+
+```sh
+docker build -f .devcontainer/Dockerfile -t soaratorium-devcontainer .
+```
+
+**Run a shell with the repo mounted:**
+
+```sh
+docker run --rm -it -v "$PWD:/workspace" -w /workspace soaratorium-devcontainer
+```
+
+Or open the folder in a devcontainer-aware editor (VS Code / Zed) and "Reopen in
+Container". The container forwards port `6080` for noVNC, and `.devcontainer.json`
+declares `clangd` for C/C++ tooling.
+
+> **Note:** Ghidra's GUI is usually unnecessary — headless analysis is the intended
+> path, and any GUI/TUI front-end can be layered on later.
+
+---
+
+## Repository layout
+
+```text
+Soaratorium/
+├── README.md              # This document (for contributors)
+├── AGENTS.md              # Conventions & findings for coding agents
+├── LICENSE.md             # GPL-3.0
+├── baserom/               # Your local copy of the game (git-ignored)
+├── .devcontainer/         # Phase 1 analysis environment (Ghidra + loader)
+│   ├── Dockerfile
+│   ├── devcontainer.json
+│   └── scripts/
+├── docs/                  # Findings (architecture, compiler, SDK, notes)   [planned]
+├── tools/                 # Decompilation helper scripts                    [planned]
+│   ├── split/             #   function/module splitting
+│   └── ...                #   diff wrappers, permuter glue, etc.
+├── src/                   # Translated C source                             [planned]
+└── config/                # Ghidra / toolchain configuration                [planned]
+```
+
+> Layout beyond `.devcontainer/` is aspirational and will be finalized as each phase
+> lands.
+
+---
+
+## References & inspiration
+
+Prior art for tooling, workflow, and repository conventions (see also
+[AGENTS.md](AGENTS.md) for the agent-relevant subset):
+
+- **MonsterDruide1/OdysseyDecomp** — the closest analog: a modern Switch
+  byte-matching decomp. Source of our devcontainer-style setup, per-function
+  metadata, and the "you must own the game" / smo.wiki dumping guidance.
+- **tangosdev/sm64ds-decomp** — LLM-automation-first matching decomp. Borrow the
+  automatic templates, near-miss database, relocation-aware reference checking, and
+  claims/coordination protocol — but we support **both** manual and automated
+  workflows.
+- **Xeeynamo/sotn-decomp** — clean `tools/` layout and a `Dockerfile`; uses `splat`,
+  `asm-differ`, `decomp-permuter`, `decomp.me`, `frogress`.
+- **pret** — `pokeemerald`, `pokefirered`, etc.: canonical matching-C decomp with
+  clear module layout, naming, and build system.
+- **zeldaret** — `oot`, `mm`: mature matching-decomp structure and tooling.
+- **open-ead/nx-decomp-tools** — Switch-specific decomp tooling (function
+  metadata/lists, relocation-aware reference checking, progress tooling). Note:
+  its current implementation targets AArch64 only — see [AGENTS.md](AGENTS.md).
+- **Fexty12573/forge** — MHGU linking/hooking/patching environment; useful for build
+  mechanics and internal data-structure hints (see the AArch32 lead above).
+- **reccmp** / **asm-differ** — the byte-matching diff tools themselves.
+- **splat** — disassembler + data extraction driven by a symbol map; likely backbone
+  for function splitting and module layout.
+- **decomp-permuter** — permutes candidate source variants to find the spelling that
+  byte-matches.
+
+*(This section will grow as the project discovers what's actually applicable.)*
