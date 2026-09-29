@@ -79,21 +79,25 @@ This corroborates the [`Fexty12573/forge`](https://github.com/Fexty12573/forge) 
 (devkitPro/devkitARM + `switch32.ld`). Do **not** assume the AArch64 SDK default.
 
 The extracted executable is `baserom/main.nso` (git-ignored), a verified `NSO0` image:
-SHA-256 `876b8587c37a7df77c40b4553dd5d7dcd0f2a898b84ca66f8ab863efbfd98b02`.
+SHA-256 `b3935415499549adaf4c0e89822831daa175cfd456a7990791c79be3997645ef`.
+
+> **Target = the latest title update**
+> (SHA-256 `876b8587c37a7df77c40b4553dd5d7dcd0f2a898b84ca66f8ab863efbfd98b02`). See
+> [Which title version](#compiler--runtime-phase-1--partially-resolved) below.
 
 Loader-built memory map (base `0x60000000`):
 
 | Block | Start | End |
 | --- | --- | --- |
-| `.text` | `0x60000000` | `0x613eec18` |
-| `.rodata` | `0x613ef000` | `0x613ef068` |
-| `.rodata.1` | `0x6154db25` | `0x6172758a` |
-| `.data` | `0x61728000` | `0x61830e58` |
-| `bss` | `0x61844000` | `0x6213f788` |
+| `.text` | `0x60000000` | `0x613f1dec` |
+| `.rodata` | `0x613f2000` | `0x613f206c` |
+| `.rodata.1` | `0x61550ccb` | `0x6172e6fa` |
+| `.data` | `0x6172f000` | `0x61837f28` |
+| `bss` | `0x6184b000` | `0x62146788` |
 
 The loader also processes the ELF dynamic relocation metadata (`.rel.dyn` at
-`0x13EF068`, `.rel.plt`, `.init_array`, and a constructed `got`), which is the basis
-for the Phase 3 relocation/link check.
+`0x13F206C`, `.rel.plt`, `.init_array`, and a constructed `got` from `0x1838AE8` to
+`0x1848900`), which is the basis for the Phase 3 relocation/link check.
 
 ### Compiler & runtime (Phase 1 — partially resolved)
 
@@ -129,11 +133,13 @@ completion task). Full evidence and method:
 
 > **SDK anchor:** `SdkAddon Ver.: 4.4.1 (v67371264)`, from the Program NCA header.
 
-**Which title *version* to target is a separate open decision.** The Lego City decomp
-deliberately targets its **v1.0.3 update** rather than the 1.0.0 releases — those "were
-compiled with a different/unknown compiler version". So the matchable build is **not
-always the earliest**. Two MHGU title versions are available locally (base `v0` and an
-update build); compare them before committing.
+**Target version: the latest title update (resolved).** We target the update build rather
+than base `v0`, because there is no
+compiler reason to prefer base — both report the identical `SdkAddon Ver.: 4.4.1
+(v67371264)`, and an aligned `.text` diff shows the update is an incremental patch over an
+otherwise-identical codebase (≈81% byte overlap; the differences are a handful of replaced
+blocks plus widespread small edits, mostly embedded-address churn from the section shift). Comparison and the `.text` diff
+verdict: [`docs/compiler-identification.md`](docs/compiler-identification.md).
 
 ### Tooling implications of the AArch32 target
 
@@ -240,8 +246,10 @@ Curated prior art (study for conventions; do not copy blindly):
 - [ ] **Pin the compiler** (Phase 1 outcome). Settled: C++17, `nn::` runtime (SDK
       4.4.x). Candidate **clang 3.9.1** — confirm by byte-diffing a leaf function.
       Evidence in [`docs/compiler-identification.md`](docs/compiler-identification.md).
-- [ ] **Choose the target title version** (base `v0` vs. the update build) — the
-      matchable build is not always the earliest (Lego City precedent).
+- [x] **Choose the target title version** → **the latest title update** (CNMT `Patch`,
+      version `262144`). Both builds report SDK `4.4.1` (compiler unchanged) and the
+      aligned `.text` diff confirms an incremental patch, so the compiler gives no reason to prefer base.
+      Evidence: [`docs/compiler-identification.md`](docs/compiler-identification.md).
 - [ ] Decide the Gold Ghidra automation front-end (headless scripts vs. GhidraMCP).
 - [ ] Define the symbol/module naming convention.
 - [ ] Verify ARM32 support in `reccmp` / `asm-differ` / `splat`; decide whether to port
