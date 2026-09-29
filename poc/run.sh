@@ -63,7 +63,7 @@ echo "  work:  ${WORK}"
 echo
 
 rm -rf "${WORK}"
-mkdir -p "${WORK}/segments" "${WORK}/objects"
+mkdir -p "${WORK}/segments" "${WORK}/objects" "${WORK}/ghidra"
 
 # ---- 1. Reference bytes + disassembly, straight from the binary -------------
 echo "[1/4] Importing the NSO into Ghidra and dumping reference data..."
