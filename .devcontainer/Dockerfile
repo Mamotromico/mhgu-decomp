@@ -110,8 +110,31 @@ RUN set -eux; \
 # the toolchain is confirmed against a real function (see AGENTS.md).
 
 # ---------------------------------------------------------------------------
+# Non-root user
+# ---------------------------------------------------------------------------
+# The workspace is a host bind mount, so anything created as root would be
+# root-owned on the host and unusable by the contributor. A real non-root user
+# is created here and selected via `remoteUser` in devcontainer.json; the
+# dev-container tooling then remaps its UID/GID to the host user's on Linux
+# (updateRemoteUserUID, on by default). The ARG defaults only matter for the
+# plain `docker build`/`docker run` path (see README) — override them with
+# `--build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)` if your host
+# UID/GID differs.
+# `sudo` is deliberately not installed: every dependency is baked into this
+# image, so the contributor never needs to install packages at runtime.
+ARG USERNAME=dev
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN set -eux; \
+    groupadd --gid "${USER_GID}" "${USERNAME}"; \
+    useradd --uid "${USER_UID}" --gid "${USER_GID}" --create-home --shell /bin/bash "${USERNAME}"
+
+# ---------------------------------------------------------------------------
 # Entry point / workspace
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
+# Select the non-root user before WORKDIR so /workspace is created writable by
+# the contributor when the image is run without a bind mount.
+USER ${USERNAME}
 WORKDIR /workspace
 CMD ["/bin/bash"]

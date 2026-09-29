@@ -12,6 +12,13 @@
     }
   },
 
+  // Run as the non-root user defined in the Dockerfile. On Linux this also
+  // remaps that user's UID/GID to the host user's (updateRemoteUserUID defaults
+  // to true), so files written into the bind-mounted workspace are owned by the
+  // host user instead of root.
+  "remoteUser": "dev",
+  "updateRemoteUserUID": true,
+
   // noVNC browser access for Ghidra's GUI (cross-platform).
   // Open http://localhost:6080/vnc.html (or vnc_lite.html) after launching.
   "forwardPorts": [6080],
@@ -29,9 +36,9 @@
         "ms-vscode.cpptools"
       ]
     },
-    // Zed equivalent (language server: clangd for C/C++).
-    // NOTE: Zed's dev-container support may not yet consume `customizations`;
-    // if so, install this from Zed's extension UI instead.
+    // Zed equivalent (language server: clangd for C/C++). Zed reads
+    // `customizations.zed.extensions` and installs these into the dev-container
+    // session.
     "zed": {
       "extensions": ["clangd"]
     }
