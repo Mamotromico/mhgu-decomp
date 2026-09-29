@@ -127,9 +127,40 @@ Files referenced below live under their `tools/`.
 
 ## `OdysseyDecomp` (closest Switch analog)
 
+The nearest analog to us: a Switch **C++** matching decomp sharing our toolchain family
+(upstream Clang), our language, and — crucially — a build model that is **not an image**. Its
+build (`add_executable` over reconstructed `src/*.cpp` + vendored lib sources) produces a
+**developer executable**: a normal ELF whose job is to (1) force the whole reconstruction to
+compile and link as a type/consistency check, (2) supply symbols and a compile database for
+editors, and (3) host the per-function gate. It is *not* the NSO, is not byte-matched, and is
+not playable. The load-bearing reframe: **in this model, building ≠ matching** — matching is a
+separate per-function claim, and the build proves only "it compiles".
+
+- 🟢 **adopt/adapt — stubs as the linkability fallback.** Non-inline callees that are not yet
+  reconstructed are simply *declared, not defined*, so the tree still links. This is the
+  Model C fallback and our on-ramp to Model B; a committed `.s` fallback is rejected. *(Accepted;
+  see *Unmatched-function fallback* in [`architecture.md`](architecture.md).)*
 - ⚫ **adopt — per-function status enum** (`data/file_list.yml`):
   `Matching / NonMatchingMinor / NonMatchingMajor / NotDecompiled / Wip`. A *graded* status,
-  not just pass/fail — useful for our behaviour-match tier.
+  not just pass/fail — useful for our behaviour-match tier. Of these, `Library` is not a new
+  concept: it *is* our `external` kind (see *Symbol ledger* in [`architecture.md`](architecture.md)).
+  The graded statuses feed the ledger's still-open progress-status layer.
+- 🟢 **adopt — the `guess` name-honesty flag.** `guess = the symbol is a guess and does not
+  appear in the target executable` — recorded so a guessed name is never mistaken for a
+  discovered one. *Accepted as a ledger attribute; see *Symbol & data naming* in
+  [`architecture.md`](architecture.md).*
+- 🟢 **adopt — the `lazy` linker-binding flag** (weak / lazy symbol). A real linker attribute;
+  it belongs as a property on an external entry, consumed by the relocation/link check.
+  *(Accepted; see *Symbol ledger*.)*
+- ⚫ **study/adapt — `tools/check` / `asm-differ` as the per-function gate.** A concrete
+  reference implementation of the human-facing line-level diff (see the diff ecosystem below).
+  Note it is **address-agnostic** — the guide says to ignore `adrp`/`bl`/`b` address
+  differences — which makes it *weaker* than our linked-image gate. Adopt the mechanism; keep
+  our stricter gate.
+- ⚫ **study — one source, two build modes.** `NON_MATCHING` / `MATCHING_HACK_*` macros isolate
+  matching-only hacks behind a platform define, so a single tree yields both a functional build
+  and a matching build. The same *shape* as our generated-vs-reviewed split, but expressed as a
+  compile switch rather than ledger state.
 - 🟢 **adopt — exclude SDK/vendored paths from object checks** (`tools/config.toml`
   `no_object_check_for = ["sead/","NintendoSDK/","eui/","agl/"]`). Maps onto our `nn::`.
 - ⚫ **study — devcontainer + CMake+Ninja+ccache** build precedent.
@@ -148,6 +179,9 @@ Files referenced below live under their `tools/`.
   AArch32 equivalents for `adr` and literal pools.
 - 🔴 **skip — as-is adoption.** Hardcodes `arch='aarch64'`, `R_AARCH64_*`, 64-bit ELF,
   `0x10`-byte PLT entries, `ADDRESS_BASE=0x71_0000_0000`.
+- ⚫ **note — MIT-licensed (leoetlino).** The only repo in the open-ead family that grants a
+  reusable license, so it is the one part we may freely adopt/port (subject to the AArch32
+  caveat above); the source libraries below are unlicensed and off-limits for reuse.
 
 ---
 
@@ -156,8 +190,11 @@ Files referenced below live under their `tools/`.
 - 🟢 **adopt — canonical naming scheme.** `func_XXXXXXXX`, data labels, `g`/`s`/`D_` prefixes —
   predictable, greppable, mapfile-checkable. *(Accepted; see *Symbol & data naming* in
   [`architecture.md`](architecture.md).)*
-- ⚫ **study — unmatched-code fallback** (an `.s` kept alongside unmatched C, so the build
-  stays green with partial progress).
+- 🔴 **skip — committed `.s` unmatched-code fallback.** Rejected: it would commit bytes derived
+  from the original binary (a hygiene violation, see [`AGENTS.md`](../AGENTS.md)) and would need
+  a proven AArch32 reassembler. Our fallback is staged instead — stubs now, object-level byte
+  substitution later *(see *Unmatched-function fallback* in [`architecture.md`](architecture.md))*.
+  The mapfile-progress and `-Werror` ideas below are unaffected.
 - ⚫ **study — mapfile-driven progress** — derive matched/unmatched from the linker map rather
   than a hand-maintained list.
 - ⚫ **study — strict `-Werror` + fixed warning set** so generated code cannot silently change
@@ -180,6 +217,40 @@ Files referenced below live under their `tools/`.
 - ⚫ **lesson — upstream Clang *can* match Switch code.** `MATCHING_HACK_NX_CLANG` shows how
   to isolate the few spots that need help. Directly supports our de-facto-pin thesis and our
   eventual behaviour-match tier.
+- ⚫ **lesson — unlicensed, so reference only.** sead ships **no `LICENSE`** (like the rest of
+  the open-ead source family); see *The open-ead ecosystem* below. We take declarations from
+  our own binary, never their text.
+
+---
+
+## The open-ead ecosystem (declaration source, not a dependency)
+
+OdysseyDecomp and Lego City pull their "externals" from an open-ead library family: `sead`,
+`agl`, `eui`, `NintendoSDK-NEX` (source), `nnheaders` (headers only), and `botw-lib-musl` (a
+binary libc). Three facts govern how — and whether — we use it.
+
+**We take declarations, not bodies.** The SDK/sead code MHGU statically linked is *already
+inside* `main.nso`; a matching build byte-substitutes it (Model B) and never recompiles it. So
+the ecosystem's only value to us is a head start on the `nn::` *declarations* our call sites
+need. It is **not** a linkable SDK, and adopting it as one would be wrong.
+
+**Their mangling is not our mangling.** Every repo targets **AArch64**; we are **AArch32**.
+Itanium mangling encodes canonical types, so `size_t` mangles as `unsigned long` (`m`) on
+LP64 but `unsigned int` (`j`) on ILP32 — any function taking a `size_t`/`ptrdiff_t`-style
+parameter mangles differently for us. Our ground truth is our own binary: the exact `nn::`
+symbols are in `main.nso`'s `dynsym`, so the workflow is **read the name from our binary, then
+write a declaration that reproduces it** — never copy theirs.
+
+**Licensing — unlicensed, not copyleft (verified).** `nx-decomp-tools` is MIT; `botw-lib-musl`
+is MIT (but a binary build). `sead`, `agl`, `eui`, `NintendoSDK-NEX` and `nnheaders` ship **no
+`LICENSE` file** — default copyright, all rights reserved, which is *more* restrictive than any
+copyleft (copyleft at least grants permission with conditions; no license grants nothing). A
+clean-room reconstruction is not the original's code, but it is still its own copyrighted,
+separately-owned work — and here, an unlicensed one. So we neither vendor nor transcribe their
+headers/source: we derive names from our own `dynsym` and treat their repos as a reading aid.
+If we ever reuse text, it needs explicit permission + attribution.
+
+---
 
 ---
 
@@ -193,9 +264,14 @@ Files referenced below live under their `tools/`.
 
 ## `Lego-City-Undercover-Decompilation`
 
-- ⚫ **study — third-party Switch C++ matching decomp build recipe.** CMake + Ninja,
-  `ToolchainNX64.cmake`, `tools/config.toml`, musl sysroot. The most direct build-system
-  precedent for our pinned clang and C++17 target.
+- ⚫ **study — third-party (non-Nintendo) Switch C++ matching decomp.** Same Model C build
+  shape as OdysseyDecomp: `add_executable` over reconstructed `src/*.cpp` + `lib/nnheaders`,
+  with `NON_MATCHING` / `MATCHING_HACK_*` compile defines (one source, functional vs. matching
+  modes). A *developer executable*, never the image.
+- ⚫ **study — pinned toolchain distribution.** CMake + Ninja, `ToolchainNX64.cmake`,
+  `tools/config.toml`, musl sysroot; it pins a specific clang (3.9.1). Precedent for
+  distributing our pinned clang/ld.lld as artifacts — the most direct build-system precedent
+  for our pinned clang and C++17 target.
 
 ---
 
@@ -224,8 +300,8 @@ Files referenced below live under their `tools/`.
   half is adopted; the canonical-DB and shared-predicate halves are not yet)*.
 - ⚫ **Separate "who is right" from "who claims"** — verification is independent of the solver.
 - 🟢 **Generated ≠ reviewed is a state machine, not a folder convention** (sm64ds `enroll.py`
-  `rombytes`→`complete`; the n64-family nonmatching `.s` fallback). *(Accepted; folders
-  rejected — see File layout & generated build.)*
+  `rombytes`→`complete`). *(Accepted; folders rejected — see File layout & generated build and
+  *Unmatched-function fallback*.)*
 - ⚫ **Pre-resolve everything a solver would otherwise have to look up** (the worklist) — the
   biggest cost lever in the whole corpus.
 
@@ -245,6 +321,8 @@ In leverage order, if/when we start building:
    state-not-folders shape is adopted — see File layout & generated build.)*
 7. ⚫ CMake + Ninja build. *(Lego City / OdysseyDecomp)*
 8. ⚫ Relocation-aware link check shaped like nx-decomp-tools. *(study)*
+9. ⚫ Model C per-function gate rig — stub callees, diff one function (`asm-differ`-style, cf.
+   `poc/lib/matchdiff.py`) — staged toward Model B. *(OdysseyDecomp / Lego City)*
 
 ## Known gap
 

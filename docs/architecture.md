@@ -26,14 +26,20 @@ The ledger is a **committed, typed symbol ledger** keyed by `(module, addr)`, wi
   time, so a bare address can name two different symbols. This is not optional.
 - **Externals as a first-class kind** — SDK / vendored symbols (our `nn::` surface) are
   recorded so references resolve, but excluded from the progress denominator.
+- **Externals carry linker attributes.** A binding such as weak / `lazy` is a property of the
+  external's entry, consumed by the relocation/link check — a *linking* fact, not a progress
+  status.
+- **`Library` is not a new concept.** OdysseyDecomp's `Library` status *is* our `external`
+  kind above — provided, not verified, and excluded from the denominator.
 - **Single source of truth** — the denominator for every progress number, and the universe
   the worklist, near misses, and claims are derived from.
 
 Precedent: sm64ds `config/**/symbols.txt` (dsd format) for the typed, module-keyed ledger;
 sm64ds `External` class and OdysseyDecomp `no_object_check_for` for the externals concept.
 
-Open: how status sits on top of the ledger (separate layer vs. baked into entries), and the
-alias / shared-"matched" honesty guards.
+Open: how *progress* status sits on top of the ledger (separate layer vs. baked into
+entries) — the honesty/link attributes (`guess`, `lazy`) are settled as entry properties, but
+the matched/unmatched status layer is not — and the alias / shared-"matched" honesty guards.
 
 ### Symbol identity & segmentation
 
@@ -71,12 +77,15 @@ second symbol (see *Symbol identity & segmentation*).
   chosen namespace or a guessed name on such a symbol is a *match-breaker*, not an organizer.
   Reproducing it also pins the signature — mangling encodes parameters and `const` — so a
   correct name doubles as a correctness check on the reconstruction.
+- **An unrecoverable name is marked, not silently invented.** When a symbol's real
+  class/namespace cannot be recovered from the binary (a stripped class with no RTTI), the
+  entry carries a **`guess`** attribute on its declared reconstruction, so a guessed name is
+  never mistaken for a discovered one. This keeps *discovered, not invented* honest — a
+  guessed name does not claim to have been discovered — and costs nothing at the match, since
+  an internal name is byte-invisible.
 
 Precedent: pret `func_XXXXXXXX` + `g`/`s`/`D_` prefixes; zeldaret `func_08000000` /
-`D_08000000` / `sXxx`; sm64ds `func_<addr>` inside the ledger.
-
-Open: a symbol whose real class/namespace cannot be recovered from the binary (a stripped
-class with no RTTI) — placeholder vs. an explicitly-declared reconstruction.
+`D_08000000` / `sXxx`; sm64ds `func_<addr>` inside the ledger; OdysseyDecomp `guess` flag.
 
 ### File layout & generated build
 
@@ -107,9 +116,33 @@ Precedent: sm64ds `tools/enroll.py` (`delinks.txt` as `rombytes`/`complete`),
 `tools/srcpath.py` (one central resolver; *"placement follows migration, it does not lead
 it"*), `tools/import_symbols.py` + `symbols/verified.tsv`; nx-decomp-tools `delinks`.
 
-Open: the state set the ledger records; the fallback for unmatched functions inside a
-partially-matched TU (object-level byte substitution vs. source-level asm inclusion); and the
-two-adjacent-functions experiment that detects real TU coupling.
+Open: the state set the ledger records, and the two-adjacent-functions experiment that
+detects real TU coupling. (The fallback for unmatched functions is resolved — see
+*Unmatched-function fallback* below.)
+
+### Unmatched-function fallback (staged)
+
+The fallback for code we have not yet matched is **staged**, not a single mechanism, and it
+is the same axis as the generated/reviewed state.
+
+- **Now — Model C (stubs).** While coverage is partial, an unmatched callee is *declared, but
+  not defined*, so the tree still compiles and links as a normal developer executable.
+  Matching is then a **per-function claim** (an address-agnostic instruction diff), independent
+  of "does it build". This is the OdysseyDecomp / Lego City model and our on-ramp.
+- **End state — Model B (byte substitution).** To reach our "done" (a linked image with a
+  relocation/link check), unmatched *regions* are filled from the original binary **by the
+  build itself** — object-level byte substitution (`rombytes` / `delinks`), never reconstructed
+  C. This is the sm64ds `enroll.py` shape.
+- **`rombytes` by default; `complete` on review.** A `src/` file's build input is the original
+  bytes until its function matches, then flips to our compiled object — the promotion bridge
+  already recorded under *File layout & generated build*.
+- **Rejected — a committed `.s` (Model A).** Keeping an assembly listing of the original in
+  the repo would commit bytes derived from the binary (a hygiene violation, see
+  [`AGENTS.md`](../AGENTS.md)) and would need a proven AArch32 reassembler; neither is acceptable.
+
+Precedent: OdysseyDecomp / Lego City (stubs; address-agnostic per-function `tools/check`);
+sm64ds `tools/enroll.py` (`rombytes`/`complete`); nx-decomp-tools `delinks` for the
+relocation-checked end state.
 
 ## Constraints
 
