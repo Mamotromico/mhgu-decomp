@@ -1,0 +1,39 @@
+{
+  "name": "Soaratorium",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      // Treat as PINNED; change only deliberately (see AGENTS.md).
+      // 12.1.2 (not 12.1.4) to match the prebuilt Switch-Loader extension.
+      "GHIDRA_VERSION": "12.1.2",
+      "GHIDRA_SHA256": "b62e81a0390618466c019c60d8c2f796ced2509c4c1aea4a37644a77272cf99d"
+    }
+  },
+
+  // noVNC browser access for Ghidra's GUI (cross-platform).
+  // Open http://localhost:6080/vnc.html (or vnc_lite.html) after launching.
+  "forwardPorts": [6080],
+
+  // X11 alternative for hosts with an X server (not needed for noVNC/headless).
+  // - Linux (X11, or Wayland via XWayland): socket at /tmp/.X11-unix, DISPLAY=:0.
+  // - Windows WSL2 (WSLg): socket at /mnt/wslg/.X11-unix, DISPLAY=:0.
+  // Uncomment and adjust the socket path + DISPLAY to match your host.
+  // "mounts": ["source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind"],
+  // "containerEnv": { "DISPLAY": ":0" },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools"
+      ]
+    },
+    // Zed equivalent (language server: clangd for C/C++).
+    // NOTE: Zed's dev-container support may not yet consume `customizations`;
+    // if so, install this from Zed's extension UI instead.
+    "zed": {
+      "extensions": ["clangd"]
+    }
+  }
+}
