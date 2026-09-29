@@ -11,11 +11,6 @@
       "GHIDRA_SHA256": "b62e81a0390618466c019c60d8c2f796ced2509c4c1aea4a37644a77272cf99d"
     }
   },
-
-  // Run as the base image's built-in `ubuntu` user (UID/GID 1000). On Linux
-  // this also remaps its UID/GID to the host user's (updateRemoteUserUID
-  // defaults to true), so files written into the bind-mounted workspace are
-  // owned by the host user instead of root.
   "remoteUser": "ubuntu",
   "updateRemoteUserUID": true,
 
@@ -33,12 +28,13 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-vscode.cpptools"
-      ]
+        "ms-vscode.cpptools",
+        "redhat.java"
+      ],
+      "settings": {
+        "java.project.referencedLibraries": ["/opt/ghidra/**/*.jar"]
+      }
     },
-    // Zed equivalent (language server: clangd for C/C++). Zed reads
-    // `customizations.zed.extensions` and installs these into the dev-container
-    // session.
     "zed": {
       "extensions": ["clangd"]
     }

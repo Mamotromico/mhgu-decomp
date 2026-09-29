@@ -1,0 +1,22 @@
+{
+  "lsp": {
+    "jdtls": {
+      "settings": {
+        "java": {
+          "project": {
+            "referencedLibraries": ["/opt/ghidra/**/*.jar"]
+          }
+        }
+      },
+      "initialization_options": {
+        "settings": {
+          "java": {
+            "project": {
+              "referencedLibraries": ["/opt/ghidra/**/*.jar"]
+            }
+          }
+        }
+      }
+    }
+  }
+}
