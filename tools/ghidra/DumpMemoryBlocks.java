@@ -1,13 +1,5 @@
 // Dump every initialized memory block of the current program to disk.
 //
-// Purpose: Ghidra's Switch loader decompresses the NSO into an in-memory image.
-// This script materializes that image as flat, correctly-addressed binaries so
-// they can be inspected with ordinary tools (strings/grep/od) outside Ghidra.
-//
-// Written in Java (not Python): Ghidra 11+ removed Jython, and Python scripts
-// now require the PyGhidra/CPython bridge. A Java GhidraScript compiles itself
-// with Ghidra's bundled compiler, so it adds no dependency.
-//
 // Usage (headless):
 //   analyzeHeadless <projDir> <projName> \
 //       -process <program> -noanalysis \

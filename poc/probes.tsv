@@ -1,0 +1,8 @@
+# name	source	address	size_bytes
+find2	find2.cpp	0x60000f8c	188
+real	real.cpp	0x60c70010	28
+find3	find3.cpp	0x6069e6f0	100
+find2s	find2s.cpp	0x6069eb18	76
+findsub	findsub.cpp	0x6069ddfc	120
+new_a	new_a.cpp	0x604f8b78	68
+new_b	new_b.cpp	0x601a72e4	60
