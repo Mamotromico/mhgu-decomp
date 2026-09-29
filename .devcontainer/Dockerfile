@@ -6,9 +6,9 @@
 # Ghidra + Switch/NSO tooling live here so the whole pipeline is reproducible
 # and no host Java install is required (the JDK lives in this image).
 #
-# The *build* toolchain (cross-compiler, SDK) is deliberately NOT pinned here:
-# it depends on the compiler identified against the real NSO (see AGENTS.md),
-# and lands in Phase 2. Do not add it until then.
+# The *build* toolchain is the Phase 1 de facto pin: clang 5.0.1 + the libtinfo5
+# shim it needs. Its exact flags (VFP-only, no -mcpu, two hidden backend knobs)
+# live in AGENTS.md; only the bare compiler is baked into the image here.
 # =============================================================================
 
 ARG BASE_IMAGE=ubuntu:24.04
@@ -34,6 +34,20 @@ ARG GHIDRA_SHA256=b62e81a0390618466c019c60d8c2f796ced2509c4c1aea4a37644a77272cf9
 #   https://github.com/adubbz/ghidra-switch-loader
 ARG SWITCH_LOADER_VERSION=1.6.1-c600d05-Ghidra_12.1.2
 ARG SWITCH_LOADER_SHA256=0bc6374c11cb7a1275a0eda22184b9b2efe5a9a7e415cc29361c334966c1f477
+
+# libtinfo.so.5 compatibility library (see its install step below). Sourced from
+# the Ubuntu 18.04 archive because 24.04 ships ncurses 6 only.
+ARG LIBTINFO5_DEB_URL=http://archive.ubuntu.com/ubuntu/pool/main/n/ncurses/libtinfo5_6.1-1ubuntu1.18.04.1_amd64.deb
+ARG LIBTINFO5_SHA256=f7a59966bba0f997dd1bee0994c43cd563026a81e791cacc6540a2a8c9a49e53
+
+# Clang 5.0.1 — the de facto pin (see AGENTS.md, "Compiler & runtime"). This is
+# the upstream prebuilt tarball from releases.llvm.org, NOT the NintendoSDK
+# toolchain (which is unobtainable). Clang release assets are not published under
+# the llvm/llvm-project GitHub releases, so the releases.llvm.org URL is used.
+ARG CLANG_VERSION=5.0.1
+ARG CLANG_TARBALL=clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+ARG CLANG_URL=https://releases.llvm.org/${CLANG_VERSION}/${CLANG_TARBALL}
+ARG CLANG_SHA256=005f21861cd2953138df7cf511f1552ef7041bafb7cfc4b172264b7ff5fe09b4
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -73,6 +87,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
+# libtinfo.so.5 (required by the pinned clang)
+# ---------------------------------------------------------------------------
+# The prebuilt clang 5.0.1 binaries link against the ncurses 5 ABI
+# (libtinfo.so.5). Ubuntu 24.04 ships only ncurses 6 (libtinfo.so.6), whose
+# versioned symbols are NOT compatible, so the binaries fail to load. Install the
+# real libtinfo5 from the Ubuntu 18.04 archive; it is self-contained (Depends:
+# libc6 only). See AGENTS.md.
+RUN set -eux; \
+    curl -fL --retry 3 -o /tmp/libtinfo5.deb "${LIBTINFO5_DEB_URL}"; \
+    echo "${LIBTINFO5_SHA256}  /tmp/libtinfo5.deb" | sha256sum -c -; \
+    dpkg -i /tmp/libtinfo5.deb; \
+    rm /tmp/libtinfo5.deb
+
+# ---------------------------------------------------------------------------
+# clang 5.0.1 (the pinned cross-compiler)
+# ---------------------------------------------------------------------------
+# Extracted to /opt/clang-5.0.1 and put on PATH so `clang`/`clang++`/`clang-5.0.1`
+# all resolve to it. This is the *bare* compiler; the project's target flags
+# (AArch32 target, VFP-only, no -mcpu, the two hidden backend knobs) are applied by
+# the build, not baked in here — see AGENTS.md for the authoritative flag list.
+ENV CLANG_HOME=/opt/clang-5.0.1
+ENV PATH=/opt/clang-5.0.1/bin:${PATH}
+RUN set -eux; \
+    curl -fL --retry 3 -o /tmp/clang.tar.xz "${CLANG_URL}"; \
+    echo "${CLANG_SHA256}  /tmp/clang.tar.xz" | sha256sum -c -; \
+    mkdir -p /tmp/clang.extract; \
+    tar -xJf /tmp/clang.tar.xz -C /tmp/clang.extract; \
+    mv /tmp/clang.extract/clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-16.04 "${CLANG_HOME}"; \
+    rm -rf /tmp/clang.tar.xz /tmp/clang.extract; \
+    clang --version
+
+# ---------------------------------------------------------------------------
 # Ghidra
 # ---------------------------------------------------------------------------
 # The Ghidra PUBLIC release zip does NOT bundle a JDK, so Java 21 is installed
@@ -106,8 +152,8 @@ RUN set -eux; \
 # ---------------------------------------------------------------------------
 # Deliberately NOT installed yet. The analysis + build tooling (reccmp, splat,
 # asm-differ, ...) isn't needed until we start translating functions, and its
-# package names/versions are unverified. Add Python + a pinned venv here once
-# the toolchain is confirmed against a real function (see AGENTS.md).
+# package names/versions are unverified. Add Python + a pinned venv here once the
+# Phase 3 matching harness is chosen (see AGENTS.md).
 
 # ---------------------------------------------------------------------------
 # Non-root user
