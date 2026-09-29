@@ -1,0 +1,151 @@
+# Architecture
+
+The authoritative model of the reconstructed project: what the source of truth is, how
+symbols are identified and segmented, how files and the build are derived from that, and
+where the tooling boundaries sit. Every section here is a **confirmed decision** (signed off
+by the project owner), with its rationale kept alongside so it is not re-litigated later.
+Everything not recorded here is still open.
+
+This is the **promoted** record. The prior-art pool it was refined from — with its per-item
+status circles and action tags — remains in [`tooling-survey.md`](tooling-survey.md); a
+point moves from there to here when it is adopted.
+
+## Project model
+
+### Symbol ledger
+
+The ledger is a **committed, typed symbol ledger** keyed by `(module, addr)`, with
+**externals as a first-class kind**. It is the universe every other mechanism draws from.
+
+- **Committed** — lives in git, not a generated artifact, so it is a *stable* denominator
+  (unlike a linker map, a disassembler dump, or a `src/` directory scan).
+- **Typed** — each entry carries a *kind* (function vs. data vs. external) plus attributes
+  such as size (and arch), so a single artifact can both describe symbols and drive the
+  build.
+- **Keyed by `(module, addr)`, never `addr` alone** — overlays reuse base addresses across
+  time, so a bare address can name two different symbols. This is not optional.
+- **Externals as a first-class kind** — SDK / vendored symbols (our `nn::` surface) are
+  recorded so references resolve, but excluded from the progress denominator.
+- **Single source of truth** — the denominator for every progress number, and the universe
+  the worklist, near misses, and claims are derived from.
+
+Precedent: sm64ds `config/**/symbols.txt` (dsd format) for the typed, module-keyed ledger;
+sm64ds `External` class and OdysseyDecomp `no_object_check_for` for the externals concept.
+
+Open: how status sits on top of the ledger (separate layer vs. baked into entries), and the
+alias / shared-"matched" honesty guards.
+
+### Symbol identity & segmentation
+
+The ledger owns segment boundaries, so re-symbolisation is **conservative**: we **rename
+existing placeholder entries only** and never **introduce** a boundary from an import.
+
+- A symbol entry in a manifest of this shape *is* a cut point — recording an address that
+  is not already a committed boundary **is** the split. Nobody has to "decide" to split.
+- **Inner/nested symbols** (struct members, vtables, RTTI/typeinfo, jump tables, literal
+  pools) are legitimate facts but are **reference material, not split points**; they go to a
+  review table (the `symbols/verified.tsv` analogue) and never the manifest.
+- Rationale: a nested entry resplits a segment, changing the generated files, alignment, and
+  the progress denominator, and orphaning already-matched work.
+
+Precedent: sm64ds `tools/import_symbols.py` + `symbols/verified.tsv`.
+
+### Symbol & data naming
+
+Names are **discovered, not invented**. An unknown symbol keeps an address-encoded
+placeholder until its real name is understood, and renaming is a ledger edit — never a
+second symbol (see *Symbol identity & segmentation*).
+
+- **Unknown code:** `func_<8hex>`, full base kept — e.g. `func_60001234`.
+- **Unknown data:** `D_<8hex>` — e.g. `D_6172f000`. The `func_`/`D_` pair marks *kind* (code
+  vs. data).
+- **Scope prefixes** `g_` (external linkage) and `s_` (file-local / internal linkage) are
+  added once linkage is known. They sit on a different axis from the placeholder, so a
+  symbol can be `D_<addr>` (unknown) or `gName` / `sVar_<addr>` (scope known, name not yet).
+- **Internal symbols** (`s_`) live in a **module namespace**, one per module. This is free:
+  internal names are byte-invisible — no ABI mangling, no dynamic relocation — so it costs
+  nothing at the match while resolving the overlay address collisions that `(module, addr)`
+  keying makes possible.
+- **Externals and class members are discovered, not chosen.** Their mangled name is already
+  in the binary (`dynsym`, and RTTI/typeinfo in `.rodata`), so it is reproduced exactly; a
+  chosen namespace or a guessed name on such a symbol is a *match-breaker*, not an organizer.
+  Reproducing it also pins the signature — mangling encodes parameters and `const` — so a
+  correct name doubles as a correctness check on the reconstruction.
+
+Precedent: pret `func_XXXXXXXX` + `g`/`s`/`D_` prefixes; zeldaret `func_08000000` /
+`D_08000000` / `sXxx`; sm64ds `func_<addr>` inside the ledger.
+
+Open: a symbol whose real class/namespace cannot be recovered from the binary (a stripped
+class with no RTTI) — placeholder vs. an explicitly-declared reconstruction.
+
+### File layout & generated build
+
+Translation-unit membership is a **ledger column**, not a filename or folder convention;
+files are **primarily one function per file** and are **merged only when the original
+grouping is required for codegen**; the build inputs are **generated from the ledger**,
+never hand-maintained.
+
+- **TU membership is data.** A function's translation unit is a `group` field on its
+  `(module, addr)` entry. Merging is a ledger edit, not a rename storm — identity never
+  came from the filename, so a merged TU (two functions, one file, a name that is neither
+  symbol) is expected, not a surprise.
+- **Per-function default; merge on evidence.** One function per file guesses nothing and
+  isolates codegen. Merge only when the original grouping is *required* to reproduce
+  codegen — an inlined helper, shared constants — decided by experiment, not by guesswork.
+- **The build is a function of the ledger.** The source list *and* the linker script are
+  generated, so a merge never produces a hand-edited CMake/Ninja diff. With
+  `-ffunction-sections -fdata-sections` the linker places — and byte-substitutes — per
+  function, so TU grouping affects only codegen, never what the link emits.
+- **One reconciler is the sole writer**, moving/merging files and regenerating the build
+  inputs idempotently; CI runs it `--check` and fails on drift.
+- **Generated ≠ reviewed is ledger state, not a folder.** A folder-per-state split was
+  considered and **rejected**: one folder expresses one axis, per file only, and a merged TU
+  has mixed state — plus it re-introduces path churn. State lives in the ledger and is
+  surfaced by tooling / dashboards instead.
+
+Precedent: sm64ds `tools/enroll.py` (`delinks.txt` as `rombytes`/`complete`),
+`tools/srcpath.py` (one central resolver; *"placement follows migration, it does not lead
+it"*), `tools/import_symbols.py` + `symbols/verified.tsv`; nx-decomp-tools `delinks`.
+
+Open: the state set the ledger records; the fallback for unmatched functions inside a
+partially-matched TU (object-level byte substitution vs. source-level asm inclusion); and the
+two-adjacent-functions experiment that detects real TU coupling.
+
+## Constraints
+
+### Ghidra & output policy
+
+Ghidra is driven **only** through pinned, committed **headless scripts**; **GhidraMCP is
+dropped**. All Ghidra **output** is **draft content** and is **never committed**.
+
+- **Headless only, agent-facing.** No live query path for agents. Human interactive
+  analysis remains available via `ghidra-gui.sh` (noVNC/X11) — the ban is on treating a
+  live, non-deterministic query as truth, not on looking.
+- **Output is a draft, never truth.** Decompiled C, disassembly listings, memory-block
+  dumps and logs are generated into the git-ignored `baserom/work/` tree and never
+  committed. Ghidra never decides symbol identity, boundaries, names, or the progress
+  denominator.
+- **Content vs. metadata.** Binary *content* (bytes, disassembly text) is never committed;
+  binary *metadata* may be, but only in its reviewed/committed form. A deterministic
+  inventory export may **seed** the committed ledger; the ledger itself stays authoritative
+  and hand-owned.
+- **One cold analysis, many warm queries.** Full auto-analysis runs once into a cached
+  Ghidra project under `baserom/work/`; all later work is targeted script runs against it.
+  Ghidra's value declines as coverage grows — it stays for unexplored regions, anomalies,
+  and data.
+
+Precedent: sm64ds `ghidra/DecompDump.java` ("scaffolds we hand to the LLM tier", never the
+identity authority).
+
+### Frozen PoC snapshot
+
+`poc/` is a **frozen snapshot** of the Phase-1/2 validation experiment.
+
+- **No further edits.** It is not maintained or extended.
+- **Not a structural template.** Phase 3 tooling is built fresh, with its own layout; the
+  PoC's structure (directory layout, bare-`addr` keying) is *not* to be copied.
+- **Soft reference only:** its byte-gate *mechanics* (`poc/lib/cmpbytes.py`,
+  `poc/lib/matchdiff.py`) may be consulted, but nothing else.
+
+This also resolves the open question about fixing the `(module, addr)` key in the PoC: **no —
+leave it as-is**; the fix belongs in the Phase-3 ledger.

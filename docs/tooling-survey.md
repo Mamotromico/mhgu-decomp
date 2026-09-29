@@ -2,80 +2,8 @@
 
 A living reference: what other matching decomps do that we might borrow, grouped by
 project, with a suggested action per item. The survey below is the pool we refine from
-while Phase 3 tooling takes shape — it is not itself a decision list. Confirmed decisions
-are recorded in the section immediately below; when a point is adopted, promote it to its
-own doc (or the relevant `tools/` README) and record the outcome here.
-
-## Confirmed decisions
-
-Decisions the project owner has signed off, with the reasoning kept next to each so it is
-not re-litigated later. Everything not listed here is still open. *(This section is the
-record of decisions and is deliberately not carrying status markers — every entry here is,
-by definition, adopted.)*
-
-### Function ledger
-
-**Decision (2026-09-29):** a **committed, typed symbol ledger**, keyed by `(module, addr)`,
-with **externals identified** as a first-class kind.
-
-Rationale and shape:
-
-- **Committed** — lives in git, not a generated artifact, so it is a *stable* denominator
-  (unlike a linker map, a disassembler dump, or a `src/` directory scan).
-- **Typed** — each entry carries a *kind* (function vs. data vs. external) plus attributes
-  such as size (and arch), so a single artifact can both describe symbols and drive the
-  build.
-- **Keyed by `(module, addr)`, never `addr` alone** — overlays reuse base addresses across
-  time, so a bare address can name two different symbols. This is not optional.
-- **Externals as a first-class kind** — SDK / vendored symbols (our `nn::` surface) are
-  recorded so references resolve, but excluded from the progress denominator.
-- **Single source of truth** — the denominator for every progress number, and the universe
-  the worklist, near misses, and claims are derived from.
-
-Precedent: sm64ds `config/**/symbols.txt` (dsd format) for the typed, module-keyed ledger;
-sm64ds `External` class and OdysseyDecomp `no_object_check_for` for the externals concept.
-
-Still open (not yet decided): how status sits on top of the ledger (separate layer vs.
-baked into entries), and the alias / shared-"matched" honesty guards.
-
-### Ghidra front-end & output policy
-
-**Decision (2026-09-29):** Ghidra is driven **only** through pinned, committed **headless
-scripts**; **GhidraMCP is dropped**. All Ghidra **output** is **draft content** and is
-**never committed**.
-
-- **Headless only, agent-facing.** No live query path for agents. Human interactive
-  analysis remains available via `ghidra-gui.sh` (noVNC/X11) — the ban is on treating a
-  live, non-deterministic query as truth, not on looking.
-- **Output is a draft, never truth.** Decompiled C, disassembly listings, memory-block
-  dumps and logs are generated into the git-ignored `baserom/work/` tree and never
-  committed. Ghidra never decides symbol identity, boundaries, names, or the progress
-  denominator.
-- **Content vs. metadata.** Binary *content* (bytes, disassembly text) is never committed;
-  binary *metadata* may be, but only in its reviewed/committed form. A deterministic
-  inventory export may **seed** the committed ledger; the ledger itself stays authoritative
-  and hand-owned.
-- **One cold analysis, many warm queries.** Full auto-analysis runs once into a cached
-  Ghidra project under `baserom/work/`; all later work is targeted script runs against it.
-  Ghidra's value declines as coverage grows — it stays for unexplored regions, anomalies,
-  and data.
-
-Precedent: sm64ds `ghidra/DecompDump.java` ("scaffolds we hand to the LLM tier", never the
-identity authority).
-
-### PoC is a frozen snapshot
-
-**Decision (2026-09-29):** `poc/` is a **frozen snapshot** of the Phase-1/2 validation
-experiment.
-
-- **No further edits.** It is not maintained or extended.
-- **Not a structural template.** Phase 3 tooling is built fresh, with its own layout; the
-  PoC's structure (directory layout, bare-`addr` keying) is *not* to be copied.
-- **Soft reference only:** its byte-gate *mechanics* (`poc/lib/cmpbytes.py`,
-  `poc/lib/matchdiff.py`) may be consulted, but nothing else.
-
-This resolves the open question about fixing the `(module, addr)` key in the PoC: **no —
-leave it as-is**; the fix belongs in the Phase-3 ledger.
+while Phase 3 tooling takes shape — it is not itself a decision list. Adopted decisions are
+promoted to [`architecture.md`](architecture.md); when a point is adopted, record it there.
 
 ## How to read this
 
@@ -87,7 +15,7 @@ disposition toward it so far) and an **action tag** (how the idea would transfer
 | ⚫ | **Identified / considered** — noted, no decision taken. |
 | 🔴 | **Considered but discarded** — deliberately not adopting. |
 | 🟡 | **Partially adopted** — some of the idea is in use. |
-| 🟢 | **Adopted** — in use (and, where it belongs, recorded under Confirmed decisions). |
+| 🟢 | **Adopted** — in use (and, where it belongs, recorded in [`architecture.md`](architecture.md)). |
 
 | Tag | Meaning |
 | --- | --- |
@@ -122,9 +50,11 @@ Files referenced below live under their `tools/`.
   not optional for us.* Our PoC currently keys by bare `addr`.
 - 🟢 **adopt — Ghidra as a draft generator only.** `tools/ghidra/DecompDump.java` writes
   `<addr>.c`; it is "scaffolds we hand to the LLM tier", never the identity authority.
-- ⚫ **adopt — conservative re-symbolisation.** `tools/import_symbols.py` only renames slots
+- 🟢 **adopt — conservative re-symbolisation.** `tools/import_symbols.py` only renames slots
   still called `func_<addr>`, only at exact function starts; the rest land in
   `symbols/verified.tsv`. Inventing a name mid-blob "would resplit the data segment."
+  *(Accepted; see *Symbol identity & segmentation* in
+  [`architecture.md`](architecture.md).)*
 
 ### Progress & honesty
 
@@ -164,15 +94,18 @@ Files referenced below live under their `tools/`.
 - ⚫ **study — claims over git refs** (`tools/classqueue.py`): parentless commits so a second
   claimant's push is always non-fast-forward (they document the bug where pushing `HEAD`
   lets everyone think they won). Clever; defer until we are multi-contributor.
-- ⚫ **adopt — promotion bridge** (`tools/enroll.py`): each `src/` file is written into
+- 🟢 **adopt — promotion bridge** (`tools/enroll.py`): each `src/` file is written into
   `delinks.txt` as `rombytes` (build uses ROM bytes) or `complete` (build compiles ours).
   Idempotent. This is a generated→reviewed migration mechanism in concrete form.
+  *(Accepted; see File layout & generated build.)*
 
 ### Skip
 
-- 🔴 **skip — their `src/`-layout machinery** (`tools/srcpath.py`, `unnamed/<module>/`, cohort
-  placement). It exists to fix a mess created *after* ~11k files went flat; we should fix
-  layout up front instead.
+- 🟡 **partially adopted — their `src/`-layout machinery** (`tools/srcpath.py`,
+  `unnamed/<module>/`, cohort placement). The cohort / `unnamed` heuristics are skipped: they
+  exist to fix a mess created *after* ~11k files went flat, and we fix layout up front
+  instead. The underlying principle **is** adopted — one central resolver, and placement
+  follows the ledger, never the reverse. *(See File layout & generated build.)*
 - 🔴 **skip — mwcc-specific concepts** (`dcd` transcriptions, mwccarm flags, D0/D1/D2
   isolation). ARM9/mwccarm world; only the anti-gaming *principle* transfers.
 - 🔴 **skip — the full ~100-script ecosystem** (treemap, atlas, coddog, coin ledger).
@@ -220,8 +153,9 @@ Files referenced below live under their `tools/`.
 
 ## `pret` (pokeemerald / pokefirered) — conventions
 
-- ⚫ **adopt — canonical naming scheme.** `func_XXXXXXXX`, data labels, `g`/`s`/`D_` prefixes —
-  predictable, greppable, mapfile-checkable.
+- 🟢 **adopt — canonical naming scheme.** `func_XXXXXXXX`, data labels, `g`/`s`/`D_` prefixes —
+  predictable, greppable, mapfile-checkable. *(Accepted; see *Symbol & data naming* in
+  [`architecture.md`](architecture.md).)*
 - ⚫ **study — unmatched-code fallback** (an `.s` kept alongside unmatched C, so the build
   stays green with partial progress).
 - ⚫ **study — mapfile-driven progress** — derive matched/unmatched from the linker map rather
@@ -289,8 +223,9 @@ Files referenced below live under their `tools/`.
   tools is the specific failure mode sm64ds most aggressively defends against *(the ledger
   half is adopted; the canonical-DB and shared-predicate halves are not yet)*.
 - ⚫ **Separate "who is right" from "who claims"** — verification is independent of the solver.
-- ⚫ **Generated ≠ reviewed is a state machine, not a folder convention** (sm64ds `enroll.py`
-  `rombytes`→`complete`; the n64-family nonmatching `.s` fallback).
+- 🟢 **Generated ≠ reviewed is a state machine, not a folder convention** (sm64ds `enroll.py`
+  `rombytes`→`complete`; the n64-family nonmatching `.s` fallback). *(Accepted; folders
+  rejected — see File layout & generated build.)*
 - ⚫ **Pre-resolve everything a solver would otherwise have to look up** (the worklist) — the
   biggest cost lever in the whole corpus.
 
@@ -306,7 +241,8 @@ In leverage order, if/when we start building:
 3. ⚫ Pre-resolved worklist. *(sm64ds)*
 4. ⚫ Independent verify-and-bank. *(sm64ds)*
 5. ⚫ Near-miss bank + eval pin. *(sm64ds)*
-6. ⚫ Promotion state machine `rombytes` → `complete`. *(sm64ds + n64-family)*
+6. 🟡 Promotion state machine `rombytes` → `complete`. *(sm64ds + n64-family; the
+   state-not-folders shape is adopted — see File layout & generated build.)*
 7. ⚫ CMake + Ninja build. *(Lego City / OdysseyDecomp)*
 8. ⚫ Relocation-aware link check shaped like nx-decomp-tools. *(study)*
 
@@ -317,15 +253,6 @@ ledger. Neither is confirmed for **AArch32**, and our target is the *AArch32* Sw
 variant. So the practical first move is a Ghidra-side inventory export
 (`(address, size, name)` over `.text`) — which requires one cached auto-analysis run, kept
 **additive** so `poc/run.sh` (intentionally `-noanalysis`) is unchanged.
-
-## Open questions
-
-- Draft `docs/ledger-and-progress.md` sketching (a) the `(module, addr)` ledger format +
-  status enum + `External` class and (b) committed-data progress derivation adapted to our
-  pinned-clang gate? *(Design doc only, no code.)*
-
-*(The former question about fixing the `(module, addr)` key in the PoC is resolved — the
-PoC is a frozen snapshot; the fix belongs in the Phase-3 ledger.)*
 
 ---
 

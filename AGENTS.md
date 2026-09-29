@@ -60,10 +60,12 @@ Two tiers of translated output exist and must not be confused:
   understandable *while preserving the byte match*.
 
 The tiers must be **distinguishable** so a reader never mistakes generated code for
-deliberately-written code. The leading idea under consideration is to keep them in
-**separate folders** (a machine-generated tree vs. the curated tree) with tooling to
-migrate a function across once it is manually reviewed. **Not decided yet** — see the
-Open questions.
+deliberately-written code. **Decided:** the distinction is **ledger state, not a folder
+layout** — a folder-per-state split was considered and rejected (one folder expresses one
+axis, per file only, and a merged translation unit has mixed state). The tier is recorded on
+the ledger entry and surfaced by tooling; files are kept primarily one function per file and
+merged only when the original grouping is required for codegen. See
+[`docs/architecture.md`](docs/architecture.md) → *File layout & generated build*.
 
 ---
 
@@ -257,7 +259,8 @@ in the near-miss bank and do not count as byte-matches.
 - **Function splitting**: scripts isolate functions into individual compilation units
   so each can be matched independently.
 - **Module isolation**: functions grouped into logical modules mirroring the original
-  layout. Naming scheme TBD — keep names consistent with the disassembly.
+  layout. The naming scheme is defined in [`docs/architecture.md`](docs/architecture.md) →
+  *Symbol & data naming*.
 - **Dual workflows, one gate**: manual or automated/LLM-assisted, every function
   passes the *same* byte-match gate. No source is trusted just because an AI produced
   it.
@@ -285,7 +288,7 @@ in the near-miss bank and do not count as byte-matches.
   disassembly listings and memory-block dumps are generated into the git-ignored
   `baserom/work/` tree and are **never committed**. Only the reviewed, curated metadata
   they inform (e.g. the committed ledger) is committed — see
-  [`docs/tooling-survey.md`](docs/tooling-survey.md).
+  [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
@@ -335,13 +338,18 @@ Curated prior art (study for conventions; do not copy blindly):
 - [x] **Decide the Gold Ghidra automation front-end** → **headless scripts**; GhidraMCP
       dropped. All Ghidra output is draft-only, generated into the git-ignored
       `baserom/work/`, and **never committed**; the committed ledger stays authoritative.
-      See [`docs/tooling-survey.md`](docs/tooling-survey.md).
-- [ ] Define the symbol/module naming convention.
+      See [`docs/architecture.md`](docs/architecture.md).
+- [x] Define the symbol/module naming convention → `func_`/`D_` placeholders (full base),
+      `g_`/`s_` scope prefixes, module namespaces for internal symbols, discovered mangling
+      reproduced exactly for externals. See [`docs/architecture.md`](docs/architecture.md) →
+      *Symbol & data naming*.
 - [ ] Verify ARM32 support in `reccmp` / `asm-differ` / `splat`; decide whether to port
       `nx-decomp-tools` or build on `asm-differ`.
 - [ ] Choose the progress-tracking format (scoreboard / decomp.me / frogress).
 - [ ] Decide how much of the sm64ds automation stack (templates, near-miss bank,
       claims protocol) to adopt for the manual-first workflow.
-- [ ] Decide the generated-vs-reviewed split (separate folders + review tooling?).
+- [x] Decide the generated-vs-reviewed split (separate folders + review tooling?) →
+      **no folders**: it is ledger state, surfaced by tooling (see
+      [`docs/architecture.md`](docs/architecture.md), *File layout & generated build*).
 
 *(Expand this file as each item is resolved.)*
