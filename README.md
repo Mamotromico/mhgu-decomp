@@ -3,7 +3,7 @@
 A work-in-progress **decompilation of _Monster Hunter Generations Ultimate_** for the
 Nintendo Switch.
 
-The objective is to recreate a buildable C source tree from the game's shipped
+The objective is to recreate a buildable C++ source tree from the game's shipped
 executable: functions reverse-engineered from its assembly that, compiled with the
 **exact original toolchain**, reproduce the binary **byte-for-byte**, validated
 function by function with a diff tool.
@@ -11,11 +11,12 @@ function by function with a diff tool.
 > **This does not produce a playable game.** It cannot, and will not, run the game
 > for anyone who does not already own it.
 
-> **Status: early planning.** The analysis environment (Ghidra + Switch loader) is
-> set up and building in a devcontainer. The compiler/toolchain has not been
-> identified yet, so no code has been translated. This document is a living outline
-> and will be revised as the project progresses — see [AGENTS.md](AGENTS.md) for
-> agent-specific conventions.
+> **Status: early planning.** The analysis environment (Ghidra + Switch loader) is set
+> up; the target is **AArch32 (32-bit ARM)** running the NintendoSDK 4.4.x `nn::`
+> runtime, and translated code will be **C++17**. The exact compiler version is not yet
+> pinned (leading candidate: **clang 3.9.1**), so no code has been translated. This
+> document is a living outline and will be revised as the project progresses — see
+> [AGENTS.md](AGENTS.md) for agent-specific conventions.
 
 ---
 
@@ -41,7 +42,7 @@ graph TD
     A[Phase 1: Ghidra + Switch loader] --> B[Identify architecture, compiler & runtime]
     B --> C[Phase 2: Build environment / devcontainer]
     C --> D[Phase 3: Split binary into functions/modules]
-    D --> E[Translate to C]
+    D --> E[Translate to C++]
     E --> F[Byte-match gate vs. original]
     F --> E
 ```
@@ -68,25 +69,30 @@ identified.
 **Outcomes:**
 
 1. Load the game's `main` executable into a Ghidra project.
-2. Confirm the target **architecture** (32- vs 64-bit ARM).
+2. Confirm the target **architecture** (32- vs 64-bit ARM) — ✅ **AArch32**.
 3. Identify the **compiler, language standard, and runtime** (SDK version, libc,
    allocator). This is critical: byte-matching is only possible with the exact
-   compiler, so it gates all of Phase 2.
+   compiler, so it gates all of Phase 2. — 🔶 **partly done:** language = **C++17**,
+   runtime = NintendoSDK 4.4.x `nn::` + libc++; compiler candidate **clang 3.9.1**
+   (upstream Clang). See [AGENTS.md](AGENTS.md) and
+   [`docs/compiler-identification.md`](docs/compiler-identification.md).
 4. Record findings in [AGENTS.md](AGENTS.md) and/or `docs/`.
 
-> **Early lead (unverified):** the community project
+> **Confirmed:** the executable is **32-bit ARM (AArch32)**, not the more common 64-bit
+> (AArch64) Switch target. Two independent sources agree: the NPDM metadata
+> (`Is64BitInstruction: false`, `ProcessAddressSpace: AddressSpace32BitNoReserved`) and
+> the Ghidra Switch Loader, which selects `ARM:LE:32:v8` (image base `0x60000000`) when
+> importing the executable. This matches the community project
 > [`Fexty12573/forge`](https://github.com/Fexty12573/forge) — an MHGU-linking,
-> hooking and patching environment — builds against **devkitPro/devkitARM** and uses
-> a `switch32.ld` linker script. That implies the executable is **32-bit ARM
-> (AArch32)**, not the more common 64-bit (AArch64) Switch target. Treat this as a
-> hint to verify against the real binary, not a conclusion. See
-> [AGENTS.md](AGENTS.md) for the tooling implications.
+> hooking and patching environment — which builds against **devkitPro/devkitARM** and
+> uses a `switch32.ld` linker script. See [AGENTS.md](AGENTS.md) for the loader-built
+> memory map and the tooling implications.
 
 ---
 
 ## Phase 2 — Build environment
 
-Assemble a reproducible environment that compiles translated C with the **exact**
+Assemble a reproducible environment that compiles translated C++ with the **exact**
 toolchain that reproduces byte-identical output.
 
 - **Devcontainer / Dockerfile** as the source of truth for the toolchain (the
@@ -98,7 +104,7 @@ toolchain that reproduces byte-identical output.
 **Outcomes:**
 
 - A container/devcontainer that yields a working, pinned toolchain.
-- A first "hello world" object built from translated C that matches its counterpart
+- A first "hello world" object built from translated C++ that matches its counterpart
   in the original binary.
 
 ---
@@ -111,9 +117,9 @@ Turn the monolithic binary into an incremental, per-function translation pipelin
   compilation units so each can be matched in isolation.
 - **Module isolation** — group related functions into logical source modules
   mirroring the original layout, with a consistent naming scheme.
-- **Translation** — convert assembly to C, one function at a time. Two workflows are
-  first-class:
-  - **Manual** — decompile with Ghidra, hand-write C, verify each attempt.
+- **Translation** — convert assembly to C++, one function at a time. Two workflows
+  are first-class:
+  - **Manual** — decompile with Ghidra, hand-write C++, verify each attempt.
   - **Automated** — template matching for common function shapes and/or LLM-assisted
     translation. Both workflows pass the *same* verification gate.
 - **Byte-match gate** — verify each compiled function against the original with a
@@ -189,7 +195,7 @@ Soaratorium/
 ├── tools/                 # Decompilation helper scripts                    [planned]
 │   ├── split/             #   function/module splitting
 │   └── ...                #   diff wrappers, permuter glue, etc.
-├── src/                   # Translated C source                             [planned]
+├── src/                   # Translated C++ source                          [planned]
 └── config/                # Ghidra / toolchain configuration                [planned]
 ```
 
@@ -220,6 +226,13 @@ Prior art for tooling, workflow, and repository conventions (see also
   its current implementation targets AArch64 only — see [AGENTS.md](AGENTS.md).
 - **Fexty12573/forge** — MHGU linking/hooking/patching environment; useful for build
   mechanics and internal data-structure hints (see the AArch32 lead above).
+- **Nintendocustom/Lego-City-Undercover-Decompilation** — third-party Switch C++
+  matching decomp; the closest toolchain analog (clang 3.9.1 + CMake/Ninja + musl
+  sysroot + the OdysseyDecomp-family `tools/`).
+- **open-ead/sead** — first-party Nintendo C++ standard-library decomp; evidence that
+  upstream Clang byte-matches Switch code (`MATCHING_HACK_NX_CLANG`).
+- **sbergeron42/ssbu-decomp** — Smash Ultimate; documents which code resists stock
+  Clang (some SDK internals).
 - **reccmp** / **asm-differ** — the byte-matching diff tools themselves.
 - **splat** — disassembler + data extraction driven by a symbol map; likely backbone
   for function splitting and module layout.
