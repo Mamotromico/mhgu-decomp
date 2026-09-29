@@ -12,11 +12,11 @@
     }
   },
 
-  // Run as the non-root user defined in the Dockerfile. On Linux this also
-  // remaps that user's UID/GID to the host user's (updateRemoteUserUID defaults
-  // to true), so files written into the bind-mounted workspace are owned by the
-  // host user instead of root.
-  "remoteUser": "dev",
+  // Run as the base image's built-in `ubuntu` user (UID/GID 1000). On Linux
+  // this also remaps its UID/GID to the host user's (updateRemoteUserUID
+  // defaults to true), so files written into the bind-mounted workspace are
+  // owned by the host user instead of root.
+  "remoteUser": "ubuntu",
   "updateRemoteUserUID": true,
 
   // noVNC browser access for Ghidra's GUI (cross-platform).

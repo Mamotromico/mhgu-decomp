@@ -113,28 +113,24 @@ RUN set -eux; \
 # Non-root user
 # ---------------------------------------------------------------------------
 # The workspace is a host bind mount, so anything created as root would be
-# root-owned on the host and unusable by the contributor. A real non-root user
-# is created here and selected via `remoteUser` in devcontainer.json; the
-# dev-container tooling then remaps its UID/GID to the host user's on Linux
-# (updateRemoteUserUID, on by default). The ARG defaults only matter for the
-# plain `docker build`/`docker run` path (see README) — override them with
-# `--build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)` if your host
-# UID/GID differs.
+# root-owned on the host and unusable by the contributor. The Ubuntu base image
+# already ships a default non-root account, `ubuntu` (UID/GID 1000), so we reuse
+# it rather than creating one; it is selected via `remoteUser` in
+# devcontainer.json. On Linux the dev-container tooling then remaps its UID/GID
+# to the host user's (updateRemoteUserUID, on by default), so files written into
+# the bind-mounted workspace are owned by the host user instead of root.
 # `sudo` is deliberately not installed: every dependency is baked into this
 # image, so the contributor never needs to install packages at runtime.
-ARG USERNAME=dev
-ARG USER_UID=1000
-ARG USER_GID=1000
-
-RUN set -eux; \
-    groupadd --gid "${USER_GID}" "${USERNAME}"; \
-    useradd --uid "${USER_UID}" --gid "${USER_GID}" --create-home --shell /bin/bash "${USERNAME}"
+#
+# NOTE: this relies on the base image providing the `ubuntu` account. If
+# BASE_IMAGE is ever swapped for a distro without it, add an explicit
+# `groupadd`/`useradd` here (mind colliding with UID/GID 1000).
 
 # ---------------------------------------------------------------------------
 # Entry point / workspace
 # ---------------------------------------------------------------------------
 # Select the non-root user before WORKDIR so /workspace is created writable by
 # the contributor when the image is run without a bind mount.
-USER ${USERNAME}
+USER ubuntu
 WORKDIR /workspace
 CMD ["/bin/bash"]
