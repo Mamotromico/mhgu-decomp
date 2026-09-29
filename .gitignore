@@ -1,0 +1,38 @@
+# =============================================================================
+# Soaratorium — .gitignore
+# =============================================================================
+# The original game is COPYRIGHTED. Neither it nor any derived extraction of it
+# may ever be committed to this repository. Everything a contributor supplies
+# locally lives under baserom/ and is ignored wholesale.
+#
+# Derived/analysis output (build products, Ghidra projects) is also ignored: it
+# is reproducible from the (untracked) original binary.
+# =============================================================================
+
+# --- Original game data: NEVER commit -----------------------------------------
+# Ignore the entire baserom tree, but keep the empty directory itself in Git.
+baserom/*
+!baserom/.gitkeep
+
+# --- Ghidra projects & analysis artifacts -------------------------------------
+*.gpr
+*.rep/
+*.ghidra/
+ghidra_project*/
+ghidra_projects/
+
+# --- Build & derived output ---------------------------------------------------
+build/
+extracted/
+out/
+*.o
+*.obj
+*.a
+*.elf
+*.map
+
+# --- Python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
