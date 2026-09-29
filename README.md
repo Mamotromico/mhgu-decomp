@@ -13,9 +13,11 @@ function by function with a diff tool.
 
 > **Status: early planning.** The analysis environment (Ghidra + Switch loader) is set
 > up; the target is **AArch32 (32-bit ARM)** running the NintendoSDK 4.4.x `nn::`
-> runtime, and translated code will be **C++17**. The exact compiler version is not yet
-> pinned (leading candidate: **clang 3.9.1**), so no code has been translated. This
-> document is a living outline and will be revised as the project progresses — see
+> runtime, and translated code will be **C++17**. The target title version is settled: the
+> **latest update patch** (it and base `v0` both ship SDK 4.4.1), so the reconstructed
+> binary is the most recent released build. The exact compiler version is not yet pinned
+> (leading candidate: **clang 3.9.1**), so no code has been translated. This document is a
+> living outline and will be revised as the project progresses — see
 > [AGENTS.md](AGENTS.md) for agent-specific conventions.
 
 ---
