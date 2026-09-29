@@ -281,6 +281,11 @@ in the near-miss bank and do not count as byte-matches.
   repository or a commit. Contributors supply their own copy locally under
   `baserom/`, which is git-ignored wholesale. This extends to issue/PR attachments
   and logs.
+- This includes **decompiler/disassembler output**: Ghidra drafts (decompiled C),
+  disassembly listings and memory-block dumps are generated into the git-ignored
+  `baserom/work/` tree and are **never committed**. Only the reviewed, curated metadata
+  they inform (e.g. the committed ledger) is committed — see
+  [`docs/tooling-survey.md`](docs/tooling-survey.md).
 
 ---
 
@@ -327,7 +332,10 @@ Curated prior art (study for conventions; do not copy blindly):
       version `262144`). Both builds report SDK `4.4.1` (compiler unchanged) and the
       aligned `.text` diff confirms an incremental patch, so the compiler gives no reason to prefer base.
       Evidence: [`docs/compiler-identification.md`](docs/compiler-identification.md).
-- [ ] Decide the Gold Ghidra automation front-end (headless scripts vs. GhidraMCP).
+- [x] **Decide the Gold Ghidra automation front-end** → **headless scripts**; GhidraMCP
+      dropped. All Ghidra output is draft-only, generated into the git-ignored
+      `baserom/work/`, and **never committed**; the committed ledger stays authoritative.
+      See [`docs/tooling-survey.md`](docs/tooling-survey.md).
 - [ ] Define the symbol/module naming convention.
 - [ ] Verify ARM32 support in `reccmp` / `asm-differ` / `splat`; decide whether to port
       `nx-decomp-tools` or build on `asm-differ`.

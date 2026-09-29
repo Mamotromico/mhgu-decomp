@@ -38,6 +38,45 @@ sm64ds `External` class and OdysseyDecomp `no_object_check_for` for the external
 Still open (not yet decided): how status sits on top of the ledger (separate layer vs.
 baked into entries), and the alias / shared-"matched" honesty guards.
 
+### Ghidra front-end & output policy
+
+**Decision (2026-09-29):** Ghidra is driven **only** through pinned, committed **headless
+scripts**; **GhidraMCP is dropped**. All Ghidra **output** is **draft content** and is
+**never committed**.
+
+- **Headless only, agent-facing.** No live query path for agents. Human interactive
+  analysis remains available via `ghidra-gui.sh` (noVNC/X11) — the ban is on treating a
+  live, non-deterministic query as truth, not on looking.
+- **Output is a draft, never truth.** Decompiled C, disassembly listings, memory-block
+  dumps and logs are generated into the git-ignored `baserom/work/` tree and never
+  committed. Ghidra never decides symbol identity, boundaries, names, or the progress
+  denominator.
+- **Content vs. metadata.** Binary *content* (bytes, disassembly text) is never committed;
+  binary *metadata* may be, but only in its reviewed/committed form. A deterministic
+  inventory export may **seed** the committed ledger; the ledger itself stays authoritative
+  and hand-owned.
+- **One cold analysis, many warm queries.** Full auto-analysis runs once into a cached
+  Ghidra project under `baserom/work/`; all later work is targeted script runs against it.
+  Ghidra's value declines as coverage grows — it stays for unexplored regions, anomalies,
+  and data.
+
+Precedent: sm64ds `ghidra/DecompDump.java` ("scaffolds we hand to the LLM tier", never the
+identity authority).
+
+### PoC is a frozen snapshot
+
+**Decision (2026-09-29):** `poc/` is a **frozen snapshot** of the Phase-1/2 validation
+experiment.
+
+- **No further edits.** It is not maintained or extended.
+- **Not a structural template.** Phase 3 tooling is built fresh, with its own layout; the
+  PoC's structure (directory layout, bare-`addr` keying) is *not* to be copied.
+- **Soft reference only:** its byte-gate *mechanics* (`poc/lib/cmpbytes.py`,
+  `poc/lib/matchdiff.py`) may be consulted, but nothing else.
+
+This resolves the open question about fixing the `(module, addr)` key in the PoC: **no —
+leave it as-is**; the fix belongs in the Phase-3 ledger.
+
 ## How to read this
 
 Each bullet carries a **status** (a coloured circle, reflecting the project owner's
@@ -81,7 +120,7 @@ Files referenced below live under their `tools/`.
   `tools/modules.py`: overlays reuse base addresses across time, so "anything that records
   matches must key by `(module, addr)`, never addr alone." *This is the one detail that is
   not optional for us.* Our PoC currently keys by bare `addr`.
-- ⚫ **study — Ghidra as a draft generator only.** `tools/ghidra/DecompDump.java` writes
+- 🟢 **adopt — Ghidra as a draft generator only.** `tools/ghidra/DecompDump.java` writes
   `<addr>.c`; it is "scaffolds we hand to the LLM tier", never the identity authority.
 - ⚫ **adopt — conservative re-symbolisation.** `tools/import_symbols.py` only renames slots
   still called `func_<addr>`, only at exact function starts; the rest land in
@@ -284,8 +323,9 @@ variant. So the practical first move is a Ghidra-side inventory export
 - Draft `docs/ledger-and-progress.md` sketching (a) the `(module, addr)` ledger format +
   status enum + `External` class and (b) committed-data progress derivation adapted to our
   pinned-clang gate? *(Design doc only, no code.)*
-- Fix the `(module, addr)` key in the PoC now (overlay-safe), or leave the PoC as-is and
-  make it Phase-3 groundwork?
+
+*(The former question about fixing the `(module, addr)` key in the PoC is resolved — the
+PoC is a frozen snapshot; the fix belongs in the Phase-3 ledger.)*
 
 ---
 
