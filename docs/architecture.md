@@ -38,8 +38,9 @@ Precedent: sm64ds `config/**/symbols.txt` (dsd format) for the typed, module-key
 sm64ds `External` class and OdysseyDecomp `no_object_check_for` for the externals concept.
 
 Open: how *progress* status sits on top of the ledger (separate layer vs. baked into
-entries) — the honesty/link attributes (`guess`, `lazy`) are settled as entry properties, but
-the matched/unmatched status layer is not — and the alias / shared-"matched" honesty guards.
+entries) — the honesty/link attributes (`guess`, `lazy`) are settled as entry properties, and
+the two published metrics are settled (*Progress metrics*), but the matched/unmatched status
+layer itself is not — and the alias / shared-"matched" honesty guards.
 
 ### Symbol identity & segmentation
 
@@ -55,6 +56,28 @@ existing placeholder entries only** and never **introduce** a boundary from an i
   the progress denominator, and orphaning already-matched work.
 
 Precedent: sm64ds `tools/import_symbols.py` + `symbols/verified.tsv`.
+
+### Segmentation seed (Ghidra inventory export)
+
+The committed ledger is **seeded from a deterministic Ghidra inventory export**, not from a
+third-party auto-splitter.
+
+- **One export, both kinds.** A single cached auto-analysis run yields `(addr, size, kind,
+  name)` for **functions and in-program data** (`.rodata`/`.data`) alike — code and data are the
+  same segmentation problem, and one export covers both.
+- **Reference-driven, therefore a draft.** Data is enumerated only where a *reference* points at
+  it (a relocation, a constant-address load, a recovered table entry), so computed-offset blobs
+  can be missed and boundaries inferred. The export **seeds** the ledger; the ledger stays
+  authoritative (see *Ghidra & output policy*).
+- **No third-party auto-splitter.** splat (and the dsd family) are dropped from the critical
+  path: splat's AArch32 support is unconfirmed and its proven ground is MIPS-family. Its one
+  transferable idea — a declarative segment/split config — is convenience, not a seeder.
+- **In-program data only; romfs/assets are out of scope.** The match target is `main.nso`;
+  romfs assets live in a separate NCA that `main.nso` does not contain, so no asset pipeline is
+  required.
+
+Precedent: sm64ds `dsd` and sotn `splat` auto-splitters (the mechanism *not* adopted); Ghidra
+headless inventory (per *Ghidra & output policy*).
 
 ### Symbol & data naming
 
@@ -144,6 +167,20 @@ Precedent: OdysseyDecomp / Lego City (stubs; address-agnostic per-function `tool
 sm64ds `tools/enroll.py` (`rombytes`/`complete`); nx-decomp-tools `delinks` for the
 relocation-checked end state.
 
+### Progress metrics (two numbers)
+
+Progress is reported as **two independent metrics**:
+
+- **Decompiled** — from the committed ledger: the entries that meet the shared "matched"
+  predicate. Requires no build.
+- **Linked** — a whole-image comparison of the built output against the original (the
+  relocation/link check, plus a first-mismatching-byte locator). Requires a build.
+
+The ledger metric is the published, continuously-reported number; the linked metric is the
+end-state gate.
+
+Precedent: decomp.dev's decompiled-vs-linked split; sm64ds "matched" vs "byte-verified".
+
 ## Constraints
 
 ### Ghidra & output policy
@@ -160,8 +197,8 @@ dropped**. All Ghidra **output** is **draft content** and is **never committed**
   denominator.
 - **Content vs. metadata.** Binary *content* (bytes, disassembly text) is never committed;
   binary *metadata* may be, but only in its reviewed/committed form. A deterministic
-  inventory export may **seed** the committed ledger; the ledger itself stays authoritative
-  and hand-owned.
+  inventory export may **seed** the committed ledger (see *Segmentation seed*); the ledger
+  itself stays authoritative and hand-owned.
 - **One cold analysis, many warm queries.** Full auto-analysis runs once into a cached
   Ghidra project under `baserom/work/`; all later work is targeted script runs against it.
   Ghidra's value declines as coverage grows — it stays for unexplored regions, anomalies,

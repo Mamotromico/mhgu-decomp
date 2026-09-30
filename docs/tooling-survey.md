@@ -63,7 +63,8 @@ Files referenced below live under their `tools/`.
   every surface reads that one file.
 - ⚫ **adopt — README progress auto-written between `<!-- progress:start/end -->` markers**
   (`tools/progress.py`).
-- ⚫ **adopt — publish "matched" and "byte-verified" side by side**, as two distinct numbers.
+- 🟢 **adopt — publish "matched" and "byte-verified" side by side**, as two distinct numbers.
+  *(Accepted; see *Progress metrics* in [`architecture.md`](architecture.md).)*
 - ⚫ **adopt — one shared definition of "matched"** (`bytegate.counts_as_matched`, via
   `tools/asm_policy.py`), so separate tools cannot drift.
 - ⚫ **adopt — honesty rules.** `bytegate.is_zero_size_alias` drops second names from the
@@ -114,14 +115,22 @@ Files referenced below live under their `tools/`.
 
 ## `sotn-decomp` (layout & diffing)
 
-- ⚫ **study — `splat` config as the single declaration of segments/splits**
-  (`config/splat.*.yaml`). Declarative splitting, one file to rule the tree. Confirm
-  AArch32 support before committing to splat.
+- 🔴 **skip — `splat` as an auto-splitter.** AArch32 support is unconfirmed and its proven
+  ground is MIPS-family; our segmentation seed is a Ghidra inventory export, not a third-party
+  splitter (see *Segmentation seed* in [`architecture.md`](architecture.md)).
+- ⚫ **study — `splat`'s declarative segment/split config** (`config/splat.*.yaml`): one file
+  declaring every segment and split. The idea, not the tool.
 - ⚫ **adopt — clean, shallow `tools/` layout** — easy to read, easy to extend.
 - ⚫ **study — `asm-differ` integration** for the human-facing line-level diff (the companion
   to our byte gate).
-- ⚫ **study — frogress** (below) as a progress dashboard; they are a reference adopter.
+- ⚫ **study — artifact-derived progress** (`tools/progress.py`): the denominator is the build's
+  linker map (`mapfile_parser`), and the "matched" bit is the absence of a nonmatchings `.s` /
+  `.NON_MATCHING` symbol. Publishes per commit to frogress + Discord + a self-hosted site. This
+  is the reference for our **Linked** metric surface; its `.s`-presence status bit and
+  build-derived denominator are the Model-A mechanism we rejected (*see Progress metrics*).
 - ⚫ **study — decomp-permuter** in the last-mile loop.
+- ⚫ **note — AGPL-3.0.** Compatible with our GPL-3.0 (any copied files stay AGPL). Prefer
+  study/reimplement over vendoring.
 
 ---
 
@@ -142,9 +151,9 @@ separate per-function claim, and the build proves only "it compiles".
   see *Unmatched-function fallback* in [`architecture.md`](architecture.md).)*
 - ⚫ **adopt — per-function status enum** (`data/file_list.yml`):
   `Matching / NonMatchingMinor / NonMatchingMajor / NotDecompiled / Wip`. A *graded* status,
-  not just pass/fail — useful for our behaviour-match tier. Of these, `Library` is not a new
-  concept: it *is* our `external` kind (see *Symbol ledger* in [`architecture.md`](architecture.md)).
-  The graded statuses feed the ledger's still-open progress-status layer.
+  not just pass/fail — useful for our behaviour-match tier, and an input to the *Decompiled*
+  metric. Of these, `Library` is not a new concept: it *is* our `external` kind (see *Symbol
+  ledger* in [`architecture.md`](architecture.md)).
 - 🟢 **adopt — the `guess` name-honesty flag.** `guess = the symbol is a guess and does not
   appear in the target executable` — recorded so a guessed name is never mistaken for a
   discovered one. *Accepted as a ledger attribute; see *Symbol & data naming* in
@@ -175,8 +184,9 @@ separate per-function claim, and the build proves only "it compiles".
 - ⚫ **study — relocation-aware reference checking.** Exactly the *shape* our Phase-3 link
   gate needs (`bl`, literal pool, GOT).
 - ⚫ **study — `listsym` / `check` tooling; function metadata + status tracking.**
-- ⚫ **study — `viking`'s data-tracking concepts.** ADRP-based for AArch64; we would need
-  AArch32 equivalents for `adr` and literal pools.
+- 🔴 **skip — porting `viking`'s data tracking.** ADRP-based for AArch64; the segmentation
+  seed (Ghidra inventory export — see *Segmentation seed*) already recovers in-program data from
+  relocations and references.
 - 🔴 **skip — as-is adoption.** Hardcodes `arch='aarch64'`, `R_AARCH64_*`, 64-bit ELF,
   `0x10`-byte PLT entries, `ADDRESS_BASE=0x71_0000_0000`.
 - ⚫ **note — MIT-licensed (leoetlino).** The only repo in the open-ead family that grants a
@@ -252,8 +262,6 @@ If we ever reuse text, it needs explicit permission + attribution.
 
 ---
 
----
-
 ## `sbergeron42/ssbu-decomp`
 
 - ⚫ **lesson — document *which* code resists stock Clang** (some SDK internals). Sets
@@ -288,7 +296,9 @@ If we ever reuse text, it needs explicit permission + attribution.
 - ⚫ **`decomp.me`** — **study.** Web scratchpad + scoring; can host our compiler preset for
   sharing single-function puzzles.
 - ⚫ **`frogress`** — **study.** Self-hosted progress dashboard reading a project's progress
-  output; icing once we have a stable number to publish.
+  output; the publish surface for our two metrics once we have a number to publish.
+- ⚫ **`decomp.dev`** — **study (nice-to-have).** Public dashboard consuming a project's progress
+  feed; the decompiled-vs-linked split is the UI shape our two metrics mirror.
 
 ---
 
@@ -298,6 +308,9 @@ If we ever reuse text, it needs explicit permission + attribution.
   canonical DB); **every tool imports the same "matched" predicate.** Divergence between
   tools is the specific failure mode sm64ds most aggressively defends against *(the ledger
   half is adopted; the canonical-DB and shared-predicate halves are not yet)*.
+- 🟢 **Two progress numbers: decompiled (ledger) and linked (artifact).** The ledger number
+  needs no build; the linked number is the end-state gate. *(Accepted; see *Progress metrics* in
+  [`architecture.md`](architecture.md).)*
 - ⚫ **Separate "who is right" from "who claims"** — verification is independent of the solver.
 - 🟢 **Generated ≠ reviewed is a state machine, not a folder convention** (sm64ds `enroll.py`
   `rombytes`→`complete`). *(Accepted; folders rejected — see File layout & generated build and
@@ -308,6 +321,9 @@ If we ever reuse text, it needs explicit permission + attribution.
 ---
 
 ## Candidate priorities (not yet decided)
+
+The **segmentation seed** (Ghidra inventory export) is adopted and precedes everything below —
+see *Segmentation seed* in [`architecture.md`](architecture.md).
 
 In leverage order, if/when we start building:
 
@@ -320,17 +336,17 @@ In leverage order, if/when we start building:
 6. 🟡 Promotion state machine `rombytes` → `complete`. *(sm64ds + n64-family; the
    state-not-folders shape is adopted — see File layout & generated build.)*
 7. ⚫ CMake + Ninja build. *(Lego City / OdysseyDecomp)*
-8. ⚫ Relocation-aware link check shaped like nx-decomp-tools. *(study)*
+8. ⚫ Relocation-aware link check shaped like nx-decomp-tools. *(study — the **Linked** metric; see Progress metrics in [`architecture.md`](architecture.md))*
 9. ⚫ Model C per-function gate rig — stub callees, diff one function (`asm-differ`-style, cf.
    `poc/lib/matchdiff.py`) — staged toward Model B. *(OdysseyDecomp / Lego City)*
 
-## Known gap
+## Segmentation seed — resolved
 
-Every mature reference starts from an **auto-splitter** (dsd, splat) that produces its
-ledger. Neither is confirmed for **AArch32**, and our target is the *AArch32* Switch
-variant. So the practical first move is a Ghidra-side inventory export
-(`(address, size, name)` over `.text`) — which requires one cached auto-analysis run, kept
-**additive** so `poc/run.sh` (intentionally `-noanalysis`) is unchanged.
+Promoted to [`architecture.md`](architecture.md) → *Segmentation seed*. In short: the ledger is
+seeded from a **Ghidra inventory export** covering functions **and** in-program data (one cached
+auto-analysis run, kept *additive* so `poc/run.sh`'s intentional `-noanalysis` is unchanged). No
+third-party auto-splitter (splat's AArch32 support is unconfirmed), and romfs/assets are outside
+`main.nso` and out of scope.
 
 ---
 

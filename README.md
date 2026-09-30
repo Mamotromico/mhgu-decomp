@@ -249,8 +249,11 @@ Prior art for tooling, workflow, and repository conventions (see also
 - **sbergeron42/ssbu-decomp** — Smash Ultimate; documents which code resists stock
   Clang (some SDK internals).
 - **reccmp** / **asm-differ** — the byte-matching diff tools themselves.
-- **splat** — disassembler + data extraction driven by a symbol map; likely backbone
-  for function splitting and module layout.
+>🤖
+> - **splat** — disassembler + data extraction driven by a symbol map; a *study reference only*
+>   (its AArch32 support is unconfirmed). Our segmentation seed is a Ghidra inventory export,
+>   not a third-party splitter — see [docs/architecture.md](docs/architecture.md).
+>🤖<
 - **decomp-permuter** — permutes candidate source variants to find the spelling that
   byte-matches.
 
