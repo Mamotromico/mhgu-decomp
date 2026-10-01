@@ -351,6 +351,10 @@ auto-analysis run, kept *additive* so `poc/run.sh`'s intentional `-noanalysis` i
 third-party auto-splitter (splat's AArch32 support is unconfirmed), and romfs/assets are outside
 `main.nso` and out of scope.
 
+The export/ledger **format** is also settled — TSV with a mandatory header row, one record per
+line (JSONL reserved for the heterogeneous nested table only; SQLite at most a git-ignored
+working store) — see *Ledger & export format* in [`architecture.md`](architecture.md).
+
 ---
 
 *Refine in place. When a point is adopted, promote it to its own doc and record the

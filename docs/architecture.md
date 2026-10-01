@@ -139,6 +139,70 @@ third-party auto-splitter.
 Precedent: sm64ds `dsd` and sotn `splat` auto-splitters (the mechanism *not* adopted); Ghidra
 headless inventory (per *Ghidra & output policy*).
 
+### Inventory export — concrete schema
+
+`tools/ghidra/InventoryExport.java` (driven by `tools/ghidra/inventory.sh`) writes four
+deterministic TSVs into the git-ignored `baserom/work/inventory/` — a **draft** that seeds,
+never replaces, the ledger:
+
+| file | purpose | columns |
+| --- | --- | --- |
+| `inventory.tsv` | cut-point candidates → manifest | `addr kind size name block source name_class thunk entry exported noncontig` |
+| `inventory.nested.tsv` | reference-only symbols → review table | `addr kind name block source name_class parent` |
+| `inventory.gaps.tsv` | uncovered initialized ranges → `D_<addr>` blobs | `block addr size` |
+| `inventory.externals.tsv` | imports (`dynsym`) → `external` kind | `name library source` |
+
+Classification rules (the export is the draft; the ledger generator is authoritative):
+
+- **`kind ∈ {function, data}`** in `inventory.tsv`; **externals are a separate file**, not a
+  `kind` value, because their schema differs (no size/block/addr).
+- A **function** (any executable block) and **top-level data in a non-executable block**
+  (`.rodata`/`.data`) are cut points. **Data living inside `.text`** (literal pools, jump
+  tables) is reference material and lands in `inventory.nested.tsv` via the symbol pass.
+- The nested file is **symbol-table driven**: every program-space symbol that is *not* the
+  primary symbol at a cut-point address — labels inside functions, aliases, params/locals,
+  literal-pool labels. `parent` is the enclosing function entry (or empty). Struct/array
+  *components* are a follow-up: they are `Data`, not symbols, and are not enumerated yet.
+- `name_class` is `discovered` iff `Symbol.getSource()` is `IMPORTED` or `USER_DEFINED`,
+  else `generated` (see *Symbol & data naming*).
+- `thunk`/`noncontig`/`entry`/`exported` are booleans: `Function.isThunk()`, a body spanning
+  >1 range, membership in the loader's external entry points, and `Symbol.isGlobal()`.
+- **Gaps** are initialized bytes claimed by neither a function body nor a defined `Data`; the
+  generator fills them as `D_<addr>` so the denominator is complete.
+- One row per symbol; **aliases are not deduplicated** — alias resolution is the ledger
+  generator's job.
+
+The cold run performs a **full auto-analysis** (not `-noanalysis`); the export is meaningless
+over an un-analysed program.
+
+### Ledger & export format
+
+The committed ledger and the Ghidra inventory export share **one line-oriented text format —
+TSV, one record per line, with a mandatory header row** — so the ledger generator is a
+near-identity mapping of the export and a `diff` of the two shows exactly where a human
+overrode the draft.
+
+- **TSV, because the readers are three.** The same rows are produced by a Ghidra script,
+  consumed by the ledger generator, and reviewed by a human / `git diff`. TSV is the only format
+  that serves all three: line-oriented, so `sort`/`awk`/`join`/`diff`/`wc -l` work and git review
+  stays per-record; dependency-free to parse; and it needs exactly one invariant — **no tab or
+  newline inside a field** — which Ghidra symbol names (including Itanium-mangled `_ZN2nn…`) never
+  violate, asserted by the producer rather than trusted.
+- **A header row is mandatory.** It makes the schema self-describing and lets columns be added
+  (status axes, `group`, …) without silent column-position drift.
+- **CSV is rejected.** Its quoting rules break the line-oriented shell tooling for no benefit —
+  we have no spreadsheet-interop requirement.
+- **JSONL is the escape hatch for heterogeneous records only.** The nested-symbol table's rows
+  differ per kind (jump table vs. literal pool vs. vtable/RTTI vs. struct field), so *that* file
+  may switch to self-describing JSONL if a fixed column set becomes sparse-and-ugly; the uniform
+  tables stay TSV. Not load-bearing — the nested table never reaches the manifest.
+- **SQLite is a working store at most.** A git-ignored, regenerable DB is welcome as an
+  *analysis* aid (relational queries over symbols ⋈ references), never as a committed artifact —
+  it is binary and not reviewable.
+
+Precedent: sm64ds `config/**/symbols.txt` (dsd text format) + `symbols/verified.tsv`;
+pret/zeldaret line-oriented symbol lists.
+
 ### Symbol & data naming
 
 Names are **discovered, not invented**. An unknown symbol keeps an address-encoded
@@ -166,6 +230,16 @@ second symbol (see *Symbol identity & segmentation*).
   never mistaken for a discovered one. This keeps *discovered, not invented* honest — a
   guessed name does not claim to have been discovered — and costs nothing at the match, since
   an internal name is byte-invisible.
+- **The Ghidra raw name is provenance, not identity.** Ghidra's auto-names (`FUN_`, `DAT_`,
+  `byte_`, `word_`, …) are kept **verbatim in the draft export** — they carry real signal
+  (found-vs-invented, and a debugging key for draft↔ledger round-trips) — but are **never** the
+  ledger name, which stays `func_<addr>` / `D_<addr>`. The prefix encodes Ghidra's *inference*
+  (`DAT_`/`byte_` = data typing, `FUN_` = function detection) and can shift across analysis runs,
+  so adopting it would contradict *Ghidra & output policy* ("Ghidra never decides … names"). An
+  entry may carry the raw name as **provenance** — a non-symbol attribute that never enters the
+  namespace, so it cannot become an alias. Discovered names (`dynsym`/RTTI) are reproduced
+  verbatim whether or not Ghidra prefixes them, so the draft's discovered-vs-generated
+  classification reads `Symbol.getSource()` and symbol type, **not** the prefix string.
 
 Precedent: pret `func_XXXXXXXX` + `g`/`s`/`D_` prefixes; zeldaret `func_08000000` /
 `D_08000000` / `sXxx`; sm64ds `func_<addr>` inside the ledger; OdysseyDecomp `guess` flag.
