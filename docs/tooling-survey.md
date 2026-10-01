@@ -306,8 +306,9 @@ If we ever reuse text, it needs explicit permission + attribution.
 
 - 🟡 **One artifact owns identity** (the ledger); **one file owns the published number** (the
   canonical DB); **every tool imports the same "matched" predicate.** Divergence between
-  tools is the specific failure mode sm64ds most aggressively defends against *(the ledger
-  half is adopted; the canonical-DB and shared-predicate halves are not yet)*.
+  tools is the specific failure mode sm64ds most aggressively defends against *(the ledger and
+  shared-predicate halves are now adopted — see *Status layer & the shared "matched" predicate*
+  in [`architecture.md`](architecture.md); the canonical-DB half is not yet)*.
 - 🟢 **Two progress numbers: decompiled (ledger) and linked (artifact).** The ledger number
   needs no build; the linked number is the end-state gate. *(Accepted; see *Progress metrics* in
   [`architecture.md`](architecture.md).)*
@@ -327,7 +328,9 @@ see *Segmentation seed* in [`architecture.md`](architecture.md).
 
 In leverage order, if/when we start building:
 
-1. 🟡 Committed `(module, addr)` ledger with a status enum. *(sm64ds + OdysseyDecomp)*
+1. 🟢 Committed `(module, addr)` ledger with a status enum. *(sm64ds + OdysseyDecomp)* —
+   **promoted** to [`architecture.md`](architecture.md) → *Symbol ledger* / *Status layer & the
+   shared "matched" predicate* (status baked into entries; four axes; one shared predicate).
 2. ⚫ Deterministic progress from committed data + one canonical DB + auto-written README
    block. *(sm64ds)*
 3. ⚫ Pre-resolved worklist. *(sm64ds)*

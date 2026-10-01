@@ -37,10 +37,70 @@ The ledger is a **committed, typed symbol ledger** keyed by `(module, addr)`, wi
 Precedent: sm64ds `config/**/symbols.txt` (dsd format) for the typed, module-keyed ledger;
 sm64ds `External` class and OdysseyDecomp `no_object_check_for` for the externals concept.
 
-Open: how *progress* status sits on top of the ledger (separate layer vs. baked into
-entries) — the honesty/link attributes (`guess`, `lazy`) are settled as entry properties, and
-the two published metrics are settled (*Progress metrics*), but the matched/unmatched status
-layer itself is not — and the alias / shared-"matched" honesty guards.
+**Resolved — status is baked into entries.** An entry carries identity *and* status (see
+*Status layer & the shared "matched" predicate*); there is no separate sidecar. The entry *set*
+stays the stable denominator; only the status attributes churn. The honesty/link attributes
+(`guess`, `lazy`) remain entry properties.
+
+### Status layer & the shared "matched" predicate
+
+Per-symbol status is **baked into the ledger entry** — not a separate sidecar. The entry is the
+single committed record of both *identity* and *status*, keyed by the same `(module, addr)`.
+
+- **One committed artifact.** Status shares the ledger's `(module, addr)` key, so there is no join
+  to reconcile and no second file to drift. Cost accepted: the ledger's git history mixes identity
+  edits with match progress — that churn is mechanics, not meaning, and the single-writer
+  reconciler plus CI `--check` (see *File layout & generated build*) keep it honest. The entry
+  *set* remains the stable denominator; only status attributes change per match.
+- **Status is not a funnel.** A single lifecycle enum cannot express "matched but not linked",
+  "linked but generated", or "behaviour-matched, deliberately not enrolled" — and the two published
+  metrics (*Progress metrics*) need different evidence. Status is therefore **four orthogonal
+  axes**:
+
+| axis | values | written by | meaning |
+| --- | --- | --- | --- |
+| `verify` | `none`, `behaviour`, `match` | byte gate | quality of the reconstruction; `behaviour` = equivalent but **not** byte-identical |
+| `review` | `generated`, `reviewed` | reviewer | readability tier (*Generated vs. reviewed code*); `reviewed` preserves the byte match |
+| `enroll` | `rombytes`, `complete` | reconciler | build input — original bytes vs. our compiled object |
+| `reloc` | *(derived)* | link build | relocation/link check — **computed, never authored** |
+
+- **`enroll` is two-valued; the unmatched case is a project-level mode.** A project-wide
+  `build_mode ∈ {C, B}` (see *Unmatched-function fallback*) decides what an unmatched symbol
+  resolves to: a **stub** in Mode C, `rombytes` in Mode B. Either way
+  `enroll = complete ⇔ verify = match` and the region is reloc-clean — a `behaviour` match is
+  never enrolled as compiled, or it would poison the whole-image Linked metric.
+- **`reloc` / Linked are derived, not stored.** `AGENTS.md`'s per-function "done" includes the
+  relocation/link check, but *Progress metrics* makes Linked a whole-image number; the link build
+  computes it and the canonical DB joins it. Nothing here is hand-authored.
+- **`guess` / `lazy` stay identity attributes**, not status — they gate naming/linking honesty,
+  not matching.
+
+**One shared "matched" predicate.** Every tool — the gate, the DB builder, CI — imports the *same*
+predicate so the definitions cannot drift (sm64ds `bytegate.counts_as_matched`):
+
+```text
+include(e)    := e.kind != external                 # externals leave the denominator
+counted(e)    := include(e) and not is_alias(e)     # honesty guard, below
+decompiled(e) := counted(e) and e.verify == match
+behaviour(e)  := counted(e) and e.verify == behaviour
+done(e)       := decompiled(e) and link_build.region_ok(e)
+
+Decompiled = |decompiled| / |counted|
+Linked     = |done|       / |counted|
+```
+
+**Honesty guards** (settle the alias / shared-"matched" half):
+
+- **Alias / zero-size dropped from both sides.** A second name at an existing `(module, addr)`, or
+  a zero-size entry, counts in neither the numerator nor the denominator.
+- **matched-but-unbuilt is surfaced.** `decompiled ∧ enroll ≠ complete` is reported as its own
+  bucket, so a match is never inflated by code the build does not use.
+- **`behaviour` never adds to Decompiled** — it is reported beside the match count.
+- **`guess` / `lazy` are identity attributes**, not status.
+
+Precedent: sm64ds `bytegate.counts_as_matched` (one shared predicate), `is_zero_size_alias` and
+`enrollment_of` (the guards); sm64ds `tools/tiers.py` (distinct denominators, explicitly "not a
+funnel").
 
 ### Symbol identity & segmentation
 
@@ -139,14 +199,16 @@ Precedent: sm64ds `tools/enroll.py` (`delinks.txt` as `rombytes`/`complete`),
 `tools/srcpath.py` (one central resolver; *"placement follows migration, it does not lead
 it"*), `tools/import_symbols.py` + `symbols/verified.tsv`; nx-decomp-tools `delinks`.
 
-Open: the state set the ledger records, and the two-adjacent-functions experiment that
-detects real TU coupling. (The fallback for unmatched functions is resolved — see
-*Unmatched-function fallback* below.)
+Open: the two-adjacent-functions experiment that detects real TU coupling. (The state set the
+ledger records is resolved — see *Status layer & the shared "matched" predicate*; the fallback
+for unmatched functions is resolved — see *Unmatched-function fallback* below.)
 
 ### Unmatched-function fallback (staged)
 
 The fallback for code we have not yet matched is **staged**, not a single mechanism, and it
-is the same axis as the generated/reviewed state.
+is the same axis as the generated/reviewed state. The active stage is the project-wide
+`build_mode` — `C` (stubs) now, `B` (byte substitution) at the end state — which decides what an
+unmatched symbol's `enroll` resolves to (see *Status layer & the shared "matched" predicate*).
 
 - **Now — Model C (stubs).** While coverage is partial, an unmatched callee is *declared, but
   not defined*, so the tree still compiles and links as a normal developer executable.
@@ -177,7 +239,8 @@ Progress is reported as **two independent metrics**:
   relocation/link check, plus a first-mismatching-byte locator). Requires a build.
 
 The ledger metric is the published, continuously-reported number; the linked metric is the
-end-state gate.
+end-state gate. The predicate's parts — the externals exclusion, the alias/zero-size guard, and
+the `behaviour` exclusion — are defined once in *Status layer & the shared "matched" predicate*.
 
 Precedent: decomp.dev's decompiled-vs-linked split; sm64ds "matched" vs "byte-verified".
 
