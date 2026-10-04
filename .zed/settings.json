@@ -9,6 +9,16 @@
     "**/baserom/**"
   ],
   "lsp": {
+    "basedpyright": {
+      "settings": {
+        "basedpyright": {
+          "analysis": {
+            "extraPaths": ["tools/ledger"],
+            "exclude": ["**/baserom/**"]
+          }
+        }
+      }
+    },
     "jdtls": {
       "settings": {
         "java": {
