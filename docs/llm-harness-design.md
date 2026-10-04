@@ -87,10 +87,30 @@ ledger supplies *identity* and, for externals, the exact Itanium-mangled name �
   — the first args go in `r0–r3`, the return in `r0` — and only matters for struct-by-value /
   64-bit / FP edge cases.
 
-**Open — link-time resolution of unmatched *internal* symbols.** "Declared but not defined"
-  keeps the tree *compiling*, but a developer executable still has to *link*. How unmatched
-  internal symbols resolve (empty stub definitions? a byte-blob object? link-time exclusion?)
-  is a separate decision from declarations, and is **not settled here**.
+**Decided — link-time resolution of unmatched *internal* symbols.** "Declared but not
+  defined" keeps the tree *compiling*; a developer executable still has to *link*. The options
+  are staged, exactly like Model C → Model B in [`architecture.md`](architecture.md) →
+  *Unmatched-function fallback*:
+
+  - **The scaffold links nothing (compile-only).** The gate compiles one TU to an object and
+    diffs the function's section; no linker is invoked. This is already how `bytegate.py`
+    works, needs no stubs, and carries no ABI risk. The generated build stays *link-optional*:
+    it can grow a linker script (with `-ffunction-sections -fdata-sections`, placement is
+    per-section) without rework.
+  - **Model C (a runnable developer executable) = weak stubs.** The generator emits each
+    unmatched internal symbol as an empty, ABI-safe `__attribute__((weak))` definition; a
+    matched function is a strong definition the linker prefers. Empty stubs are ABI-safe (the
+    callee ignores `r0–r3`; the *caller's* bytes — all the match sees — are unaffected), and
+    weakness removes the churn a strong-stub set would cause as functions flip to matched.
+  - **Model B (the relocation/link check) = byte substitution.** Unmatched *regions* are
+    filled from the original binary by the build (`rombytes`/`delinks`), so the linked image is
+    byte-correct everywhere and the relocation check is meaningful. This is the one option
+    that carries real AArch32 work — the NSO is a PIE with `.rel.dyn`/`.rel.plt` — and it is a
+    scoped task of its own, not a scaffold rider.
+
+  **Externals are a separate axis.** The `nn::` imports resolve via the loader/dynsym; a
+  static link needs import stubs or the NSO import table. That is *external* resolution and
+  does not bear on this decision.
 
 ---
 
@@ -191,7 +211,7 @@ rule.
 | 5 | Harness shape | **Decided** — custom repo-local Python; not a framework |
 | 6 | Match authority | **Decided** — the gate is the only writer of `verify` (independent verify) |
 | 7 | Attempt/near-miss storage | **Proposed** — git-ignored `baserom/work/attempts/`; confirm later |
-| 8 | Link-time resolution of unmatched internal symbols | **Open** |
+| 8 | Link-time resolution of unmatched internal symbols | **Decided** — scaffold compile-only; Model C weak stubs; Model B byte substitution |
 | 9 | Model endpoint shape (HTTP vs. CLI) | **Open** |
 | 10 | Disassembly-derived function extent | **Open** (shared with the gate; `--body` is the stopgap) |
 
