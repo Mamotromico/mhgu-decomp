@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Shared ledger schema, reader, and the one canonical "matched" predicate.
 
 Every tool that reads the committed ledger — the gate, the validator, the progress

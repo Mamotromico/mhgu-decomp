@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import itertools
 import sys
 from pathlib import Path
 
@@ -243,7 +244,7 @@ def partition_sizes(entries: list[dict], block_ends: dict[str, int]) -> int:
     changed = 0
     for (_, block), rows in per_block.items():
         rows.sort(key=lambda e: int(e["addr"], 16))
-        for e, nxt in zip(rows, rows[1:]):
+        for e, nxt in itertools.pairwise(rows):
             size = int(nxt["addr"], 16) - int(e["addr"], 16)
             if size != int(e["size"]):
                 e["size"] = str(size)

@@ -38,8 +38,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import itertools
 import re
-import sys
 from pathlib import Path
 
 from ledgerlib import (
@@ -169,7 +169,7 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
     # --- partition: adjacency within each block ------------------------------------------
     for (module, block), rows in sorted(per_block.items()):
         rows.sort(key=lambda x: int(x["addr"], 16))
-        for prev, nxt in zip(rows, rows[1:]):
+        for prev, nxt in itertools.pairwise(rows):
             end = int(prev["addr"], 16) + int(prev["size"])
             if int(nxt["addr"], 16) != end:
                 errors.append(

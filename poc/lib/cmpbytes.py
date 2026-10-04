@@ -6,21 +6,21 @@ Prints MATCH or the differing byte positions.
 """
 import sys
 
-cand = open(sys.argv[1], "rb").read()
-real = open(sys.argv[2], "rb").read()
+with open(sys.argv[1], "rb") as f:
+    cand = f.read()
+with open(sys.argv[2], "rb") as f:
+    real = f.read()
 off = int(sys.argv[3], 16)
 n = int(sys.argv[4])
 ref = real[off:off + n]
 got = cand[:n]
 
 if len(cand) != n:
-    print("  LENGTH  got=%d want=%d  (extra bytes: %s)" %
-          (len(cand), n, cand[n:].hex(" ")))
+    print(f"  LENGTH  got={len(cand)} want={n}  (extra bytes: {cand[n:].hex(' ')})")
 if got == ref:
-    print("  >>> MATCH (%d/%d)" % (n, n))
+    print(f"  >>> MATCH ({n}/{n})")
 else:
     bad = [i for i in range(min(len(got), len(ref))) if got[i] != ref[i]]
-    print("  >>> MISMATCH %d/%d bytes differ; first at +0x%x" %
-          (len(bad), n, bad[0] if bad else -1))
+    print(f"  >>> MISMATCH {len(bad)}/{n} bytes differ; first at +0x{(bad[0] if bad else -1):x}")
     for i in bad[:16]:
-        print("      +0x%02x  got %02x  want %02x" % (i, got[i], ref[i]))
+        print(f"      +0x{i:02x}  got {got[i]:02x}  want {ref[i]:02x}")

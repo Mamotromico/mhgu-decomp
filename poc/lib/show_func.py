@@ -15,19 +15,20 @@ def main(argv):
     want = {int(a, 16) for a in argv[2:]}
     cur = None
     printing = False
-    for line in open(path):
-        m = entry_re.match(line)
-        if m:
-            cur = int(m.group(1), 16)
-            printing = cur in want
+    with open(path) as f:
+        for line in f:
+            m = entry_re.match(line)
+            if m:
+                cur = int(m.group(1), 16)
+                printing = cur in want
+                if printing:
+                    print(line.rstrip("\n"))
+                continue
             if printing:
-                print(line.rstrip("\n"))
-            continue
-        if printing:
-            if insn_re.match(line) or line.strip() == "":
-                print(line.rstrip("\n"))
-            else:
-                printing = False
+                if insn_re.match(line) or line.strip() == "":
+                    print(line.rstrip("\n"))
+                else:
+                    printing = False
 
 
 if __name__ == "__main__":

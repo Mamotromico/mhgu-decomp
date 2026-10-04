@@ -1,10 +1,22 @@
 {
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/.svn",
+    "**/.hg",
+    "**/CVS",
+    "**/.DS_Store",
+    "**/Thumbs.db",
+    "**/baserom/**"
+  ],
   "lsp": {
     "jdtls": {
       "settings": {
         "java": {
           "project": {
-            "referencedLibraries": ["/opt/ghidra/**/*.jar"]
+            "referencedLibraries": [
+              "/opt/ghidra/Ghidra/Framework/**/lib/*.jar",
+              "/opt/ghidra/Ghidra/Features/Base/lib/*.jar"
+            ]
           }
         }
       },
@@ -12,7 +24,10 @@
         "settings": {
           "java": {
             "project": {
-              "referencedLibraries": ["/opt/ghidra/**/*.jar"]
+              "referencedLibraries": [
+                "/opt/ghidra/Ghidra/Framework/**/lib/*.jar",
+                "/opt/ghidra/Ghidra/Features/Base/lib/*.jar"
+              ]
             }
           }
         }

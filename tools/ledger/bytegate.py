@@ -119,8 +119,8 @@ def _elf32(path: Path) -> tuple[list[dict], list[dict]]:
         symstr = sections[s["link"]]
         symdata = data[symstr["offset"]:symstr["offset"] + symstr["size"]]
         for o in range(0, s["size"], 16):
-            n, val, sz, info, other, shndx = struct.unpack_from("<IIIBBH", data,
-                                                                s["offset"] + o)
+            n, val, sz, info, _other, shndx = struct.unpack_from("<IIIBBH", data,
+                                                                 s["offset"] + o)
             symbols.append({
                 "name": name_at_bytes(symdata, n),
                 "value": val, "size": sz, "info": info, "shndx": shndx,

@@ -13,7 +13,8 @@ import sys
 def main(argv):
     path = argv[1]
     want = argv[2] if len(argv) > 2 else ".text"
-    data = open(path, "rb").read()
+    with open(path, "rb") as f:
+        data = f.read()
     assert data[:4] == b"\x7fELF", "not an ELF"
     assert data[4] == 1 and data[5] == 1, "expected ELF32 little-endian"
     e_shoff = struct.unpack_from("<I", data, 0x20)[0]
@@ -23,7 +24,7 @@ def main(argv):
 
     def sh(i):
         base = e_shoff + i * e_shentsize
-        name, typ, flags, addr, off, size = struct.unpack_from("<IIIIII", data, base)
+        name, _typ, _flags, _addr, off, size = struct.unpack_from("<IIIIII", data, base)
         return name, off, size
 
     _, str_off, str_size = sh(e_shstrndx)
@@ -35,7 +36,7 @@ def main(argv):
         if name == want:
             sys.stdout.buffer.write(data[off:off + size])
             return
-    sys.exit("section %s not found" % want)
+    sys.exit(f"section {want} not found")
 
 
 if __name__ == "__main__":

@@ -23,24 +23,26 @@ RESET = "\033[0m"
 
 def parse_real(path):
     ins = []
-    for line in open(path):
-        if line.startswith(";;"):
-            continue
-        m = re.match(r"^\s*[0-9a-fA-F]{8}\s+(\S.*?)\s*$", line)
-        if m:
-            ins.append(" ".join(m.group(1).split()))
+    with open(path) as f:
+        for line in f:
+            if line.startswith(";;"):
+                continue
+            m = re.match(r"^\s*[0-9a-fA-F]{8}\s+(\S.*?)\s*$", line)
+            if m:
+                ins.append(" ".join(m.group(1).split()))
     return ins
 
 
 def parse_compiled(path):
     ins = []
-    for line in open(path):
-        if not line.startswith("\t"):
-            continue
-        body = line[1:].rstrip("\n")
-        if body.startswith(".") or not body.strip():
-            continue
-        ins.append(" ".join(body.split()))
+    with open(path) as f:
+        for line in f:
+            if not line.startswith("\t"):
+                continue
+            body = line[1:].rstrip("\n")
+            if body.startswith(".") or not body.strip():
+                continue
+            ins.append(" ".join(body.split()))
     return ins
 
 
@@ -51,14 +53,16 @@ def main(argv):
 
     real_ins = parse_real(real_asm)
     comp_ins = parse_compiled(comp_s)
-    real_bytes = open(real_bin, "rb").read()[off:off + nb]
-    comp_bytes = open(comp_bin, "rb").read()
+    with open(real_bin, "rb") as f:
+        real_bytes = f.read()[off:off + nb]
+    with open(comp_bin, "rb") as f:
+        comp_bytes = f.read()
 
     w1 = max([len(x) for x in real_ins] + [4])
     w2 = max([len(x) for x in comp_ins] + [4])
 
-    print("%s%s  vs  %s%s" % (BOLD, real_asm, comp_s, RESET))
-    print("  %-*s | %-*s" % (w1, "REAL", w2, "COMPILED"))
+    print(f"{BOLD}{real_asm}  vs  {comp_s}{RESET}")
+    print(f"  {'REAL':<{w1}} | {'COMPILED':<{w2}}")
 
     nrows = max(len(real_ins), len(comp_ins))
     bad = 0
@@ -73,17 +77,15 @@ def main(argv):
         col = GREEN if eq else RED
         note = ""
         if not eq:
-            note = "  %sgot %s want %s%s" % (
-                DIM, b.hex(" ") or "--", a.hex(" ") or "--", RESET)
-        print("%s %3d  %-*s | %-*s%s" % (col, i, w1, lt, w2, rt, note))
+            note = f"  {DIM}got {b.hex(' ') or '--'} want {a.hex(' ') or '--'}{RESET}"
+        print(f"{col} {i:3d}  {lt:<{w1}} | {rt:<{w2}}{note}")
 
     total = nrows
     print()
     if bad == 0:
-        print("%s>>> MATCH%s  (%d/%d instructions, %d bytes)" %
-              (GREEN, RESET, total, total, nb))
+        print(f"{GREEN}>>> MATCH{RESET}  ({total}/{total} instructions, {nb} bytes)")
     else:
-        print("%s>>> MISMATCH%s  %d/%d instructions differ" % (RED, RESET, bad, total))
+        print(f"{RED}>>> MISMATCH{RESET}  {bad}/{total} instructions differ")
     return 0 if bad == 0 else 1
 
 

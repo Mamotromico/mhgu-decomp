@@ -21,7 +21,7 @@ from pathlib import Path
 # The ledger tools are plain scripts (no package), so put their directory on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "ledger"))
 
-from bytegate import compare_body  # noqa: E402
+from bytegate import compare_body
 
 
 class CompareBodyTests(unittest.TestCase):
@@ -60,7 +60,7 @@ class CompareBodyTests(unittest.TestCase):
 
     def test_candidate_longer_than_partition_is_too_long(self):
         body = self.original(200)
-        ok, ref, status = compare_body(body, self.BLOCK, self.OFF, 100, None)
+        ok, _ref, status = compare_body(body, self.BLOCK, self.OFF, 100, None)
         self.assertFalse(ok)
         self.assertEqual(status, "too-long")
 
@@ -91,7 +91,7 @@ class CompareBodyTests(unittest.TestCase):
     def test_body_override_wrong_bytes_is_a_mismatch(self):
         body = bytearray(self.original(60))
         body[0] ^= 0xFF
-        ok, ref, status = compare_body(bytes(body), self.BLOCK, self.OFF, 1368, 60)
+        ok, _ref, status = compare_body(bytes(body), self.BLOCK, self.OFF, 1368, 60)
         self.assertFalse(ok)
         self.assertEqual(status, "mismatch")
 
