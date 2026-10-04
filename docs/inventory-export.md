@@ -32,7 +32,7 @@ Overridable via environment: `GHIDRA_HOME` (default `/opt/ghidra`), `INV_WORK` (
 
 ## Outputs
 
-All four files are **TSV with a header row**, one record per line, sorted deterministically.
+All five files are **TSV with a header row**, one record per line, sorted deterministically.
 Addresses are 8-digit lowercase hex (image offsets).
 
 ### `inventory.tsv` — cut-point candidates → the ledger manifest
@@ -69,6 +69,14 @@ blobs so the denominator is complete.
 ### `inventory.externals.tsv` — imports (`external` kind)
 
 Columns: `name`, `bind`. See *Externals* below.
+
+### `inventory.blocks.tsv` — memory-block extents
+
+Columns: `block`, `class`, `addr`, `size`. Every real block's start and size (both classes
+emitted tagged; the synthetic `EXTERNAL` block is skipped, as everywhere). This is the only
+record of an *uninitialized* block (`bss` is skipped by the gaps pass) and the only source for
+the **last** cut point in a block — the one entry whose extent has no successor to bound it. The
+generator uses it to close each block's partition.
 
 ## Block classes (`class`)
 
@@ -148,5 +156,6 @@ replaced by `func_<addr>`/`D_<addr>` placeholders.
 One transformation is **not** identity: `size`. The export reports a function's **span**
 (first…last instruction), which for a non-contiguous body over-covers the next function and
 leaves interior bytes untilled, so the ledger re-derives `size` as the distance to the next
-cut point in the block (a complete, disjoint partition). The export's own `size` is therefore
-advisory; treat it as a draft, not a boundary.
+cut point in the block (the last entry uses the block end from `inventory.blocks.tsv`) — a
+complete, disjoint partition. The export's own `size` is therefore advisory; treat it as a
+draft, not a boundary.

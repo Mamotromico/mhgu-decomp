@@ -141,7 +141,7 @@ headless inventory (per *Ghidra & output policy*).
 
 ### Inventory export — concrete schema
 
-`tools/ghidra/InventoryExport.java` (driven by `tools/ghidra/inventory.sh`) writes four
+`tools/ghidra/InventoryExport.java` (driven by `tools/ghidra/inventory.sh`) writes five
 deterministic TSVs into the git-ignored `baserom/work/inventory/` — a **draft** that seeds,
 never replaces, the ledger:
 
@@ -151,6 +151,7 @@ never replaces, the ledger:
 | `inventory.nested.tsv` | reference-only symbols → review table | `addr kind name block source name_class parent` |
 | `inventory.gaps.tsv` | uncovered initialized ranges → `D_<addr>` blobs | `block class addr size` |
 | `inventory.externals.tsv` | imports (parsed from `.dynsym`) → `external` kind | `name bind` |
+| `inventory.blocks.tsv` | memory-block extents → closes each block's partition | `block class addr size` |
 
 Classification rules (the export is the draft; the ledger generator is authoritative):
 
@@ -245,8 +246,9 @@ Columns, with the mandatory header row:
 
 `size` is the **block partition**, not Ghidra's body length. Within a block each cut point owns
 the bytes up to the next cut point; gap blobs are cut points too, so an un-symbolised region
-stays its own entry and stops a neighbour's growth (the last entry in a block keeps its draft
-size). This is required because Ghidra reports a function's length as the *span* between its
+stays its own entry and stops a neighbour's growth (the last entry in a block is bounded by the
+block end from `inventory.blocks.tsv`). This is required because Ghidra reports a function's
+length as the *span* between its
 first and last instruction: a non-contiguous body over-covers the function that begins in its
 hole (1,057 draft overlaps) and leaves the interior literal-pool/jump-table bytes untilled
 (2.7 MB of unclaimed `.text`). Deriving extents from the next cut point is what makes the

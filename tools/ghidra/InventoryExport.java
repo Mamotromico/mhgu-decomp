@@ -13,7 +13,7 @@
 //       -scriptPath <this dir> \
 //       -postScript InventoryExport.java <outDir>
 //
-// <outDir> is created if needed. Four files are written there (all TSV, header
+// <outDir> is created if needed. Five files are written there (all TSV, header
 // row, sorted for determinism):
 //
 //   inventory.tsv           cut-point candidates  -> seeds the ledger manifest
@@ -26,6 +26,11 @@
 //   inventory.externals.tsv imported symbols (parsed from .dynsym) -> recorded
 //                           as the ledger's first-class "external" kind,
 //                           excluded from the progress denominator
+//   inventory.blocks.tsv    every real memory block's extent -> lets the
+//                           generator bound the last cut point in a block (the
+//                           only boundary the export's own per-symbol sizes
+//                           cannot supply, and the only record of an
+//                           uninitialized block such as bss)
 //
 // Classification rules (this file is the *draft*, not the authority):
 //   * every Function in an executable block              -> cut point
@@ -378,6 +383,29 @@ public class InventoryExport extends GhidraScript {
         }
         Collections.sort(externals, DET);
 
+        // ---- Memory-block extents -----------------------------------------------
+        // The generator partitions each content block at its cut points; the *last*
+        // cut point in a block has no successor, so its size can only come from the
+        // block's own end. bss is additionally recorded nowhere else (uninitialized
+        // blocks are skipped by the gaps pass). The loader-synthetic EXTERNAL block
+        // is skipped, as everywhere else. Both classes are emitted tagged.
+        List<String[]> blocks = new ArrayList<>();
+        for (MemoryBlock blk : memory.getBlocks()) {
+            if (EXTERNAL_BLOCK.equals(blk.getName())) {
+                continue;
+            }
+            if (!blk.getStart().getAddressSpace().equals(defSpace)) {
+                continue;
+            }
+            blocks.add(new String[]{
+                    blk.getName(),
+                    blockClass(blk.getName()),
+                    addr(blk.getStart()),
+                    Long.toString(blk.getSize()),
+            });
+        }
+        Collections.sort(blocks, DET);
+
         // ---- Write --------------------------------------------------------------
         String hdrMain = String.join("\t", "addr", "kind", "size", "name", "block",
                 "class", "source", "name_class", "thunk", "entry", "exported", "noncontig");
@@ -385,20 +413,23 @@ public class InventoryExport extends GhidraScript {
                 "source", "name_class", "parent");
         String hdrGaps = String.join("\t", "block", "class", "addr", "size");
         String hdrExt = String.join("\t", "name", "bind");
+        String hdrBlocks = String.join("\t", "block", "class", "addr", "size");
 
         try (PrintWriter wMain = new PrintWriter(new File(outdir, "inventory.tsv"));
              PrintWriter wNested = new PrintWriter(new File(outdir, "inventory.nested.tsv"));
              PrintWriter wGaps = new PrintWriter(new File(outdir, "inventory.gaps.tsv"));
-             PrintWriter wExt = new PrintWriter(new File(outdir, "inventory.externals.tsv"))) {
+             PrintWriter wExt = new PrintWriter(new File(outdir, "inventory.externals.tsv"));
+             PrintWriter wBlocks = new PrintWriter(new File(outdir, "inventory.blocks.tsv"))) {
             writeTsv(wMain, hdrMain, main);
             writeTsv(wNested, hdrNested, nested);
             writeTsv(wGaps, hdrGaps, gaps);
             writeTsv(wExt, hdrExt, externals);
+            writeTsv(wBlocks, hdrBlocks, blocks);
         }
 
         println(String.format(
-                "InventoryExport: cut=%d nested=%d gaps=%d externals=%d -> %s",
-                main.size(), nested.size(), gaps.size(), externals.size(), outdir));
+                "InventoryExport: cut=%d nested=%d gaps=%d externals=%d blocks=%d -> %s",
+                main.size(), nested.size(), gaps.size(), externals.size(), blocks.size(), outdir));
     }
 
     private static String block(Memory memory, Address a) {
