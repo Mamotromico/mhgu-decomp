@@ -136,3 +136,17 @@ entries such as `__rela_dyn_start`).
 The output depends solely on the pinned trio — **Ghidra 12.1.2, the Switch Loader, and the
 NSO** — plus sort order. No timestamps, no absolute paths, no machine state. Two runs over the
 same inputs are byte-identical.
+
+## Downstream — the committed ledger
+
+`tools/ledger/gen_ledger.py` promotes this draft into the committed ledger
+(`config/main/ledger.tsv` + a `--check` CI gate) — see
+[`architecture.md`](architecture.md) → *Ledger — concrete schema*. It is a near-identity
+mapping: content cut points + materialised `content` gaps + externals, with generated names
+replaced by `func_<addr>`/`D_<addr>` placeholders.
+
+One transformation is **not** identity: `size`. The export reports a function's **span**
+(first…last instruction), which for a non-contiguous body over-covers the next function and
+leaves interior bytes untilled, so the ledger re-derives `size` as the distance to the next
+cut point in the block (a complete, disjoint partition). The export's own `size` is therefore
+advisory; treat it as a draft, not a boundary.

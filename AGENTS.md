@@ -351,5 +351,10 @@ Curated prior art (study for conventions; do not copy blindly):
 - [x] Decide the generated-vs-reviewed split (separate folders + review tooling?) →
       **no folders**: it is ledger state, surfaced by tooling (see
       [`docs/architecture.md`](docs/architecture.md), *File layout & generated build*).
+- [x] Define the committed ledger schema + generator → `config/main/ledger.tsv` (single module;
+      content-only cut points + materialised `content` gaps + externals), produced by
+      `tools/ledger/gen_ledger.py` from the inventory export with a `--check` CI gate. `size`
+      is the block *partition* (distance to the next cut point), not Ghidra's body span — see
+      [`docs/architecture.md`](docs/architecture.md) → *Ledger — concrete schema*.
 
 *(Expand this file as each item is resolved.)*

@@ -208,10 +208,13 @@ declares `clangd` for C/C++ tooling.
 > │   ├── src/               #   reconstructed C++ for the seven probes
 > │   └── lib/               #   helpers: slice .text, byte-compare, diff
 > ├── tools/                 # Decompilation helper scripts
-> │   ├── ghidra/            #   GhidraScripts (import, dump, disassemble)
+> │   ├── ghidra/            #   GhidraScripts (import, dump, inventory export)
+> │   ├── ledger/            #   ledger generator (inventory draft → committed ledger)
 > │   └── nso/               #   NSO extraction / section compare / text align
-> ├── src/                   # Translated C++ source                        [planned]
-> └── config/                # Ghidra / toolchain configuration              [planned]
+> ├── config/                # Committed symbol ledger
+> │   └── main/
+> │       └── ledger.tsv     #   the (module, addr) ledger — the denominator & build seed
+> └── src/                   # Translated C++ source                        [planned]
 > ```
 >
 > Layout beyond `.devcontainer/` is still being finalized as each phase lands.
