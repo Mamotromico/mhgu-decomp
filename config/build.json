@@ -1,0 +1,7 @@
+{
+  "_comment": "Build layout for the reconstruction tree. The source list and build/compile_commands.json are *generated* from the committed ledger (the single source of truth) by tools/build/gen_compile_db.py; this file holds only the layout constants that generator and the byte gate share, so they cannot drift. See docs/architecture.md -> File layout & generated build.",
+  "source_root": "src",
+  "include_dirs": ["include"],
+  "object_dir": "build/obj",
+  "compile_db": "build/compile_commands.json"
+}

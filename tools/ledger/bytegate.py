@@ -49,6 +49,7 @@ Usage::
 Options:
     --ledger FILE   committed ledger (default config/main/ledger.tsv)
     --src-root DIR  source root (default <repo>/src)
+    --build-config FILE  build layout incl. include dirs (default config/build.json)
     --ref-bin FILE  a block .bin to compare against (skips the Ghidra dump)
     --ref-dir DIR   where to dump blocks (default baserom/work/bytegate/ref)
     --nso FILE      NSO to dump (default baserom/main.nso)
@@ -72,6 +73,15 @@ REPO = Path(__file__).resolve().parents[2]
 DEFAULT_LEDGER = REPO / "config" / "main" / "ledger.tsv"
 DEFAULT_SRC_ROOT = REPO / "src"
 DEFAULT_TOOLCHAIN = REPO / "config" / "toolchain.json"
+DEFAULT_BUILD_CONFIG = REPO / "config" / "build.json"
+
+
+def include_dirs(build_config: Path) -> list[str]:
+    """Include dirs from the shared build layout, so the gate and the build agree."""
+    if not build_config.exists():
+        return []
+    raw = json.loads(build_config.read_text())
+    return [f"-I{(REPO / d).resolve()}" for d in raw.get("include_dirs", [])]
 
 GREEN, RED, YELLOW, DIM, BOLD, RESET = (
     "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m", "\033[0m")
@@ -266,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ref-dir", type=Path, default=REPO / "baserom" / "work" / "bytegate" / "ref")
     ap.add_argument("--nso", type=Path, default=REPO / "baserom" / "main.nso")
     ap.add_argument("--toolchain", type=Path, default=DEFAULT_TOOLCHAIN)
+    ap.add_argument("--build-config", type=Path, default=DEFAULT_BUILD_CONFIG)
     ap.add_argument("--build-dir", type=Path, default=REPO / "baserom" / "work" / "bytegate")
     ap.add_argument("--body", type=int, default=None,
                     help="authoritative body length in bytes; requires an exact length match")
@@ -295,7 +306,8 @@ def main(argv: list[str] | None = None) -> int:
 
     tc = json.loads(args.toolchain.read_text())
     clang = tc.get("clang", "clang")
-    cflags = list(tc["cflags"]) + list(tc.get("section_flags", []))
+    cflags = (list(tc["cflags"]) + list(tc.get("section_flags", []))
+              + include_dirs(args.build_config))
 
     args.build_dir.mkdir(parents=True, exist_ok=True)
     obj = args.build_dir / f"{entry['name']}.o"

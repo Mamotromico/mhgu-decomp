@@ -22,7 +22,9 @@ ghidra_project*/
 ghidra_projects/
 
 # --- Build & derived output ---------------------------------------------------
-build/
+# Anchored to the repo root: the generated build tree. An unanchored `build/` also
+# swallowed legitimate source dirs (tools/build/, tests/build/).
+/build/
 extracted/
 out/
 *.o

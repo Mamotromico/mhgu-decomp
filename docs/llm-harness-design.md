@@ -205,7 +205,7 @@ rule.
 | # | question | status |
 | --- | --- | --- |
 | 1 | Declaration strategy | **Decided** — `asm("mangled")` now, committed `include/` tree grown over types later |
-| 2 | Signature source for externals | **Decided** — demangle the ledger's 761 externals (exact function types) |
+| 2 | Signature source for externals | **Decided** — demangle the ledger's 761 externals (exact function types); implemented by `tools/build/seed_externals.py` → `include/generated/` |
 | 3 | Ghidra decompiler draft in LLM context | **Decided** — excluded; retained for humans |
 | 4 | Bundle order | **Decided** — disassembly-first, annotated; deterministic, one-way, git-ignored |
 | 5 | Harness shape | **Decided** — custom repo-local Python; not a framework |

@@ -366,8 +366,20 @@ relocation-checked end state.
 Implemented by `tools/ledger/` — `bytegate.py` (the gate: compile one function, diff it against
 the original), `validate.py` (the ledger's invariants, the CI gate), and `ledgerlib.py` (the
 schema and the one shared matched predicate). The compiler pin lives in
-`config/toolchain.json`. The reconstruction loop that *consumes* the gate is designed —
-not yet built — in [`llm-harness-design.md`](llm-harness-design.md).
+`config/toolchain.json`.
+
+The reconstruction tree is seeded under `src/<module>/<group>.cpp` (committed) with a
+committed `include/` tree for declarations. Its build inputs are **generated from the ledger**
+by `tools/build/gen_compile_db.py` — the sole writer of `build/compile_commands.json` (which
+activates clangd) — using the shared layout in `config/build.json`; the gate reads the same
+include dirs so it compiles a candidate exactly as the build does.
+
+The declaration tree is seeded by `tools/build/seed_externals.py`: a demangle pass over the
+ledger's externals writing `include/generated/externals.tsv` (the review catalog) and
+`include/generated/externals.hpp` (compilable Phase A `asm`-pinned candidates for the subset
+whose types are expressible today — no return types, no class types). Both are deterministic
+functions of the ledger with a CI `--check`. The reconstruction loop that *produces* candidates
+is designed — not yet built — in [`llm-harness-design.md`](llm-harness-design.md).
 
 ### Progress metrics (two numbers)
 

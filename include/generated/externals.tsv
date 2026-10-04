@@ -1,0 +1,762 @@
+mangled	demangled	bind	kind	ns	name	params	param_kind	decl_hint
+_ZN2nn2ec30ShowShopApplicationInformationENS_13ApplicationIdE	nn::ec::ShowShopApplicationInformation(nn::ApplicationId)	GLOBAL	qualified	nn::ec	ShowShopApplicationInformation	nn::ApplicationId	has-byvalue-class	
+_ZN2nn2fs10CreateFileEPKcx	nn::fs::CreateFile(char const*, long long)	GLOBAL	qualified	nn::fs	CreateFile	char const*, long long	scalars	namespace nn::fs { void CreateFile(char const*, long long) asm("_ZN2nn2fs10CreateFileEPKcx"); }
+_ZN2nn2fs10DeleteFileEPKc	nn::fs::DeleteFile(char const*)	GLOBAL	qualified	nn::fs	DeleteFile	char const*	scalars	namespace nn::fs { void DeleteFile(char const*) asm("_ZN2nn2fs10DeleteFileEPKc"); }
+_ZN2nn2fs10RenameFileEPKcS2_	nn::fs::RenameFile(char const*, char const*)	GLOBAL	qualified	nn::fs	RenameFile	char const*, char const*	scalars	namespace nn::fs { void RenameFile(char const*, char const*) asm("_ZN2nn2fs10RenameFileEPKcS2_"); }
+_ZN2nn2fs11GetFileSizeEPxNS0_10FileHandleE	nn::fs::GetFileSize(long long*, nn::fs::FileHandle)	GLOBAL	qualified	nn::fs	GetFileSize	long long*, nn::fs::FileHandle	has-byvalue-class	
+_ZN2nn2fs11SetFileSizeENS0_10FileHandleEx	nn::fs::SetFileSize(nn::fs::FileHandle, long long)	GLOBAL	qualified	nn::fs	SetFileSize	nn::fs::FileHandle, long long	has-byvalue-class	
+_ZN2nn2fs12GetEntryTypeEPNS0_18DirectoryEntryTypeEPKc	nn::fs::GetEntryType(nn::fs::DirectoryEntryType*, char const*)	GLOBAL	qualified	nn::fs	GetEntryType	nn::fs::DirectoryEntryType*, char const*	scalars	
+_ZN2nn2fs12SetAllocatorEPFPvjEPFvS1_jE	nn::fs::SetAllocator(void* (*)(unsigned int), void (*)(void*, unsigned int))	GLOBAL	qualified	nn::fs	SetAllocator	void* (*)(unsigned int), void (*)(void*, unsigned int)	scalars	
+_ZN2nn2fs13MountSaveDataEPKcRKNS_7account3UidE	nn::fs::MountSaveData(char const*, nn::account::Uid const&)	GLOBAL	qualified	nn::fs	MountSaveData	char const*, nn::account::Uid const&	scalars	
+_ZN2nn2fs13OpenDirectoryEPNS0_15DirectoryHandleEPKci	nn::fs::OpenDirectory(nn::fs::DirectoryHandle*, char const*, int)	GLOBAL	qualified	nn::fs	OpenDirectory	nn::fs::DirectoryHandle*, char const*, int	scalars	
+_ZN2nn2fs13ReadDirectoryEPxPNS0_14DirectoryEntryENS0_15DirectoryHandleEx	nn::fs::ReadDirectory(long long*, nn::fs::DirectoryEntry*, nn::fs::DirectoryHandle, long long)	GLOBAL	qualified	nn::fs	ReadDirectory	long long*, nn::fs::DirectoryEntry*, nn::fs::DirectoryHandle, long long	has-byvalue-class	
+_ZN2nn2fs14CloseDirectoryENS0_15DirectoryHandleE	nn::fs::CloseDirectory(nn::fs::DirectoryHandle)	GLOBAL	qualified	nn::fs	CloseDirectory	nn::fs::DirectoryHandle	has-byvalue-class	
+_ZN2nn2fs14CommitSaveDataEPKc	nn::fs::CommitSaveData(char const*)	GLOBAL	qualified	nn::fs	CommitSaveData	char const*	scalars	namespace nn::fs { void CommitSaveData(char const*) asm("_ZN2nn2fs14CommitSaveDataEPKc"); }
+_ZN2nn2fs14EnsureSaveDataERKNS_7account3UidE	nn::fs::EnsureSaveData(nn::account::Uid const&)	GLOBAL	qualified	nn::fs	EnsureSaveData	nn::account::Uid const&	scalars	
+_ZN2nn2fs15CreateDirectoryEPKc	nn::fs::CreateDirectory(char const*)	GLOBAL	qualified	nn::fs	CreateDirectory	char const*	scalars	namespace nn::fs { void CreateDirectory(char const*) asm("_ZN2nn2fs15CreateDirectoryEPKc"); }
+_ZN2nn2fs15DeleteDirectoryEPKc	nn::fs::DeleteDirectory(char const*)	GLOBAL	qualified	nn::fs	DeleteDirectory	char const*	scalars	namespace nn::fs { void DeleteDirectory(char const*) asm("_ZN2nn2fs15DeleteDirectoryEPKc"); }
+_ZN2nn2fs17MountAddOnContentEPKciPvj	nn::fs::MountAddOnContent(char const*, int, void*, unsigned int)	GLOBAL	qualified	nn::fs	MountAddOnContent	char const*, int, void*, unsigned int	scalars	namespace nn::fs { void MountAddOnContent(char const*, int, void*, unsigned int) asm("_ZN2nn2fs17MountAddOnContentEPKciPvj"); }
+_ZN2nn2fs18IsSaveDataExistingENS_13ApplicationIdERKNS_7account3UidE	nn::fs::IsSaveDataExisting(nn::ApplicationId, nn::account::Uid const&)	GLOBAL	qualified	nn::fs	IsSaveDataExisting	nn::ApplicationId, nn::account::Uid const&	has-byvalue-class	
+_ZN2nn2fs18IsSaveDataExistingERKNS_7account3UidE	nn::fs::IsSaveDataExisting(nn::account::Uid const&)	GLOBAL	qualified	nn::fs	IsSaveDataExisting	nn::account::Uid const&	scalars	
+_ZN2nn2fs21MountSaveDataReadOnlyEPKcNS_13ApplicationIdERKNS_7account3UidE	nn::fs::MountSaveDataReadOnly(char const*, nn::ApplicationId, nn::account::Uid const&)	GLOBAL	qualified	nn::fs	MountSaveDataReadOnly	char const*, nn::ApplicationId, nn::account::Uid const&	has-byvalue-class	
+_ZN2nn2fs22GetDirectoryEntryCountEPxNS0_15DirectoryHandleE	nn::fs::GetDirectoryEntryCount(long long*, nn::fs::DirectoryHandle)	GLOBAL	qualified	nn::fs	GetDirectoryEntryCount	long long*, nn::fs::DirectoryHandle	has-byvalue-class	
+_ZN2nn2fs22QueryMountRomCacheSizeEPj	nn::fs::QueryMountRomCacheSize(unsigned int*)	GLOBAL	qualified	nn::fs	QueryMountRomCacheSize	unsigned int*	scalars	namespace nn::fs { void QueryMountRomCacheSize(unsigned int*) asm("_ZN2nn2fs22QueryMountRomCacheSizeEPj"); }
+_ZN2nn2fs26DeleteDirectoryRecursivelyEPKc	nn::fs::DeleteDirectoryRecursively(char const*)	GLOBAL	qualified	nn::fs	DeleteDirectoryRecursively	char const*	scalars	namespace nn::fs { void DeleteDirectoryRecursively(char const*) asm("_ZN2nn2fs26DeleteDirectoryRecursivelyEPKc"); }
+_ZN2nn2fs31QueryMountAddOnContentCacheSizeEPji	nn::fs::QueryMountAddOnContentCacheSize(unsigned int*, int)	GLOBAL	qualified	nn::fs	QueryMountAddOnContentCacheSize	unsigned int*, int	scalars	namespace nn::fs { void QueryMountAddOnContentCacheSize(unsigned int*, int) asm("_ZN2nn2fs31QueryMountAddOnContentCacheSizeEPji"); }
+_ZN2nn2fs7UnmountEPKc	nn::fs::Unmount(char const*)	GLOBAL	qualified	nn::fs	Unmount	char const*	scalars	namespace nn::fs { void Unmount(char const*) asm("_ZN2nn2fs7UnmountEPKc"); }
+_ZN2nn2fs8MountRomEPKcPvj	nn::fs::MountRom(char const*, void*, unsigned int)	GLOBAL	qualified	nn::fs	MountRom	char const*, void*, unsigned int	scalars	namespace nn::fs { void MountRom(char const*, void*, unsigned int) asm("_ZN2nn2fs8MountRomEPKcPvj"); }
+_ZN2nn2fs8OpenFileEPNS0_10FileHandleEPKci	nn::fs::OpenFile(nn::fs::FileHandle*, char const*, int)	GLOBAL	qualified	nn::fs	OpenFile	nn::fs::FileHandle*, char const*, int	scalars	
+_ZN2nn2fs8ReadFileEPjNS0_10FileHandleExPvj	nn::fs::ReadFile(unsigned int*, nn::fs::FileHandle, long long, void*, unsigned int)	GLOBAL	qualified	nn::fs	ReadFile	unsigned int*, nn::fs::FileHandle, long long, void*, unsigned int	has-byvalue-class	
+_ZN2nn2fs9CloseFileENS0_10FileHandleE	nn::fs::CloseFile(nn::fs::FileHandle)	GLOBAL	qualified	nn::fs	CloseFile	nn::fs::FileHandle	has-byvalue-class	
+_ZN2nn2fs9FlushFileENS0_10FileHandleE	nn::fs::FlushFile(nn::fs::FileHandle)	GLOBAL	qualified	nn::fs	FlushFile	nn::fs::FileHandle	has-byvalue-class	
+_ZN2nn2fs9WriteFileENS0_10FileHandleExPKvjRKNS0_11WriteOptionE	nn::fs::WriteFile(nn::fs::FileHandle, long long, void const*, unsigned int, nn::fs::WriteOption const&)	GLOBAL	qualified	nn::fs	WriteFile	nn::fs::FileHandle, long long, void const*, unsigned int, nn::fs::WriteOption const&	has-byvalue-class	
+_ZN2nn2oe10InitializeEv	nn::oe::Initialize()	GLOBAL	qualified	nn::oe	Initialize		void	namespace nn::oe { void Initialize() asm("_ZN2nn2oe10InitializeEv"); }
+_ZN2nn2oe16EnableScreenShotEv	nn::oe::EnableScreenShot()	GLOBAL	qualified	nn::oe	EnableScreenShot		void	namespace nn::oe { void EnableScreenShot() asm("_ZN2nn2oe16EnableScreenShotEv"); }
+_ZN2nn2oe16GetOperationModeEv	nn::oe::GetOperationMode()	GLOBAL	qualified	nn::oe	GetOperationMode		void	namespace nn::oe { void GetOperationMode() asm("_ZN2nn2oe16GetOperationModeEv"); }
+_ZN2nn2oe17DisableScreenShotEv	nn::oe::DisableScreenShot()	GLOBAL	qualified	nn::oe	DisableScreenShot		void	namespace nn::oe { void DisableScreenShot() asm("_ZN2nn2oe17DisableScreenShotEv"); }
+_ZN2nn2oe17FinishStartupLogoEv	nn::oe::FinishStartupLogo()	GLOBAL	qualified	nn::oe	FinishStartupLogo		void	namespace nn::oe { void FinishStartupLogo() asm("_ZN2nn2oe17FinishStartupLogoEv"); }
+_ZN2nn2oe18GetDesiredLanguageEv	nn::oe::GetDesiredLanguage()	GLOBAL	qualified	nn::oe	GetDesiredLanguage		void	namespace nn::oe { void GetDesiredLanguage() asm("_ZN2nn2oe18GetDesiredLanguageEv"); }
+_ZN2nn2oe18GetPerformanceModeEv	nn::oe::GetPerformanceMode()	GLOBAL	qualified	nn::oe	GetPerformanceMode		void	namespace nn::oe { void GetPerformanceMode() asm("_ZN2nn2oe18GetPerformanceModeEv"); }
+_ZN2nn2oe20GetCurrentFocusStateEv	nn::oe::GetCurrentFocusState()	GLOBAL	qualified	nn::oe	GetCurrentFocusState		void	namespace nn::oe { void GetCurrentFocusState() asm("_ZN2nn2oe20GetCurrentFocusStateEv"); }
+_ZN2nn2oe20SetFocusHandlingModeENS0_17FocusHandlingModeE	nn::oe::SetFocusHandlingMode(nn::oe::FocusHandlingMode)	GLOBAL	qualified	nn::oe	SetFocusHandlingMode	nn::oe::FocusHandlingMode	has-byvalue-class	
+_ZN2nn2oe21SetExpectedThemeColorENS0_14ThemeColorTypeE	nn::oe::SetExpectedThemeColor(nn::oe::ThemeColorType)	GLOBAL	qualified	nn::oe	SetExpectedThemeColor	nn::oe::ThemeColorType	has-byvalue-class	
+_ZN2nn2oe24GetExpectedVolumeBalanceEPfS1_	nn::oe::GetExpectedVolumeBalance(float*, float*)	GLOBAL	qualified	nn::oe	GetExpectedVolumeBalance	float*, float*	scalars	namespace nn::oe { void GetExpectedVolumeBalance(float*, float*) asm("_ZN2nn2oe24GetExpectedVolumeBalanceEPfS1_"); }
+_ZN2nn2oe24SetExpectedVolumeBalanceEff	nn::oe::SetExpectedVolumeBalance(float, float)	GLOBAL	qualified	nn::oe	SetExpectedVolumeBalance	float, float	scalars	namespace nn::oe { void SetExpectedVolumeBalance(float, float) asm("_ZN2nn2oe24SetExpectedVolumeBalanceEff"); }
+_ZN2nn2oe25TryPopNotificationMessageEPj	nn::oe::TryPopNotificationMessage(unsigned int*)	GLOBAL	qualified	nn::oe	TryPopNotificationMessage	unsigned int*	scalars	namespace nn::oe { void TryPopNotificationMessage(unsigned int*) asm("_ZN2nn2oe25TryPopNotificationMessageEPj"); }
+_ZN2nn2oe27SetPerformanceConfigurationENS0_15PerformanceModeEi	nn::oe::SetPerformanceConfiguration(nn::oe::PerformanceMode, int)	GLOBAL	qualified	nn::oe	SetPerformanceConfiguration	nn::oe::PerformanceMode, int	has-byvalue-class	
+_ZN2nn2oe28SetResumeNotificationEnabledEb	nn::oe::SetResumeNotificationEnabled(bool)	GLOBAL	qualified	nn::oe	SetResumeNotificationEnabled	bool	scalars	namespace nn::oe { void SetResumeNotificationEnabled(bool) asm("_ZN2nn2oe28SetResumeNotificationEnabledEb"); }
+_ZN2nn2oe31EnterExitRequestHandlingSectionEv	nn::oe::EnterExitRequestHandlingSection()	GLOBAL	qualified	nn::oe	EnterExitRequestHandlingSection		void	namespace nn::oe { void EnterExitRequestHandlingSection() asm("_ZN2nn2oe31EnterExitRequestHandlingSectionEv"); }
+_ZN2nn2oe31LeaveExitRequestHandlingSectionEv	nn::oe::LeaveExitRequestHandlingSection()	GLOBAL	qualified	nn::oe	LeaveExitRequestHandlingSection		void	namespace nn::oe { void LeaveExitRequestHandlingSection() asm("_ZN2nn2oe31LeaveExitRequestHandlingSectionEv"); }
+_ZN2nn2oe37IsUserInactivityDetectionTimeExtendedEv	nn::oe::IsUserInactivityDetectionTimeExtended()	GLOBAL	qualified	nn::oe	IsUserInactivityDetectionTimeExtended		void	namespace nn::oe { void IsUserInactivityDetectionTimeExtended() asm("_ZN2nn2oe37IsUserInactivityDetectionTimeExtendedEv"); }
+_ZN2nn2oe38SetUserInactivityDetectionTimeExtendedEb	nn::oe::SetUserInactivityDetectionTimeExtended(bool)	GLOBAL	qualified	nn::oe	SetUserInactivityDetectionTimeExtended	bool	scalars	namespace nn::oe { void SetUserInactivityDetectionTimeExtended(bool) asm("_ZN2nn2oe38SetUserInactivityDetectionTimeExtendedEb"); }
+_ZN2nn2oe42SetOperationModeChangedNotificationEnabledEb	nn::oe::SetOperationModeChangedNotificationEnabled(bool)	GLOBAL	qualified	nn::oe	SetOperationModeChangedNotificationEnabled	bool	scalars	namespace nn::oe { void SetOperationModeChangedNotificationEnabled(bool) asm("_ZN2nn2oe42SetOperationModeChangedNotificationEnabledEb"); }
+_ZN2nn2oe44SetPerformanceModeChangedNotificationEnabledEb	nn::oe::SetPerformanceModeChangedNotificationEnabled(bool)	GLOBAL	qualified	nn::oe	SetPerformanceModeChangedNotificationEnabled	bool	scalars	namespace nn::oe { void SetPerformanceModeChangedNotificationEnabled(bool) asm("_ZN2nn2oe44SetPerformanceModeChangedNotificationEnabledEb"); }
+_ZN2nn2os10ClearEventEPNS0_9EventTypeE	nn::os::ClearEvent(nn::os::EventType*)	GLOBAL	qualified	nn::os	ClearEvent	nn::os::EventType*	scalars	
+_ZN2nn2os10WaitThreadEPNS0_10ThreadTypeE	nn::os::WaitThread(nn::os::ThreadType*)	GLOBAL	qualified	nn::os	WaitThread	nn::os::ThreadType*	scalars	
+_ZN2nn2os11FreeTlsSlotENS0_7TlsSlotE	nn::os::FreeTlsSlot(nn::os::TlsSlot)	GLOBAL	qualified	nn::os	FreeTlsSlot	nn::os::TlsSlot	has-byvalue-class	
+_ZN2nn2os11GetHostArgcEv	nn::os::GetHostArgc()	GLOBAL	qualified	nn::os	GetHostArgc		void	namespace nn::os { void GetHostArgc() asm("_ZN2nn2os11GetHostArgcEv"); }
+_ZN2nn2os11GetHostArgvEv	nn::os::GetHostArgv()	GLOBAL	qualified	nn::os	GetHostArgv		void	namespace nn::os { void GetHostArgv() asm("_ZN2nn2os11GetHostArgvEv"); }
+_ZN2nn2os11GetTlsValueENS0_7TlsSlotE	nn::os::GetTlsValue(nn::os::TlsSlot)	GLOBAL	qualified	nn::os	GetTlsValue	nn::os::TlsSlot	has-byvalue-class	
+_ZN2nn2os11SetTlsValueENS0_7TlsSlotEj	nn::os::SetTlsValue(nn::os::TlsSlot, unsigned int)	GLOBAL	qualified	nn::os	SetTlsValue	nn::os::TlsSlot, unsigned int	has-byvalue-class	
+_ZN2nn2os11SignalEventEPNS0_9EventTypeE	nn::os::SignalEvent(nn::os::EventType*)	GLOBAL	qualified	nn::os	SignalEvent	nn::os::EventType*	scalars	
+_ZN2nn2os11SleepThreadENS_8TimeSpanE	nn::os::SleepThread(nn::TimeSpan)	GLOBAL	qualified	nn::os	SleepThread	nn::TimeSpan	has-byvalue-class	
+_ZN2nn2os11StartThreadEPNS0_10ThreadTypeE	nn::os::StartThread(nn::os::ThreadType*)	GLOBAL	qualified	nn::os	StartThread	nn::os::ThreadType*	scalars	
+_ZN2nn2os11UnlockMutexEPNS0_9MutexTypeE	nn::os::UnlockMutex(nn::os::MutexType*)	GLOBAL	qualified	nn::os	UnlockMutex	nn::os::MutexType*	scalars	
+_ZN2nn2os11YieldThreadEv	nn::os::YieldThread()	GLOBAL	qualified	nn::os	YieldThread		void	namespace nn::os { void YieldThread() asm("_ZN2nn2os11YieldThreadEv"); }
+_ZN2nn2os12CreateThreadEPNS0_10ThreadTypeEPFvPvES3_S3_ji	nn::os::CreateThread(nn::os::ThreadType*, void (*)(void*), void*, void*, unsigned int, int)	GLOBAL	qualified	nn::os	CreateThread	nn::os::ThreadType*, void (*)(void*), void*, void*, unsigned int, int	scalars	
+_ZN2nn2os12CreateThreadEPNS0_10ThreadTypeEPFvPvES3_S3_jii	nn::os::CreateThread(nn::os::ThreadType*, void (*)(void*), void*, void*, unsigned int, int, int)	GLOBAL	qualified	nn::os	CreateThread	nn::os::ThreadType*, void (*)(void*), void*, void*, unsigned int, int, int	scalars	
+_ZN2nn2os12TryLockMutexEPNS0_9MutexTypeE	nn::os::TryLockMutex(nn::os::MutexType*)	GLOBAL	qualified	nn::os	TryLockMutex	nn::os::MutexType*	scalars	
+_ZN2nn2os13DestroyThreadEPNS0_10ThreadTypeE	nn::os::DestroyThread(nn::os::ThreadType*)	GLOBAL	qualified	nn::os	DestroyThread	nn::os::ThreadType*	scalars	
+_ZN2nn2os13FinalizeEventEPNS0_9EventTypeE	nn::os::FinalizeEvent(nn::os::EventType*)	GLOBAL	qualified	nn::os	FinalizeEvent	nn::os::EventType*	scalars	
+_ZN2nn2os13FinalizeMutexEPNS0_9MutexTypeE	nn::os::FinalizeMutex(nn::os::MutexType*)	GLOBAL	qualified	nn::os	FinalizeMutex	nn::os::MutexType*	scalars	
+_ZN2nn2os13GetSystemTickEv	nn::os::GetSystemTick()	GLOBAL	qualified	nn::os	GetSystemTick		void	namespace nn::os { void GetSystemTick() asm("_ZN2nn2os13GetSystemTickEv"); }
+_ZN2nn2os13SetThreadNameEPNS0_10ThreadTypeEPKc	nn::os::SetThreadName(nn::os::ThreadType*, char const*)	GLOBAL	qualified	nn::os	SetThreadName	nn::os::ThreadType*, char const*	scalars	
+_ZN2nn2os14StopTimerEventEPNS0_14TimerEventTypeE	nn::os::StopTimerEvent(nn::os::TimerEventType*)	GLOBAL	qualified	nn::os	StopTimerEvent	nn::os::TimerEventType*	scalars	
+_ZN2nn2os14TimedWaitEventEPNS0_9EventTypeENS_8TimeSpanE	nn::os::TimedWaitEvent(nn::os::EventType*, nn::TimeSpan)	GLOBAL	qualified	nn::os	TimedWaitEvent	nn::os::EventType*, nn::TimeSpan	has-byvalue-class	
+_ZN2nn2os14WaitTimerEventEPNS0_14TimerEventTypeE	nn::os::WaitTimerEvent(nn::os::TimerEventType*)	GLOBAL	qualified	nn::os	WaitTimerEvent	nn::os::TimerEventType*	scalars	
+_ZN2nn2os15FreeMemoryBlockEjj	nn::os::FreeMemoryBlock(unsigned int, unsigned int)	GLOBAL	qualified	nn::os	FreeMemoryBlock	unsigned int, unsigned int	scalars	namespace nn::os { void FreeMemoryBlock(unsigned int, unsigned int) asm("_ZN2nn2os15FreeMemoryBlockEjj"); }
+_ZN2nn2os15InitializeEventEPNS0_9EventTypeEbNS0_14EventClearModeE	nn::os::InitializeEvent(nn::os::EventType*, bool, nn::os::EventClearMode)	GLOBAL	qualified	nn::os	InitializeEvent	nn::os::EventType*, bool, nn::os::EventClearMode	has-byvalue-class	
+_ZN2nn2os15InitializeMutexEPNS0_9MutexTypeEbi	nn::os::InitializeMutex(nn::os::MutexType*, bool, int)	GLOBAL	qualified	nn::os	InitializeMutex	nn::os::MutexType*, bool, int	scalars	
+_ZN2nn2os15JamMessageQueueEPNS0_16MessageQueueTypeEj	nn::os::JamMessageQueue(nn::os::MessageQueueType*, unsigned int)	GLOBAL	qualified	nn::os	JamMessageQueue	nn::os::MessageQueueType*, unsigned int	scalars	
+_ZN2nn2os15QueryMemoryInfoEPNS0_10MemoryInfoE	nn::os::QueryMemoryInfo(nn::os::MemoryInfo*)	GLOBAL	qualified	nn::os	QueryMemoryInfo	nn::os::MemoryInfo*	scalars	
+_ZN2nn2os15WaitSystemEventEPNS0_15SystemEventTypeE	nn::os::WaitSystemEvent(nn::os::SystemEventType*)	GLOBAL	qualified	nn::os	WaitSystemEvent	nn::os::SystemEventType*	scalars	
+_ZN2nn2os16ClearSystemEventEPNS0_15SystemEventTypeE	nn::os::ClearSystemEvent(nn::os::SystemEventType*)	GLOBAL	qualified	nn::os	ClearSystemEvent	nn::os::SystemEventType*	scalars	
+_ZN2nn2os16GetCurrentThreadEv	nn::os::GetCurrentThread()	GLOBAL	qualified	nn::os	GetCurrentThread		void	namespace nn::os { void GetCurrentThread() asm("_ZN2nn2os16GetCurrentThreadEv"); }
+_ZN2nn2os16PeekMessageQueueEPjPKNS0_16MessageQueueTypeE	nn::os::PeekMessageQueue(unsigned int*, nn::os::MessageQueueType const*)	GLOBAL	qualified	nn::os	PeekMessageQueue	unsigned int*, nn::os::MessageQueueType const*	scalars	
+_ZN2nn2os16ReleaseSemaphoreEPNS0_13SemaphoreTypeE	nn::os::ReleaseSemaphore(nn::os::SemaphoreType*)	GLOBAL	qualified	nn::os	ReleaseSemaphore	nn::os::SemaphoreType*	scalars	
+_ZN2nn2os16ReleaseSemaphoreEPNS0_13SemaphoreTypeEi	nn::os::ReleaseSemaphore(nn::os::SemaphoreType*, int)	GLOBAL	qualified	nn::os	ReleaseSemaphore	nn::os::SemaphoreType*, int	scalars	
+_ZN2nn2os16SendMessageQueueEPNS0_16MessageQueueTypeEj	nn::os::SendMessageQueue(nn::os::MessageQueueType*, unsigned int)	GLOBAL	qualified	nn::os	SendMessageQueue	nn::os::MessageQueueType*, unsigned int	scalars	
+_ZN2nn2os17ConvertToTimeSpanENS0_4TickE	nn::os::ConvertToTimeSpan(nn::os::Tick)	GLOBAL	qualified	nn::os	ConvertToTimeSpan	nn::os::Tick	has-byvalue-class	
+_ZN2nn2os17FinalizeMultiWaitEPNS0_13MultiWaitTypeE	nn::os::FinalizeMultiWait(nn::os::MultiWaitType*)	GLOBAL	qualified	nn::os	FinalizeMultiWait	nn::os::MultiWaitType*	scalars	
+_ZN2nn2os17FinalizeSemaphoreEPNS0_13SemaphoreTypeE	nn::os::FinalizeSemaphore(nn::os::SemaphoreType*)	GLOBAL	qualified	nn::os	FinalizeSemaphore	nn::os::SemaphoreType*	scalars	
+_ZN2nn2os17GetThreadPriorityEPKNS0_10ThreadTypeE	nn::os::GetThreadPriority(nn::os::ThreadType const*)	GLOBAL	qualified	nn::os	GetThreadPriority	nn::os::ThreadType const*	scalars	
+_ZN2nn2os17SetMemoryHeapSizeEj	nn::os::SetMemoryHeapSize(unsigned int)	GLOBAL	qualified	nn::os	SetMemoryHeapSize	unsigned int	scalars	namespace nn::os { void SetMemoryHeapSize(unsigned int) asm("_ZN2nn2os17SetMemoryHeapSizeEj"); }
+_ZN2nn2os17SetThreadCoreMaskEPNS0_10ThreadTypeEiy	nn::os::SetThreadCoreMask(nn::os::ThreadType*, int, unsigned long long)	GLOBAL	qualified	nn::os	SetThreadCoreMask	nn::os::ThreadType*, int, unsigned long long	scalars	
+_ZN2nn2os18DestroySystemEventEPNS0_15SystemEventTypeE	nn::os::DestroySystemEvent(nn::os::SystemEventType*)	GLOBAL	qualified	nn::os	DestroySystemEvent	nn::os::SystemEventType*	scalars	
+_ZN2nn2os18SdkAllocateTlsSlotEPNS0_7TlsSlotEPFvjE	nn::os::SdkAllocateTlsSlot(nn::os::TlsSlot*, void (*)(unsigned int))	GLOBAL	qualified	nn::os	SdkAllocateTlsSlot	nn::os::TlsSlot*, void (*)(unsigned int)	scalars	
+_ZN2nn2os18TryJamMessageQueueEPNS0_16MessageQueueTypeEj	nn::os::TryJamMessageQueue(nn::os::MessageQueueType*, unsigned int)	GLOBAL	qualified	nn::os	TryJamMessageQueue	nn::os::MessageQueueType*, unsigned int	scalars	
+_ZN2nn2os18TryWaitSystemEventEPNS0_15SystemEventTypeE	nn::os::TryWaitSystemEvent(nn::os::SystemEventType*)	GLOBAL	qualified	nn::os	TryWaitSystemEvent	nn::os::SystemEventType*	scalars	
+_ZN2nn2os19AllocateMemoryBlockEPjj	nn::os::AllocateMemoryBlock(unsigned int*, unsigned int)	GLOBAL	qualified	nn::os	AllocateMemoryBlock	unsigned int*, unsigned int	scalars	namespace nn::os { void AllocateMemoryBlock(unsigned int*, unsigned int) asm("_ZN2nn2os19AllocateMemoryBlockEPjj"); }
+_ZN2nn2os19GenerateRandomBytesEPvj	nn::os::GenerateRandomBytes(void*, unsigned int)	GLOBAL	qualified	nn::os	GenerateRandomBytes	void*, unsigned int	scalars	namespace nn::os { void GenerateRandomBytes(void*, unsigned int) asm("_ZN2nn2os19GenerateRandomBytesEPvj"); }
+_ZN2nn2os19GetCurrentStackInfoEPjS1_	nn::os::GetCurrentStackInfo(unsigned int*, unsigned int*)	GLOBAL	qualified	nn::os	GetCurrentStackInfo	unsigned int*, unsigned int*	scalars	namespace nn::os { void GetCurrentStackInfo(unsigned int*, unsigned int*) asm("_ZN2nn2os19GetCurrentStackInfoEPjS1_"); }
+_ZN2nn2os19InitializeMultiWaitEPNS0_13MultiWaitTypeE	nn::os::InitializeMultiWait(nn::os::MultiWaitType*)	GLOBAL	qualified	nn::os	InitializeMultiWait	nn::os::MultiWaitType*	scalars	
+_ZN2nn2os19InitializeSemaphoreEPNS0_13SemaphoreTypeEii	nn::os::InitializeSemaphore(nn::os::SemaphoreType*, int, int)	GLOBAL	qualified	nn::os	InitializeSemaphore	nn::os::SemaphoreType*, int, int	scalars	
+_ZN2nn2os19LinkMultiWaitHolderEPNS0_13MultiWaitTypeEPNS0_19MultiWaitHolderTypeE	nn::os::LinkMultiWaitHolder(nn::os::MultiWaitType*, nn::os::MultiWaitHolderType*)	GLOBAL	qualified	nn::os	LinkMultiWaitHolder	nn::os::MultiWaitType*, nn::os::MultiWaitHolderType*	scalars	
+_ZN2nn2os19ReceiveMessageQueueEPjPNS0_16MessageQueueTypeE	nn::os::ReceiveMessageQueue(unsigned int*, nn::os::MessageQueueType*)	GLOBAL	qualified	nn::os	ReceiveMessageQueue	unsigned int*, nn::os::MessageQueueType*	scalars	
+_ZN2nn2os19TryPeekMessageQueueEPjPKNS0_16MessageQueueTypeE	nn::os::TryPeekMessageQueue(unsigned int*, nn::os::MessageQueueType const*)	GLOBAL	qualified	nn::os	TryPeekMessageQueue	unsigned int*, nn::os::MessageQueueType const*	scalars	
+_ZN2nn2os19TrySendMessageQueueEPNS0_16MessageQueueTypeEj	nn::os::TrySendMessageQueue(nn::os::MessageQueueType*, unsigned int)	GLOBAL	qualified	nn::os	TrySendMessageQueue	nn::os::MessageQueueType*, unsigned int	scalars	
+_ZN2nn2os20ChangeThreadPriorityEPNS0_10ThreadTypeEi	nn::os::ChangeThreadPriority(nn::os::ThreadType*, int)	GLOBAL	qualified	nn::os	ChangeThreadPriority	nn::os::ThreadType*, int	scalars	
+_ZN2nn2os20FinalizeMessageQueueEPNS0_16MessageQueueTypeE	nn::os::FinalizeMessageQueue(nn::os::MessageQueueType*)	GLOBAL	qualified	nn::os	FinalizeMessageQueue	nn::os::MessageQueueType*	scalars	
+_ZN2nn2os20GetCurrentCoreNumberEv	nn::os::GetCurrentCoreNumber()	GLOBAL	qualified	nn::os	GetCurrentCoreNumber		void	namespace nn::os { void GetCurrentCoreNumber() asm("_ZN2nn2os20GetCurrentCoreNumberEv"); }
+_ZN2nn2os20InitializeTimerEventEPNS0_14TimerEventTypeENS0_14EventClearModeE	nn::os::InitializeTimerEvent(nn::os::TimerEventType*, nn::os::EventClearMode)	GLOBAL	qualified	nn::os	InitializeTimerEvent	nn::os::TimerEventType*, nn::os::EventClearMode	has-byvalue-class	
+_ZN2nn2os20SetThreadNamePointerEPNS0_10ThreadTypeEPKc	nn::os::SetThreadNamePointer(nn::os::ThreadType*, char const*)	GLOBAL	qualified	nn::os	SetThreadNamePointer	nn::os::ThreadType*, char const*	scalars	
+_ZN2nn2os20TimedWaitSystemEventEPNS0_15SystemEventTypeENS_8TimeSpanE	nn::os::TimedWaitSystemEvent(nn::os::SystemEventType*, nn::TimeSpan)	GLOBAL	qualified	nn::os	TimedWaitSystemEvent	nn::os::SystemEventType*, nn::TimeSpan	has-byvalue-class	
+_ZN2nn2os21TimedAcquireSemaphoreEPNS0_13SemaphoreTypeENS_8TimeSpanE	nn::os::TimedAcquireSemaphore(nn::os::SemaphoreType*, nn::TimeSpan)	GLOBAL	qualified	nn::os	TimedAcquireSemaphore	nn::os::SemaphoreType*, nn::TimeSpan	has-byvalue-class	
+_ZN2nn2os21UnlinkMultiWaitHolderEPNS0_19MultiWaitHolderTypeE	nn::os::UnlinkMultiWaitHolder(nn::os::MultiWaitHolderType*)	GLOBAL	qualified	nn::os	UnlinkMultiWaitHolder	nn::os::MultiWaitHolderType*	scalars	
+_ZN2nn2os21WaitConditionVariableEPNS0_21ConditionVariableTypeEPNS0_9MutexTypeE	nn::os::WaitConditionVariable(nn::os::ConditionVariableType*, nn::os::MutexType*)	GLOBAL	qualified	nn::os	WaitConditionVariable	nn::os::ConditionVariableType*, nn::os::MutexType*	scalars	
+_ZN2nn2os22GetSystemTickFrequencyEv	nn::os::GetSystemTickFrequency()	GLOBAL	qualified	nn::os	GetSystemTickFrequency		void	namespace nn::os { void GetSystemTickFrequency() asm("_ZN2nn2os22GetSystemTickFrequencyEv"); }
+_ZN2nn2os22InitializeMessageQueueEPNS0_16MessageQueueTypeEPjj	nn::os::InitializeMessageQueue(nn::os::MessageQueueType*, unsigned int*, unsigned int)	GLOBAL	qualified	nn::os	InitializeMessageQueue	nn::os::MessageQueueType*, unsigned int*, unsigned int	scalars	
+_ZN2nn2os22TryReceiveMessageQueueEPjPNS0_16MessageQueueTypeE	nn::os::TryReceiveMessageQueue(unsigned int*, nn::os::MessageQueueType*)	GLOBAL	qualified	nn::os	TryReceiveMessageQueue	unsigned int*, nn::os::MessageQueueType*	scalars	
+_ZN2nn2os23FinalizeMultiWaitHolderEPNS0_19MultiWaitHolderTypeE	nn::os::FinalizeMultiWaitHolder(nn::os::MultiWaitHolderType*)	GLOBAL	qualified	nn::os	FinalizeMultiWaitHolder	nn::os::MultiWaitHolderType*	scalars	
+_ZN2nn2os23SignalConditionVariableEPNS0_21ConditionVariableTypeE	nn::os::SignalConditionVariable(nn::os::ConditionVariableType*)	GLOBAL	qualified	nn::os	SignalConditionVariable	nn::os::ConditionVariableType*	scalars	
+_ZN2nn2os23StartPeriodicTimerEventEPNS0_14TimerEventTypeENS_8TimeSpanES3_	nn::os::StartPeriodicTimerEvent(nn::os::TimerEventType*, nn::TimeSpan, nn::TimeSpan)	GLOBAL	qualified	nn::os	StartPeriodicTimerEvent	nn::os::TimerEventType*, nn::TimeSpan, nn::TimeSpan	has-byvalue-class	
+_ZN2nn2os25FinalizeConditionVariableEPNS0_21ConditionVariableTypeE	nn::os::FinalizeConditionVariable(nn::os::ConditionVariableType*)	GLOBAL	qualified	nn::os	FinalizeConditionVariable	nn::os::ConditionVariableType*	scalars	
+_ZN2nn2os25InitializeMultiWaitHolderEPNS0_19MultiWaitHolderTypeEPNS0_15SystemEventTypeE	nn::os::InitializeMultiWaitHolder(nn::os::MultiWaitHolderType*, nn::os::SystemEventType*)	GLOBAL	qualified	nn::os	InitializeMultiWaitHolder	nn::os::MultiWaitHolderType*, nn::os::SystemEventType*	scalars	
+_ZN2nn2os25InitializeMultiWaitHolderEPNS0_19MultiWaitHolderTypeEPNS0_9EventTypeE	nn::os::InitializeMultiWaitHolder(nn::os::MultiWaitHolderType*, nn::os::EventType*)	GLOBAL	qualified	nn::os	InitializeMultiWaitHolder	nn::os::MultiWaitHolderType*, nn::os::EventType*	scalars	
+_ZN2nn2os26BroadcastConditionVariableEPNS0_21ConditionVariableTypeE	nn::os::BroadcastConditionVariable(nn::os::ConditionVariableType*)	GLOBAL	qualified	nn::os	BroadcastConditionVariable	nn::os::ConditionVariableType*	scalars	
+_ZN2nn2os26GetThreadAvailableCoreMaskEv	nn::os::GetThreadAvailableCoreMask()	GLOBAL	qualified	nn::os	GetThreadAvailableCoreMask		void	namespace nn::os { void GetThreadAvailableCoreMask() asm("_ZN2nn2os26GetThreadAvailableCoreMaskEv"); }
+_ZN2nn2os26TimedWaitConditionVariableEPNS0_21ConditionVariableTypeEPNS0_9MutexTypeENS_8TimeSpanE	nn::os::TimedWaitConditionVariable(nn::os::ConditionVariableType*, nn::os::MutexType*, nn::TimeSpan)	GLOBAL	qualified	nn::os	TimedWaitConditionVariable	nn::os::ConditionVariableType*, nn::os::MutexType*, nn::TimeSpan	has-byvalue-class	
+_ZN2nn2os27InitializeConditionVariableEPNS0_21ConditionVariableTypeE	nn::os::InitializeConditionVariable(nn::os::ConditionVariableType*)	GLOBAL	qualified	nn::os	InitializeConditionVariable	nn::os::ConditionVariableType*	scalars	
+_ZN2nn2os7WaitAnyEPNS0_13MultiWaitTypeE	nn::os::WaitAny(nn::os::MultiWaitType*)	GLOBAL	qualified	nn::os	WaitAny	nn::os::MultiWaitType*	scalars	
+_ZN2nn2os9LockMutexEPNS0_9MutexTypeE	nn::os::LockMutex(nn::os::MutexType*)	GLOBAL	qualified	nn::os	LockMutex	nn::os::MutexType*	scalars	
+_ZN2nn2os9WaitEventEPNS0_9EventTypeE	nn::os::WaitEvent(nn::os::EventType*)	GLOBAL	qualified	nn::os	WaitEvent	nn::os::EventType*	scalars	
+_ZN2nn2vi10InitializeEv	nn::vi::Initialize()	GLOBAL	qualified	nn::vi	Initialize		void	namespace nn::vi { void Initialize() asm("_ZN2nn2vi10InitializeEv"); }
+_ZN2nn2vi11CreateLayerEPPNS0_5LayerEPNS0_7DisplayE	nn::vi::CreateLayer(nn::vi::Layer**, nn::vi::Display*)	GLOBAL	qualified	nn::vi	CreateLayer	nn::vi::Layer**, nn::vi::Display*	scalars	
+_ZN2nn2vi12CloseDisplayEPNS0_7DisplayE	nn::vi::CloseDisplay(nn::vi::Display*)	GLOBAL	qualified	nn::vi	CloseDisplay	nn::vi::Display*	scalars	
+_ZN2nn2vi12DestroyLayerEPNS0_5LayerE	nn::vi::DestroyLayer(nn::vi::Layer*)	GLOBAL	qualified	nn::vi	DestroyLayer	nn::vi::Layer*	scalars	
+_ZN2nn2vi12ListDisplaysEPNS0_11DisplayInfoEi	nn::vi::ListDisplays(nn::vi::DisplayInfo*, int)	GLOBAL	qualified	nn::vi	ListDisplays	nn::vi::DisplayInfo*, int	scalars	
+_ZN2nn2vi15GetNativeWindowEPPvPNS0_5LayerE	nn::vi::GetNativeWindow(void**, nn::vi::Layer*)	GLOBAL	qualified	nn::vi	GetNativeWindow	void**, nn::vi::Layer*	scalars	
+_ZN2nn2vi18OpenDefaultDisplayEPPNS0_7DisplayE	nn::vi::OpenDefaultDisplay(nn::vi::Display**)	GLOBAL	qualified	nn::vi	OpenDefaultDisplay	nn::vi::Display**	scalars	
+_ZN2nn2vi19SetLayerScalingModeEPNS0_5LayerENS0_11ScalingModeE	nn::vi::SetLayerScalingMode(nn::vi::Layer*, nn::vi::ScalingMode)	GLOBAL	qualified	nn::vi	SetLayerScalingMode	nn::vi::Layer*, nn::vi::ScalingMode	has-byvalue-class	
+_ZN2nn2vi8FinalizeEv	nn::vi::Finalize()	GLOBAL	qualified	nn::vi	Finalize		void	namespace nn::vi { void Finalize() asm("_ZN2nn2vi8FinalizeEv"); }
+_ZN2nn3aoc16ListAddOnContentEPiii	nn::aoc::ListAddOnContent(int*, int, int)	GLOBAL	qualified	nn::aoc	ListAddOnContent	int*, int, int	scalars	namespace nn::aoc { void ListAddOnContent(int*, int, int) asm("_ZN2nn3aoc16ListAddOnContentEPiii"); }
+_ZN2nn3aoc17CountAddOnContentEv	nn::aoc::CountAddOnContent()	GLOBAL	qualified	nn::aoc	CountAddOnContent		void	namespace nn::aoc { void CountAddOnContent() asm("_ZN2nn3aoc17CountAddOnContentEv"); }
+_ZN2nn3err19ApplicationErrorArg15SetLanguageCodeERKNS_8settings12LanguageCodeE	nn::err::ApplicationErrorArg::SetLanguageCode(nn::settings::LanguageCode const&)	GLOBAL	qualified	nn::err::ApplicationErrorArg	SetLanguageCode	nn::settings::LanguageCode const&	scalars	
+_ZN2nn3err19ApplicationErrorArg16SetDialogMessageEPKc	nn::err::ApplicationErrorArg::SetDialogMessage(char const*)	GLOBAL	qualified	nn::err::ApplicationErrorArg	SetDialogMessage	char const*	scalars	namespace nn::err::ApplicationErrorArg { void SetDialogMessage(char const*) asm("_ZN2nn3err19ApplicationErrorArg16SetDialogMessageEPKc"); }
+_ZN2nn3err19ApplicationErrorArg20SetFullScreenMessageEPKc	nn::err::ApplicationErrorArg::SetFullScreenMessage(char const*)	GLOBAL	qualified	nn::err::ApplicationErrorArg	SetFullScreenMessage	char const*	scalars	namespace nn::err::ApplicationErrorArg { void SetFullScreenMessage(char const*) asm("_ZN2nn3err19ApplicationErrorArg20SetFullScreenMessageEPKc"); }
+_ZN2nn3err19ApplicationErrorArg29SetApplicationErrorCodeNumberEj	nn::err::ApplicationErrorArg::SetApplicationErrorCodeNumber(unsigned int)	GLOBAL	qualified	nn::err::ApplicationErrorArg	SetApplicationErrorCodeNumber	unsigned int	scalars	namespace nn::err::ApplicationErrorArg { void SetApplicationErrorCodeNumber(unsigned int) asm("_ZN2nn3err19ApplicationErrorArg29SetApplicationErrorCodeNumberEj"); }
+_ZN2nn3err19ApplicationErrorArgC1Ev	nn::err::ApplicationErrorArg::ApplicationErrorArg()	GLOBAL	ctor	nn::err::ApplicationErrorArg	ApplicationErrorArg		void	
+_ZN2nn3err20ShowApplicationErrorERKNS0_19ApplicationErrorArgE	nn::err::ShowApplicationError(nn::err::ApplicationErrorArg const&)	GLOBAL	qualified	nn::err	ShowApplicationError	nn::err::ApplicationErrorArg const&	scalars	
+_ZN2nn3err21IsNetworkServiceErrorENS0_9ErrorCodeE	nn::err::IsNetworkServiceError(nn::err::ErrorCode)	GLOBAL	qualified	nn::err	IsNetworkServiceError	nn::err::ErrorCode	has-byvalue-class	
+_ZN2nn3err23ShowNetworkServiceErrorENS0_9ErrorCodeE	nn::err::ShowNetworkServiceError(nn::err::ErrorCode)	GLOBAL	qualified	nn::err	ShowNetworkServiceError	nn::err::ErrorCode	has-byvalue-class	
+_ZN2nn3err9ErrorCode19GetInvalidErrorCodeEv	nn::err::ErrorCode::GetInvalidErrorCode()	GLOBAL	qualified	nn::err::ErrorCode	GetInvalidErrorCode		void	namespace nn::err::ErrorCode { void GetInvalidErrorCode() asm("_ZN2nn3err9ErrorCode19GetInvalidErrorCodeEv"); }
+_ZN2nn3err9ShowErrorENS0_9ErrorCodeE	nn::err::ShowError(nn::err::ErrorCode)	GLOBAL	qualified	nn::err	ShowError	nn::err::ErrorCode	has-byvalue-class	
+_ZN2nn3err9ShowErrorENS_6ResultE	nn::err::ShowError(nn::Result)	GLOBAL	qualified	nn::err	ShowError	nn::Result	has-byvalue-class	
+_ZN2nn3hid12GetNpadStateEPNS0_16NpadFullKeyStateERKj	nn::hid::GetNpadState(nn::hid::NpadFullKeyState*, unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadState	nn::hid::NpadFullKeyState*, unsigned int const&	scalars	
+_ZN2nn3hid12GetNpadStateEPNS0_16NpadJoyDualStateERKj	nn::hid::GetNpadState(nn::hid::NpadJoyDualState*, unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadState	nn::hid::NpadJoyDualState*, unsigned int const&	scalars	
+_ZN2nn3hid12GetNpadStateEPNS0_16NpadJoyLeftStateERKj	nn::hid::GetNpadState(nn::hid::NpadJoyLeftState*, unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadState	nn::hid::NpadJoyLeftState*, unsigned int const&	scalars	
+_ZN2nn3hid12GetNpadStateEPNS0_17NpadHandheldStateERKj	nn::hid::GetNpadState(nn::hid::NpadHandheldState*, unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadState	nn::hid::NpadHandheldState*, unsigned int const&	scalars	
+_ZN2nn3hid12GetNpadStateEPNS0_17NpadJoyRightStateERKj	nn::hid::GetNpadState(nn::hid::NpadJoyRightState*, unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadState	nn::hid::NpadJoyRightState*, unsigned int const&	scalars	
+_ZN2nn3hid13VibrationNode30DefaultVibrationSampleIntervalE	nn::hid::VibrationNode::DefaultVibrationSampleInterval	GLOBAL	data		nn::hid::VibrationNode::DefaultVibrationSampleInterval			
+_ZN2nn3hid13VibrationNode6UpdateEv	nn::hid::VibrationNode::Update()	GLOBAL	qualified	nn::hid::VibrationNode	Update		void	namespace nn::hid::VibrationNode { void Update() asm("_ZN2nn3hid13VibrationNode6UpdateEv"); }
+_ZN2nn3hid14DisconnectNpadERKj	nn::hid::DisconnectNpad(unsigned int const&)	GLOBAL	qualified	nn::hid	DisconnectNpad	unsigned int const&	scalars	namespace nn::hid { void DisconnectNpad(unsigned int const&) asm("_ZN2nn3hid14DisconnectNpadERKj"); }
+_ZN2nn3hid14InitializeNpadEv	nn::hid::InitializeNpad()	GLOBAL	qualified	nn::hid	InitializeNpad		void	namespace nn::hid { void InitializeNpad() asm("_ZN2nn3hid14InitializeNpadEv"); }
+_ZN2nn3hid14VibrationMixer10SetMixModeENS0_16VibrationMixModeE	nn::hid::VibrationMixer::SetMixMode(nn::hid::VibrationMixMode)	GLOBAL	qualified	nn::hid::VibrationMixer	SetMixMode	nn::hid::VibrationMixMode	has-byvalue-class	
+_ZN2nn3hid14VibrationMixerC1Ev	nn::hid::VibrationMixer::VibrationMixer()	GLOBAL	ctor	nn::hid::VibrationMixer	VibrationMixer		void	
+_ZN2nn3hid14VibrationMixerD1Ev	nn::hid::VibrationMixer::~VibrationMixer()	GLOBAL	dtor	nn::hid::VibrationMixer	~VibrationMixer		void	
+_ZN2nn3hid15GetNpadStyleSetERKj	nn::hid::GetNpadStyleSet(unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadStyleSet	unsigned int const&	scalars	namespace nn::hid { void GetNpadStyleSet(unsigned int const&) asm("_ZN2nn3hid15GetNpadStyleSetERKj"); }
+_ZN2nn3hid15VibrationPlayer15SetLoopIntervalEi	nn::hid::VibrationPlayer::SetLoopInterval(int)	GLOBAL	qualified	nn::hid::VibrationPlayer	SetLoopInterval	int	scalars	namespace nn::hid::VibrationPlayer { void SetLoopInterval(int) asm("_ZN2nn3hid15VibrationPlayer15SetLoopIntervalEi"); }
+_ZN2nn3hid15VibrationPlayer18SetCurrentPositionEi	nn::hid::VibrationPlayer::SetCurrentPosition(int)	GLOBAL	qualified	nn::hid::VibrationPlayer	SetCurrentPosition	int	scalars	namespace nn::hid::VibrationPlayer { void SetCurrentPosition(int) asm("_ZN2nn3hid15VibrationPlayer18SetCurrentPositionEi"); }
+_ZN2nn3hid15VibrationPlayer18SetLoopEndPositionEi	nn::hid::VibrationPlayer::SetLoopEndPosition(int)	GLOBAL	qualified	nn::hid::VibrationPlayer	SetLoopEndPosition	int	scalars	namespace nn::hid::VibrationPlayer { void SetLoopEndPosition(int) asm("_ZN2nn3hid15VibrationPlayer18SetLoopEndPositionEi"); }
+_ZN2nn3hid15VibrationPlayer20SetLoopStartPositionEi	nn::hid::VibrationPlayer::SetLoopStartPosition(int)	GLOBAL	qualified	nn::hid::VibrationPlayer	SetLoopStartPosition	int	scalars	namespace nn::hid::VibrationPlayer { void SetLoopStartPosition(int) asm("_ZN2nn3hid15VibrationPlayer20SetLoopStartPositionEi"); }
+_ZN2nn3hid15VibrationPlayer4LoadEPKvj	nn::hid::VibrationPlayer::Load(void const*, unsigned int)	GLOBAL	qualified	nn::hid::VibrationPlayer	Load	void const*, unsigned int	scalars	namespace nn::hid::VibrationPlayer { void Load(void const*, unsigned int) asm("_ZN2nn3hid15VibrationPlayer4LoadEPKvj"); }
+_ZN2nn3hid15VibrationPlayer4PlayEv	nn::hid::VibrationPlayer::Play()	GLOBAL	qualified	nn::hid::VibrationPlayer	Play		void	namespace nn::hid::VibrationPlayer { void Play() asm("_ZN2nn3hid15VibrationPlayer4PlayEv"); }
+_ZN2nn3hid15VibrationPlayer4StopEv	nn::hid::VibrationPlayer::Stop()	GLOBAL	qualified	nn::hid::VibrationPlayer	Stop		void	namespace nn::hid::VibrationPlayer { void Stop() asm("_ZN2nn3hid15VibrationPlayer4StopEv"); }
+_ZN2nn3hid15VibrationPlayer7SetLoopEb	nn::hid::VibrationPlayer::SetLoop(bool)	GLOBAL	qualified	nn::hid::VibrationPlayer	SetLoop	bool	scalars	namespace nn::hid::VibrationPlayer { void SetLoop(bool) asm("_ZN2nn3hid15VibrationPlayer7SetLoopEb"); }
+_ZN2nn3hid15VibrationPlayerC1Ev	nn::hid::VibrationPlayer::VibrationPlayer()	GLOBAL	ctor	nn::hid::VibrationPlayer	VibrationPlayer		void	
+_ZN2nn3hid15VibrationPlayerD1Ev	nn::hid::VibrationPlayer::~VibrationPlayer()	GLOBAL	dtor	nn::hid::VibrationPlayer	~VibrationPlayer		void	
+_ZN2nn3hid15VibrationTarget24SetVibrationDeviceHandleERKNS0_21VibrationDeviceHandleE	nn::hid::VibrationTarget::SetVibrationDeviceHandle(nn::hid::VibrationDeviceHandle const&)	GLOBAL	qualified	nn::hid::VibrationTarget	SetVibrationDeviceHandle	nn::hid::VibrationDeviceHandle const&	scalars	
+_ZN2nn3hid15VibrationTarget26UnsetVibrationDeviceHandleEv	nn::hid::VibrationTarget::UnsetVibrationDeviceHandle()	GLOBAL	qualified	nn::hid::VibrationTarget	UnsetVibrationDeviceHandle		void	namespace nn::hid::VibrationTarget { void UnsetVibrationDeviceHandle() asm("_ZN2nn3hid15VibrationTarget26UnsetVibrationDeviceHandleEv"); }
+_ZN2nn3hid15VibrationTargetC1Ev	nn::hid::VibrationTarget::VibrationTarget()	GLOBAL	ctor	nn::hid::VibrationTarget	VibrationTarget		void	
+_ZN2nn3hid15VibrationTargetD1Ev	nn::hid::VibrationTarget::~VibrationTarget()	GLOBAL	dtor	nn::hid::VibrationTarget	~VibrationTarget		void	
+_ZN2nn3hid15VibrationWriter5WriteERKNS0_14VibrationValueE	nn::hid::VibrationWriter::Write(nn::hid::VibrationValue const&)	GLOBAL	qualified	nn::hid::VibrationWriter	Write	nn::hid::VibrationValue const&	scalars	
+_ZN2nn3hid15VibrationWriterC1Ev	nn::hid::VibrationWriter::VibrationWriter()	GLOBAL	ctor	nn::hid::VibrationWriter	VibrationWriter		void	
+_ZN2nn3hid15VibrationWriterD1Ev	nn::hid::VibrationWriter::~VibrationWriter()	GLOBAL	dtor	nn::hid::VibrationWriter	~VibrationWriter		void	
+_ZN2nn3hid16GetKeyboardStateEPNS0_13KeyboardStateE	nn::hid::GetKeyboardState(nn::hid::KeyboardState*)	GLOBAL	qualified	nn::hid	GetKeyboardState	nn::hid::KeyboardState*	scalars	
+_ZN2nn3hid17StopSixAxisSensorERKNS0_19SixAxisSensorHandleE	nn::hid::StopSixAxisSensor(nn::hid::SixAxisSensorHandle const&)	GLOBAL	qualified	nn::hid	StopSixAxisSensor	nn::hid::SixAxisSensorHandle const&	scalars	
+_ZN2nn3hid18GetNpadJoyHoldTypeEv	nn::hid::GetNpadJoyHoldType()	GLOBAL	qualified	nn::hid	GetNpadJoyHoldType		void	namespace nn::hid { void GetNpadJoyHoldType() asm("_ZN2nn3hid18GetNpadJoyHoldTypeEv"); }
+_ZN2nn3hid18InitializeKeyboardEv	nn::hid::InitializeKeyboard()	GLOBAL	qualified	nn::hid	InitializeKeyboard		void	namespace nn::hid { void InitializeKeyboard() asm("_ZN2nn3hid18InitializeKeyboardEv"); }
+_ZN2nn3hid18SetNpadJoyHoldTypeENS0_15NpadJoyHoldTypeE	nn::hid::SetNpadJoyHoldType(nn::hid::NpadJoyHoldType)	GLOBAL	qualified	nn::hid	SetNpadJoyHoldType	nn::hid::NpadJoyHoldType	has-byvalue-class	
+_ZN2nn3hid18StartSixAxisSensorERKNS0_19SixAxisSensorHandleE	nn::hid::StartSixAxisSensor(nn::hid::SixAxisSensorHandle const&)	GLOBAL	qualified	nn::hid	StartSixAxisSensor	nn::hid::SixAxisSensorHandle const&	scalars	
+_ZN2nn3hid20GetNpadJoyAssignmentERKj	nn::hid::GetNpadJoyAssignment(unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadJoyAssignment	unsigned int const&	scalars	namespace nn::hid { void GetNpadJoyAssignment(unsigned int const&) asm("_ZN2nn3hid20GetNpadJoyAssignmentERKj"); }
+_ZN2nn3hid21GetSixAxisSensorStateEPNS0_18SixAxisSensorStateERKNS0_19SixAxisSensorHandleE	nn::hid::GetSixAxisSensorState(nn::hid::SixAxisSensorState*, nn::hid::SixAxisSensorHandle const&)	GLOBAL	qualified	nn::hid	GetSixAxisSensorState	nn::hid::SixAxisSensorState*, nn::hid::SixAxisSensorHandle const&	scalars	
+_ZN2nn3hid21IsSixAxisSensorAtRestERKNS0_19SixAxisSensorHandleE	nn::hid::IsSixAxisSensorAtRest(nn::hid::SixAxisSensorHandle const&)	GLOBAL	qualified	nn::hid	IsSixAxisSensorAtRest	nn::hid::SixAxisSensorHandle const&	scalars	
+_ZN2nn3hid21ShowControllerSupportEPNS0_27ControllerSupportResultInfoERKNS0_20ControllerSupportArgE	nn::hid::ShowControllerSupport(nn::hid::ControllerSupportResultInfo*, nn::hid::ControllerSupportArg const&)	GLOBAL	qualified	nn::hid	ShowControllerSupport	nn::hid::ControllerSupportResultInfo*, nn::hid::ControllerSupportArg const&	scalars	
+_ZN2nn3hid22GetNpadControllerColorEPNS0_19NpadControllerColorERKj	nn::hid::GetNpadControllerColor(nn::hid::NpadControllerColor*, unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadControllerColor	nn::hid::NpadControllerColor*, unsigned int const&	scalars	
+_ZN2nn3hid22GetNpadControllerColorEPNS0_19NpadControllerColorES2_RKj	nn::hid::GetNpadControllerColor(nn::hid::NpadControllerColor*, nn::hid::NpadControllerColor*, unsigned int const&)	GLOBAL	qualified	nn::hid	GetNpadControllerColor	nn::hid::NpadControllerColor*, nn::hid::NpadControllerColor*, unsigned int const&	scalars	
+_ZN2nn3hid22GetVibrationDeviceInfoEPNS0_19VibrationDeviceInfoERKNS0_21VibrationDeviceHandleE	nn::hid::GetVibrationDeviceInfo(nn::hid::VibrationDeviceInfo*, nn::hid::VibrationDeviceHandle const&)	GLOBAL	qualified	nn::hid	GetVibrationDeviceInfo	nn::hid::VibrationDeviceInfo*, nn::hid::VibrationDeviceHandle const&	scalars	
+_ZN2nn3hid22SetSupportedNpadIdTypeEPKjj	nn::hid::SetSupportedNpadIdType(unsigned int const*, unsigned int)	GLOBAL	qualified	nn::hid	SetSupportedNpadIdType	unsigned int const*, unsigned int	scalars	namespace nn::hid { void SetSupportedNpadIdType(unsigned int const*, unsigned int) asm("_ZN2nn3hid22SetSupportedNpadIdTypeEPKjj"); }
+_ZN2nn3hid23GetActualVibrationValueEPNS0_14VibrationValueERKNS0_21VibrationDeviceHandleE	nn::hid::GetActualVibrationValue(nn::hid::VibrationValue*, nn::hid::VibrationDeviceHandle const&)	GLOBAL	qualified	nn::hid	GetActualVibrationValue	nn::hid::VibrationValue*, nn::hid::VibrationDeviceHandle const&	scalars	
+_ZN2nn3hid23GetSixAxisSensorHandlesEPNS0_19SixAxisSensorHandleEiRKjNS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEE	nn::hid::GetSixAxisSensorHandles(nn::hid::SixAxisSensorHandle*, int, unsigned int const&, nn::util::BitFlagSet<32, nn::hid::NpadStyleTag>)	GLOBAL	qualified	nn::hid	GetSixAxisSensorHandles	nn::hid::SixAxisSensorHandle*, int, unsigned int const&, nn::util::BitFlagSet<32, nn::hid::NpadStyleTag>	has-byvalue-class	
+_ZN2nn3hid23VibrationNodeConnection10DisconnectEv	nn::hid::VibrationNodeConnection::Disconnect()	GLOBAL	qualified	nn::hid::VibrationNodeConnection	Disconnect		void	namespace nn::hid::VibrationNodeConnection { void Disconnect() asm("_ZN2nn3hid23VibrationNodeConnection10DisconnectEv"); }
+_ZN2nn3hid23VibrationNodeConnection13SetModulationERKNS0_19VibrationModulationE	nn::hid::VibrationNodeConnection::SetModulation(nn::hid::VibrationModulation const&)	GLOBAL	qualified	nn::hid::VibrationNodeConnection	SetModulation	nn::hid::VibrationModulation const&	scalars	
+_ZN2nn3hid23VibrationNodeConnection7ConnectEPNS0_13VibrationNodeES3_	nn::hid::VibrationNodeConnection::Connect(nn::hid::VibrationNode*, nn::hid::VibrationNode*)	GLOBAL	qualified	nn::hid::VibrationNodeConnection	Connect	nn::hid::VibrationNode*, nn::hid::VibrationNode*	scalars	
+_ZN2nn3hid23VibrationNodeConnectionC1Ev	nn::hid::VibrationNodeConnection::VibrationNodeConnection()	GLOBAL	ctor	nn::hid::VibrationNodeConnection	VibrationNodeConnection		void	
+_ZN2nn3hid23VibrationNodeConnectionD1Ev	nn::hid::VibrationNodeConnection::~VibrationNodeConnection()	GLOBAL	dtor	nn::hid::VibrationNodeConnection	~VibrationNodeConnection		void	
+_ZN2nn3hid24SetSupportedNpadStyleSetENS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEE	nn::hid::SetSupportedNpadStyleSet(nn::util::BitFlagSet<32, nn::hid::NpadStyleTag>)	GLOBAL	qualified	nn::hid	SetSupportedNpadStyleSet	nn::util::BitFlagSet<32, nn::hid::NpadStyleTag>	has-byvalue-class	
+_ZN2nn3hid25GetVibrationDeviceHandlesEPNS0_21VibrationDeviceHandleEiRKjNS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEE	nn::hid::GetVibrationDeviceHandles(nn::hid::VibrationDeviceHandle*, int, unsigned int const&, nn::util::BitFlagSet<32, nn::hid::NpadStyleTag>)	GLOBAL	qualified	nn::hid	GetVibrationDeviceHandles	nn::hid::VibrationDeviceHandle*, int, unsigned int const&, nn::util::BitFlagSet<32, nn::hid::NpadStyleTag>	has-byvalue-class	
+_ZN2nn3hid25InitializeVibrationDeviceERKNS0_21VibrationDeviceHandleE	nn::hid::InitializeVibrationDevice(nn::hid::VibrationDeviceHandle const&)	GLOBAL	qualified	nn::hid	InitializeVibrationDevice	nn::hid::VibrationDeviceHandle const&	scalars	
+_ZN2nn3hid27BindNpadStyleSetUpdateEventERKjPNS_2os15SystemEventTypeENS3_14EventClearModeE	nn::hid::BindNpadStyleSetUpdateEvent(unsigned int const&, nn::os::SystemEventType*, nn::os::EventClearMode)	GLOBAL	qualified	nn::hid	BindNpadStyleSetUpdateEvent	unsigned int const&, nn::os::SystemEventType*, nn::os::EventClearMode	has-byvalue-class	
+_ZN2nn3hid29GetNpadHandheldActivationModeEv	nn::hid::GetNpadHandheldActivationMode()	GLOBAL	qualified	nn::hid	GetNpadHandheldActivationMode		void	namespace nn::hid { void GetNpadHandheldActivationMode() asm("_ZN2nn3hid29GetNpadHandheldActivationModeEv"); }
+_ZN2nn3hid29SetNpadHandheldActivationModeENS0_26NpadHandheldActivationModeE	nn::hid::SetNpadHandheldActivationMode(nn::hid::NpadHandheldActivationMode)	GLOBAL	qualified	nn::hid	SetNpadHandheldActivationMode	nn::hid::NpadHandheldActivationMode	has-byvalue-class	
+_ZN2nn3hid6NpadId8HandheldE	nn::hid::NpadId::Handheld	GLOBAL	data		nn::hid::NpadId::Handheld			
+_ZN2nn3ldn10DisconnectEv	nn::ldn::Disconnect()	GLOBAL	qualified	nn::ldn	Disconnect		void	namespace nn::ldn { void Disconnect() asm("_ZN2nn3ldn10DisconnectEv"); }
+_ZN2nn3ldn10InitializeEv	nn::ldn::Initialize()	GLOBAL	qualified	nn::ldn	Initialize		void	namespace nn::ldn { void Initialize() asm("_ZN2nn3ldn10InitializeEv"); }
+_ZN2nn3ldn11OpenStationEv	nn::ldn::OpenStation()	GLOBAL	qualified	nn::ldn	OpenStation		void	namespace nn::ldn { void OpenStation() asm("_ZN2nn3ldn11OpenStationEv"); }
+_ZN2nn3ldn12CloseStationEv	nn::ldn::CloseStation()	GLOBAL	qualified	nn::ldn	CloseStation		void	namespace nn::ldn { void CloseStation() asm("_ZN2nn3ldn12CloseStationEv"); }
+_ZN2nn3ldn13CreateNetworkERKNS0_13NetworkConfigERKNS0_14SecurityConfigERKNS0_10UserConfigE	nn::ldn::CreateNetwork(nn::ldn::NetworkConfig const&, nn::ldn::SecurityConfig const&, nn::ldn::UserConfig const&)	GLOBAL	qualified	nn::ldn	CreateNetwork	nn::ldn::NetworkConfig const&, nn::ldn::SecurityConfig const&, nn::ldn::UserConfig const&	scalars	
+_ZN2nn3ldn14ConnectPrivateERKNS0_13NetworkConfigERKNS0_14SecurityConfigERKNS0_17SecurityParameterERKNS0_10UserConfigEiNS0_13ConnectOptionE	nn::ldn::ConnectPrivate(nn::ldn::NetworkConfig const&, nn::ldn::SecurityConfig const&, nn::ldn::SecurityParameter const&, nn::ldn::UserConfig const&, int, nn::ldn::ConnectOption)	GLOBAL	qualified	nn::ldn	ConnectPrivate	nn::ldn::NetworkConfig const&, nn::ldn::SecurityConfig const&, nn::ldn::SecurityParameter const&, nn::ldn::UserConfig const&, int, nn::ldn::ConnectOption	has-byvalue-class	
+_ZN2nn3ldn14DestroyNetworkEv	nn::ldn::DestroyNetwork()	GLOBAL	qualified	nn::ldn	DestroyNetwork		void	namespace nn::ldn { void DestroyNetwork() asm("_ZN2nn3ldn14DestroyNetworkEv"); }
+_ZN2nn3ldn14GetIpv4AddressEPNS0_11Ipv4AddressEPNS0_10SubnetMaskE	nn::ldn::GetIpv4Address(nn::ldn::Ipv4Address*, nn::ldn::SubnetMask*)	GLOBAL	qualified	nn::ldn	GetIpv4Address	nn::ldn::Ipv4Address*, nn::ldn::SubnetMask*	scalars	
+_ZN2nn3ldn14GetNetworkInfoEPNS0_11NetworkInfoE	nn::ldn::GetNetworkInfo(nn::ldn::NetworkInfo*)	GLOBAL	qualified	nn::ldn	GetNetworkInfo	nn::ldn::NetworkInfo*	scalars	
+_ZN2nn3ldn15MakeIpv4AddressEhhhh	nn::ldn::MakeIpv4Address(unsigned char, unsigned char, unsigned char, unsigned char)	GLOBAL	qualified	nn::ldn	MakeIpv4Address	unsigned char, unsigned char, unsigned char, unsigned char	scalars	namespace nn::ldn { void MakeIpv4Address(unsigned char, unsigned char, unsigned char, unsigned char) asm("_ZN2nn3ldn15MakeIpv4AddressEhhhh"); }
+_ZN2nn3ldn15OpenAccessPointEv	nn::ldn::OpenAccessPoint()	GLOBAL	qualified	nn::ldn	OpenAccessPoint		void	namespace nn::ldn { void OpenAccessPoint() asm("_ZN2nn3ldn15OpenAccessPointEv"); }
+_ZN2nn3ldn16CloseAccessPointEv	nn::ldn::CloseAccessPoint()	GLOBAL	qualified	nn::ldn	CloseAccessPoint		void	namespace nn::ldn { void CloseAccessPoint() asm("_ZN2nn3ldn16CloseAccessPointEv"); }
+_ZN2nn3ldn16GetNetworkConfigEPNS0_13NetworkConfigE	nn::ldn::GetNetworkConfig(nn::ldn::NetworkConfig*)	GLOBAL	qualified	nn::ldn	GetNetworkConfig	nn::ldn::NetworkConfig*	scalars	
+_ZN2nn3ldn16SetAdvertiseDataEPKvj	nn::ldn::SetAdvertiseData(void const*, unsigned int)	GLOBAL	qualified	nn::ldn	SetAdvertiseData	void const*, unsigned int	scalars	namespace nn::ldn { void SetAdvertiseData(void const*, unsigned int) asm("_ZN2nn3ldn16SetAdvertiseDataEPKvj"); }
+_ZN2nn3ldn19GetDisconnectReasonEv	nn::ldn::GetDisconnectReason()	GLOBAL	qualified	nn::ldn	GetDisconnectReason		void	namespace nn::ldn { void GetDisconnectReason() asm("_ZN2nn3ldn19GetDisconnectReasonEv"); }
+_ZN2nn3ldn20CreateNetworkPrivateERKNS0_13NetworkConfigERKNS0_14SecurityConfigERKNS0_17SecurityParameterERKNS0_10UserConfigEiPKNS0_12AddressEntryE	nn::ldn::CreateNetworkPrivate(nn::ldn::NetworkConfig const&, nn::ldn::SecurityConfig const&, nn::ldn::SecurityParameter const&, nn::ldn::UserConfig const&, int, nn::ldn::AddressEntry const*)	GLOBAL	qualified	nn::ldn	CreateNetworkPrivate	nn::ldn::NetworkConfig const&, nn::ldn::SecurityConfig const&, nn::ldn::SecurityParameter const&, nn::ldn::UserConfig const&, int, nn::ldn::AddressEntry const*	scalars	
+_ZN2nn3ldn20GetSecurityParameterEPNS0_17SecurityParameterE	nn::ldn::GetSecurityParameter(nn::ldn::SecurityParameter*)	GLOBAL	qualified	nn::ldn	GetSecurityParameter	nn::ldn::SecurityParameter*	scalars	
+_ZN2nn3ldn20MakeBroadcastAddressENS0_11Ipv4AddressENS0_10SubnetMaskE	nn::ldn::MakeBroadcastAddress(nn::ldn::Ipv4Address, nn::ldn::SubnetMask)	GLOBAL	qualified	nn::ldn	MakeBroadcastAddress	nn::ldn::Ipv4Address, nn::ldn::SubnetMask	has-byvalue-class	
+_ZN2nn3ldn22AttachStateChangeEventEPNS_2os15SystemEventTypeE	nn::ldn::AttachStateChangeEvent(nn::os::SystemEventType*)	GLOBAL	qualified	nn::ldn	AttachStateChangeEvent	nn::os::SystemEventType*	scalars	
+_ZN2nn3ldn22SetStationAcceptPolicyENS0_12AcceptPolicyE	nn::ldn::SetStationAcceptPolicy(nn::ldn::AcceptPolicy)	GLOBAL	qualified	nn::ldn	SetStationAcceptPolicy	nn::ldn::AcceptPolicy	has-byvalue-class	
+_ZN2nn3ldn4ScanEPNS0_11NetworkInfoEPiiRKNS0_10ScanFilterEi	nn::ldn::Scan(nn::ldn::NetworkInfo*, int*, int, nn::ldn::ScanFilter const&, int)	GLOBAL	qualified	nn::ldn	Scan	nn::ldn::NetworkInfo*, int*, int, nn::ldn::ScanFilter const&, int	scalars	
+_ZN2nn3ldn6RejectENS0_11Ipv4AddressE	nn::ldn::Reject(nn::ldn::Ipv4Address)	GLOBAL	qualified	nn::ldn	Reject	nn::ldn::Ipv4Address	has-byvalue-class	
+_ZN2nn3ldn7ConnectERKNS0_11NetworkInfoERKNS0_14SecurityConfigERKNS0_10UserConfigEiNS0_13ConnectOptionE	nn::ldn::Connect(nn::ldn::NetworkInfo const&, nn::ldn::SecurityConfig const&, nn::ldn::UserConfig const&, int, nn::ldn::ConnectOption)	GLOBAL	qualified	nn::ldn	Connect	nn::ldn::NetworkInfo const&, nn::ldn::SecurityConfig const&, nn::ldn::UserConfig const&, int, nn::ldn::ConnectOption	has-byvalue-class	
+_ZN2nn3ldn8FinalizeEv	nn::ldn::Finalize()	GLOBAL	qualified	nn::ldn	Finalize		void	namespace nn::ldn { void Finalize() asm("_ZN2nn3ldn8FinalizeEv"); }
+_ZN2nn3ldn8GetStateEv	nn::ldn::GetState()	GLOBAL	qualified	nn::ldn	GetState		void	namespace nn::ldn { void GetState() asm("_ZN2nn3ldn8GetStateEv"); }
+_ZN2nn3mem17StandardAllocator10InitializeEPvj	nn::mem::StandardAllocator::Initialize(void*, unsigned int)	GLOBAL	qualified	nn::mem::StandardAllocator	Initialize	void*, unsigned int	scalars	namespace nn::mem::StandardAllocator { void Initialize(void*, unsigned int) asm("_ZN2nn3mem17StandardAllocator10InitializeEPvj"); }
+_ZN2nn3mem17StandardAllocator10ReallocateEPvj	nn::mem::StandardAllocator::Reallocate(void*, unsigned int)	GLOBAL	qualified	nn::mem::StandardAllocator	Reallocate	void*, unsigned int	scalars	namespace nn::mem::StandardAllocator { void Reallocate(void*, unsigned int) asm("_ZN2nn3mem17StandardAllocator10ReallocateEPvj"); }
+_ZN2nn3mem17StandardAllocator4FreeEPv	nn::mem::StandardAllocator::Free(void*)	GLOBAL	qualified	nn::mem::StandardAllocator	Free	void*	scalars	namespace nn::mem::StandardAllocator { void Free(void*) asm("_ZN2nn3mem17StandardAllocator4FreeEPv"); }
+_ZN2nn3mem17StandardAllocator8AllocateEj	nn::mem::StandardAllocator::Allocate(unsigned int)	GLOBAL	qualified	nn::mem::StandardAllocator	Allocate	unsigned int	scalars	namespace nn::mem::StandardAllocator { void Allocate(unsigned int) asm("_ZN2nn3mem17StandardAllocator8AllocateEj"); }
+_ZN2nn3mem17StandardAllocator8AllocateEjj	nn::mem::StandardAllocator::Allocate(unsigned int, unsigned int)	GLOBAL	qualified	nn::mem::StandardAllocator	Allocate	unsigned int, unsigned int	scalars	namespace nn::mem::StandardAllocator { void Allocate(unsigned int, unsigned int) asm("_ZN2nn3mem17StandardAllocator8AllocateEjj"); }
+_ZN2nn3mem17StandardAllocator8FinalizeEv	nn::mem::StandardAllocator::Finalize()	GLOBAL	qualified	nn::mem::StandardAllocator	Finalize		void	namespace nn::mem::StandardAllocator { void Finalize() asm("_ZN2nn3mem17StandardAllocator8FinalizeEv"); }
+_ZN2nn3mem17StandardAllocatorC1Ev	nn::mem::StandardAllocator::StandardAllocator()	GLOBAL	ctor	nn::mem::StandardAllocator	StandardAllocator		void	
+_ZN2nn3ngc15ProfanityFilter10InitializeEPvj	nn::ngc::ProfanityFilter::Initialize(void*, unsigned int)	GLOBAL	qualified	nn::ngc::ProfanityFilter	Initialize	void*, unsigned int	scalars	namespace nn::ngc::ProfanityFilter { void Initialize(void*, unsigned int) asm("_ZN2nn3ngc15ProfanityFilter10InitializeEPvj"); }
+_ZN2nn3ngc15ProfanityFilter11SetMaskModeENS1_8MaskModeE	nn::ngc::ProfanityFilter::SetMaskMode(nn::ngc::ProfanityFilter::MaskMode)	GLOBAL	qualified	nn::ngc::ProfanityFilter	SetMaskMode	nn::ngc::ProfanityFilter::MaskMode	has-byvalue-class	
+_ZN2nn3ngc15ProfanityFilter17GetContentVersionEv	nn::ngc::ProfanityFilter::GetContentVersion()	GLOBAL	qualified	nn::ngc::ProfanityFilter	GetContentVersion		void	namespace nn::ngc::ProfanityFilter { void GetContentVersion() asm("_ZN2nn3ngc15ProfanityFilter17GetContentVersionEv"); }
+_ZN2nn3ngc15ProfanityFilter19CheckProfanityWordsEPjjPPKcj	nn::ngc::ProfanityFilter::CheckProfanityWords(unsigned int*, unsigned int, char const**, unsigned int)	GLOBAL	qualified	nn::ngc::ProfanityFilter	CheckProfanityWords	unsigned int*, unsigned int, char const**, unsigned int	scalars	namespace nn::ngc::ProfanityFilter { void CheckProfanityWords(unsigned int*, unsigned int, char const**, unsigned int) asm("_ZN2nn3ngc15ProfanityFilter19CheckProfanityWordsEPjjPPKcj"); }
+_ZN2nn3ngc15ProfanityFilter24MaskProfanityWordsInTextEPiPcj	nn::ngc::ProfanityFilter::MaskProfanityWordsInText(int*, char*, unsigned int)	GLOBAL	qualified	nn::ngc::ProfanityFilter	MaskProfanityWordsInText	int*, char*, unsigned int	scalars	namespace nn::ngc::ProfanityFilter { void MaskProfanityWordsInText(int*, char*, unsigned int) asm("_ZN2nn3ngc15ProfanityFilter24MaskProfanityWordsInTextEPiPcj"); }
+_ZN2nn3ngc15ProfanityFilterC1Ev	nn::ngc::ProfanityFilter::ProfanityFilter()	GLOBAL	ctor	nn::ngc::ProfanityFilter	ProfanityFilter		void	
+_ZN2nn3ngc15ProfanityFilterD1Ev	nn::ngc::ProfanityFilter::~ProfanityFilter()	GLOBAL	dtor	nn::ngc::ProfanityFilter	~ProfanityFilter		void	
+_ZN2nn3nsd9ResolveExEPNS0_4FqdnERKS1_	nn::nsd::ResolveEx(nn::nsd::Fqdn*, nn::nsd::Fqdn const&)	GLOBAL	qualified	nn::nsd	ResolveEx	nn::nsd::Fqdn*, nn::nsd::Fqdn const&	scalars	
+_ZN2nn3ssl10InitializeEv	nn::ssl::Initialize()	GLOBAL	qualified	nn::ssl	Initialize		void	namespace nn::ssl { void Initialize() asm("_ZN2nn3ssl10InitializeEv"); }
+_ZN2nn3ssl7Context15ImportServerPkiEPyPKcjNS0_17CertificateFormatE	nn::ssl::Context::ImportServerPki(unsigned long long*, char const*, unsigned int, nn::ssl::CertificateFormat)	GLOBAL	qualified	nn::ssl::Context	ImportServerPki	unsigned long long*, char const*, unsigned int, nn::ssl::CertificateFormat	has-byvalue-class	
+_ZN2nn3ssl7Context6CreateENS1_10SslVersionE	nn::ssl::Context::Create(nn::ssl::Context::SslVersion)	GLOBAL	qualified	nn::ssl::Context	Create	nn::ssl::Context::SslVersion	has-byvalue-class	
+_ZN2nn3ssl8FinalizeEv	nn::ssl::Finalize()	GLOBAL	qualified	nn::ssl	Finalize		void	namespace nn::ssl { void Finalize() asm("_ZN2nn3ssl8FinalizeEv"); }
+_ZN2nn3web11ShowWebPageEPNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE	nn::web::ShowWebPage(nn::web::WebPageReturnValue*, nn::web::ShowWebPageArg const&)	GLOBAL	qualified	nn::web	ShowWebPage	nn::web::WebPageReturnValue*, nn::web::ShowWebPageArg const&	scalars	
+_ZN2nn3web14ShowWebPageArg14SetCallbackUrlEPKc	nn::web::ShowWebPageArg::SetCallbackUrl(char const*)	GLOBAL	qualified	nn::web::ShowWebPageArg	SetCallbackUrl	char const*	scalars	namespace nn::web::ShowWebPageArg { void SetCallbackUrl(char const*) asm("_ZN2nn3web14ShowWebPageArg14SetCallbackUrlEPKc"); }
+_ZN2nn3web14ShowWebPageArg16SetLeftStickModeENS0_16WebLeftStickModeE	nn::web::ShowWebPageArg::SetLeftStickMode(nn::web::WebLeftStickMode)	GLOBAL	qualified	nn::web::ShowWebPageArg	SetLeftStickMode	nn::web::WebLeftStickMode	has-byvalue-class	
+_ZN2nn3web14ShowWebPageArg17SetBackgroundKindENS0_17WebBackgroundKindE	nn::web::ShowWebPageArg::SetBackgroundKind(nn::web::WebBackgroundKind)	GLOBAL	qualified	nn::web::ShowWebPageArg	SetBackgroundKind	nn::web::WebBackgroundKind	has-byvalue-class	
+_ZN2nn3web14ShowWebPageArg20SetBootAsMediaPlayerEb	nn::web::ShowWebPageArg::SetBootAsMediaPlayer(bool)	GLOBAL	qualified	nn::web::ShowWebPageArg	SetBootAsMediaPlayer	bool	scalars	namespace nn::web::ShowWebPageArg { void SetBootAsMediaPlayer(bool) asm("_ZN2nn3web14ShowWebPageArg20SetBootAsMediaPlayerEb"); }
+_ZN2nn3web14ShowWebPageArg6SetUidERKNS_7account3UidE	nn::web::ShowWebPageArg::SetUid(nn::account::Uid const&)	GLOBAL	qualified	nn::web::ShowWebPageArg	SetUid	nn::account::Uid const&	scalars	
+_ZN2nn3web14ShowWebPageArgC1EPKc	nn::web::ShowWebPageArg::ShowWebPageArg(char const*)	GLOBAL	ctor	nn::web::ShowWebPageArg	ShowWebPageArg	char const*	scalars	
+_ZN2nn3web18WebPageReturnValueC1Ev	nn::web::WebPageReturnValue::WebPageReturnValue()	GLOBAL	ctor	nn::web::WebPageReturnValue	WebPageReturnValue		void	
+_ZN2nn3web19ShowOfflineHtmlPageEPNS0_26OfflineHtmlPageReturnValueERKNS0_22ShowOfflineHtmlPageArgE	nn::web::ShowOfflineHtmlPage(nn::web::OfflineHtmlPageReturnValue*, nn::web::ShowOfflineHtmlPageArg const&)	GLOBAL	qualified	nn::web	ShowOfflineHtmlPage	nn::web::OfflineHtmlPageReturnValue*, nn::web::ShowOfflineHtmlPageArg const&	scalars	
+_ZN2nn3web22ShowOfflineHtmlPageArg16SetFooterEnabledEb	nn::web::ShowOfflineHtmlPageArg::SetFooterEnabled(bool)	GLOBAL	qualified	nn::web::ShowOfflineHtmlPageArg	SetFooterEnabled	bool	scalars	namespace nn::web::ShowOfflineHtmlPageArg { void SetFooterEnabled(bool) asm("_ZN2nn3web22ShowOfflineHtmlPageArg16SetFooterEnabledEb"); }
+_ZN2nn3web22ShowOfflineHtmlPageArg16SetLeftStickModeERKNS0_20OfflineLeftStickModeE	nn::web::ShowOfflineHtmlPageArg::SetLeftStickMode(nn::web::OfflineLeftStickMode const&)	GLOBAL	qualified	nn::web::ShowOfflineHtmlPageArg	SetLeftStickMode	nn::web::OfflineLeftStickMode const&	scalars	
+_ZN2nn3web22ShowOfflineHtmlPageArg17SetBackgroundKindERKNS0_21OfflineBackgroundKindE	nn::web::ShowOfflineHtmlPageArg::SetBackgroundKind(nn::web::OfflineBackgroundKind const&)	GLOBAL	qualified	nn::web::ShowOfflineHtmlPageArg	SetBackgroundKind	nn::web::OfflineBackgroundKind const&	scalars	
+_ZN2nn3web22ShowOfflineHtmlPageArg17SetPointerEnabledEb	nn::web::ShowOfflineHtmlPageArg::SetPointerEnabled(bool)	GLOBAL	qualified	nn::web::ShowOfflineHtmlPageArg	SetPointerEnabled	bool	scalars	namespace nn::web::ShowOfflineHtmlPageArg { void SetPointerEnabled(bool) asm("_ZN2nn3web22ShowOfflineHtmlPageArg17SetPointerEnabledEb"); }
+_ZN2nn3web22ShowOfflineHtmlPageArgC1EPKc	nn::web::ShowOfflineHtmlPageArg::ShowOfflineHtmlPageArg(char const*)	GLOBAL	ctor	nn::web::ShowOfflineHtmlPageArg	ShowOfflineHtmlPageArg	char const*	scalars	
+_ZN2nn3web26OfflineHtmlPageReturnValueC1Ev	nn::web::OfflineHtmlPageReturnValue::OfflineHtmlPageReturnValue()	GLOBAL	ctor	nn::web::OfflineHtmlPageReturnValue	OfflineHtmlPageReturnValue		void	
+_ZN2nn4bcat10InitializeEv	nn::bcat::Initialize()	GLOBAL	qualified	nn::bcat	Initialize		void	namespace nn::bcat { void Initialize() asm("_ZN2nn4bcat10InitializeEv"); }
+_ZN2nn4bcat17DeliveryCacheFile4OpenEPKc	nn::bcat::DeliveryCacheFile::Open(char const*)	GLOBAL	qualified	nn::bcat::DeliveryCacheFile	Open	char const*	scalars	namespace nn::bcat::DeliveryCacheFile { void Open(char const*) asm("_ZN2nn4bcat17DeliveryCacheFile4OpenEPKc"); }
+_ZN2nn4bcat17DeliveryCacheFile4ReadEPjxPvj	nn::bcat::DeliveryCacheFile::Read(unsigned int*, long long, void*, unsigned int)	GLOBAL	qualified	nn::bcat::DeliveryCacheFile	Read	unsigned int*, long long, void*, unsigned int	scalars	namespace nn::bcat::DeliveryCacheFile { void Read(unsigned int*, long long, void*, unsigned int) asm("_ZN2nn4bcat17DeliveryCacheFile4ReadEPjxPvj"); }
+_ZN2nn4bcat17DeliveryCacheFile5CloseEv	nn::bcat::DeliveryCacheFile::Close()	GLOBAL	qualified	nn::bcat::DeliveryCacheFile	Close		void	namespace nn::bcat::DeliveryCacheFile { void Close() asm("_ZN2nn4bcat17DeliveryCacheFile5CloseEv"); }
+_ZN2nn4bcat17DeliveryCacheFileC1Ev	nn::bcat::DeliveryCacheFile::DeliveryCacheFile()	GLOBAL	ctor	nn::bcat::DeliveryCacheFile	DeliveryCacheFile		void	
+_ZN2nn4bcat17DeliveryCacheFileD1Ev	nn::bcat::DeliveryCacheFile::~DeliveryCacheFile()	GLOBAL	dtor	nn::bcat::DeliveryCacheFile	~DeliveryCacheFile		void	
+_ZN2nn4bcat21DeliveryCacheProgress6UpdateEv	nn::bcat::DeliveryCacheProgress::Update()	GLOBAL	qualified	nn::bcat::DeliveryCacheProgress	Update		void	namespace nn::bcat::DeliveryCacheProgress { void Update() asm("_ZN2nn4bcat21DeliveryCacheProgress6UpdateEv"); }
+_ZN2nn4bcat21DeliveryCacheProgressC1Ev	nn::bcat::DeliveryCacheProgress::DeliveryCacheProgress()	GLOBAL	ctor	nn::bcat::DeliveryCacheProgress	DeliveryCacheProgress		void	
+_ZN2nn4bcat21DeliveryCacheProgressD1Ev	nn::bcat::DeliveryCacheProgress::~DeliveryCacheProgress()	GLOBAL	dtor	nn::bcat::DeliveryCacheProgress	~DeliveryCacheProgress		void	
+_ZN2nn4bcat24RequestSyncDeliveryCacheEPNS0_21DeliveryCacheProgressE	nn::bcat::RequestSyncDeliveryCache(nn::bcat::DeliveryCacheProgress*)	GLOBAL	qualified	nn::bcat	RequestSyncDeliveryCache	nn::bcat::DeliveryCacheProgress*	scalars	
+_ZN2nn4bcat25MountDeliveryCacheStorageEv	nn::bcat::MountDeliveryCacheStorage()	GLOBAL	qualified	nn::bcat	MountDeliveryCacheStorage		void	namespace nn::bcat { void MountDeliveryCacheStorage() asm("_ZN2nn4bcat25MountDeliveryCacheStorageEv"); }
+_ZN2nn4bcat27UnmountDeliveryCacheStorageEv	nn::bcat::UnmountDeliveryCacheStorage()	GLOBAL	qualified	nn::bcat	UnmountDeliveryCacheStorage		void	namespace nn::bcat { void UnmountDeliveryCacheStorage() asm("_ZN2nn4bcat27UnmountDeliveryCacheStorageEv"); }
+_ZN2nn4diag6detail7LogImplERKNS0_11LogMetaDataEPKcz	nn::diag::detail::LogImpl(nn::diag::LogMetaData const&, char const*, ...)	GLOBAL	qualified	nn::diag::detail	LogImpl	nn::diag::LogMetaData const&, char const*, ...	scalars	
+_ZN2nn4diag6detail9AbortImplEPKcS3_S3_i	nn::diag::detail::AbortImpl(char const*, char const*, char const*, int)	GLOBAL	qualified	nn::diag::detail	AbortImpl	char const*, char const*, char const*, int	scalars	namespace nn::diag::detail { void AbortImpl(char const*, char const*, char const*, int) asm("_ZN2nn4diag6detail9AbortImplEPKcS3_S3_i"); }
+_ZN2nn4nifm10InitializeEv	nn::nifm::Initialize()	GLOBAL	qualified	nn::nifm	Initialize		void	namespace nn::nifm { void Initialize() asm("_ZN2nn4nifm10InitializeEv"); }
+_ZN2nn4nifm18IsNetworkAvailableEv	nn::nifm::IsNetworkAvailable()	GLOBAL	qualified	nn::nifm	IsNetworkAvailable		void	namespace nn::nifm { void IsNetworkAvailable() asm("_ZN2nn4nifm18IsNetworkAvailableEv"); }
+_ZN2nn4nifm19SetLocalNetworkModeEb	nn::nifm::SetLocalNetworkMode(bool)	GLOBAL	qualified	nn::nifm	SetLocalNetworkMode	bool	scalars	namespace nn::nifm { void SetLocalNetworkMode(bool) asm("_ZN2nn4nifm19SetLocalNetworkModeEb"); }
+_ZN2nn4nifm20CancelNetworkRequestEv	nn::nifm::CancelNetworkRequest()	GLOBAL	qualified	nn::nifm	CancelNetworkRequest		void	namespace nn::nifm { void CancelNetworkRequest() asm("_ZN2nn4nifm20CancelNetworkRequestEv"); }
+_ZN2nn4nifm22GetCurrentIpConfigInfoEP7in_addrS2_S2_S2_S2_	nn::nifm::GetCurrentIpConfigInfo(in_addr*, in_addr*, in_addr*, in_addr*, in_addr*)	GLOBAL	qualified	nn::nifm	GetCurrentIpConfigInfo	in_addr*, in_addr*, in_addr*, in_addr*, in_addr*	scalars	
+_ZN2nn4nifm22GetCurrentProxySettingEPNS0_12ProxySettingE	nn::nifm::GetCurrentProxySetting(nn::nifm::ProxySetting*)	GLOBAL	qualified	nn::nifm	GetCurrentProxySetting	nn::nifm::ProxySetting*	scalars	
+_ZN2nn4nifm26GetCurrentPrimaryIpAddressEP7in_addr	nn::nifm::GetCurrentPrimaryIpAddress(in_addr*)	GLOBAL	qualified	nn::nifm	GetCurrentPrimaryIpAddress	in_addr*	scalars	
+_ZN2nn4nifm26HandleNetworkRequestResultEv	nn::nifm::HandleNetworkRequestResult()	GLOBAL	qualified	nn::nifm	HandleNetworkRequestResult		void	namespace nn::nifm { void HandleNetworkRequestResult() asm("_ZN2nn4nifm26HandleNetworkRequestResultEv"); }
+_ZN2nn4nifm27SubmitNetworkRequestAndWaitEv	nn::nifm::SubmitNetworkRequestAndWait()	GLOBAL	qualified	nn::nifm	SubmitNetworkRequestAndWait		void	namespace nn::nifm { void SubmitNetworkRequestAndWait() asm("_ZN2nn4nifm27SubmitNetworkRequestAndWaitEv"); }
+_ZN2nn4pctl32CheckFreeCommunicationPermissionEb	nn::pctl::CheckFreeCommunicationPermission(bool)	GLOBAL	qualified	nn::pctl	CheckFreeCommunicationPermission	bool	scalars	namespace nn::pctl { void CheckFreeCommunicationPermission(bool) asm("_ZN2nn4pctl32CheckFreeCommunicationPermissionEb"); }
+_ZN2nn4time10InitializeEv	nn::time::Initialize()	GLOBAL	qualified	nn::time	Initialize		void	namespace nn::time { void Initialize() asm("_ZN2nn4time10InitializeEv"); }
+_ZN2nn4time14ToCalendarTimeEPNS0_12CalendarTimeEPNS0_22CalendarAdditionalInfoERKNS0_9PosixTimeE	nn::time::ToCalendarTime(nn::time::CalendarTime*, nn::time::CalendarAdditionalInfo*, nn::time::PosixTime const&)	GLOBAL	qualified	nn::time	ToCalendarTime	nn::time::CalendarTime*, nn::time::CalendarAdditionalInfo*, nn::time::PosixTime const&	scalars	
+_ZN2nn4time14ToCalendarTimeEPNS0_12CalendarTimeEPNS0_22CalendarAdditionalInfoERKNS0_9PosixTimeERKNS0_12TimeZoneRuleE	nn::time::ToCalendarTime(nn::time::CalendarTime*, nn::time::CalendarAdditionalInfo*, nn::time::PosixTime const&, nn::time::TimeZoneRule const&)	GLOBAL	qualified	nn::time	ToCalendarTime	nn::time::CalendarTime*, nn::time::CalendarAdditionalInfo*, nn::time::PosixTime const&, nn::time::TimeZoneRule const&	scalars	
+_ZN2nn4time16LoadTimeZoneRuleEPNS0_12TimeZoneRuleERKNS0_12LocationNameE	nn::time::LoadTimeZoneRule(nn::time::TimeZoneRule*, nn::time::LocationName const&)	GLOBAL	qualified	nn::time	LoadTimeZoneRule	nn::time::TimeZoneRule*, nn::time::LocationName const&	scalars	
+_ZN2nn4time21GetDeviceLocationNameEPNS0_12LocationNameE	nn::time::GetDeviceLocationName(nn::time::LocationName*)	GLOBAL	qualified	nn::time	GetDeviceLocationName	nn::time::LocationName*	scalars	
+_ZN2nn4time23StandardUserSystemClock14GetCurrentTimeEPNS0_9PosixTimeE	nn::time::StandardUserSystemClock::GetCurrentTime(nn::time::PosixTime*)	GLOBAL	qualified	nn::time::StandardUserSystemClock	GetCurrentTime	nn::time::PosixTime*	scalars	
+_ZN2nn4time8FinalizeEv	nn::time::Finalize()	GLOBAL	qualified	nn::time	Finalize		void	namespace nn::time { void Finalize() asm("_ZN2nn4time8FinalizeEv"); }
+_ZN2nn4util11ReferSymbolEPKv	nn::util::ReferSymbol(void const*)	GLOBAL	qualified	nn::util	ReferSymbol	void const*	scalars	namespace nn::util { void ReferSymbol(void const*) asm("_ZN2nn4util11ReferSymbolEPKv"); }
+_ZN2nn4util8SNPrintfEPcjPKcz	nn::util::SNPrintf(char*, unsigned int, char const*, ...)	GLOBAL	qualified	nn::util	SNPrintf	char*, unsigned int, char const*, ...	scalars	namespace nn::util { void SNPrintf(char*, unsigned int, char const*, ...) asm("_ZN2nn4util8SNPrintfEPcjPKcz"); }
+_ZN2nn4util8Vector4f12ConstantZeroE	nn::util::Vector4f::ConstantZero	GLOBAL	data		nn::util::Vector4f::ConstantZero			
+_ZN2nn4util9VSNPrintfEPcjPKcSt9__va_list	nn::util::VSNPrintf(char*, unsigned int, char const*, std::__va_list)	GLOBAL	qualified	nn::util	VSNPrintf	char*, unsigned int, char const*, std::__va_list	has-byvalue-class	
+_ZN2nn5audio12IsVoiceValidEPKNS0_9VoiceTypeE	nn::audio::IsVoiceValid(nn::audio::VoiceType const*)	GLOBAL	qualified	nn::audio	IsVoiceValid	nn::audio::VoiceType const*	scalars	
+_ZN2nn5audio13AcquireSubMixEPNS0_19AudioRendererConfigEPNS0_10SubMixTypeEii	nn::audio::AcquireSubMix(nn::audio::AudioRendererConfig*, nn::audio::SubMixType*, int, int)	GLOBAL	qualified	nn::audio	AcquireSubMix	nn::audio::AudioRendererConfig*, nn::audio::SubMixType*, int, int	scalars	
+_ZN2nn5audio13AddDeviceSinkEPNS0_19AudioRendererConfigEPNS0_14DeviceSinkTypeEPNS0_12FinalMixTypeEPKaiPKc	nn::audio::AddDeviceSink(nn::audio::AudioRendererConfig*, nn::audio::DeviceSinkType*, nn::audio::FinalMixType*, signed char const*, int, char const*)	GLOBAL	qualified	nn::audio	AddDeviceSink	nn::audio::AudioRendererConfig*, nn::audio::DeviceSinkType*, nn::audio::FinalMixType*, signed char const*, int, char const*	scalars	
+_ZN2nn5audio13ReleaseSubMixEPNS0_19AudioRendererConfigEPNS0_10SubMixTypeE	nn::audio::ReleaseSubMix(nn::audio::AudioRendererConfig*, nn::audio::SubMixType*)	GLOBAL	qualified	nn::audio	ReleaseSubMix	nn::audio::AudioRendererConfig*, nn::audio::SubMixType*	scalars	
+_ZN2nn5audio13SetAuxEnabledEPNS0_7AuxTypeEb	nn::audio::SetAuxEnabled(nn::audio::AuxType*, bool)	GLOBAL	qualified	nn::audio	SetAuxEnabled	nn::audio::AuxType*, bool	scalars	
+_ZN2nn5audio13SetVoicePitchEPNS0_9VoiceTypeEf	nn::audio::SetVoicePitch(nn::audio::VoiceType*, float)	GLOBAL	qualified	nn::audio	SetVoicePitch	nn::audio::VoiceType*, float	scalars	
+_ZN2nn5audio14AddBufferMixerEPNS0_19AudioRendererConfigEPNS0_15BufferMixerTypeEPNS0_10SubMixTypeE	nn::audio::AddBufferMixer(nn::audio::AudioRendererConfig*, nn::audio::BufferMixerType*, nn::audio::SubMixType*)	GLOBAL	qualified	nn::audio	AddBufferMixer	nn::audio::AudioRendererConfig*, nn::audio::BufferMixerType*, nn::audio::SubMixType*	scalars	
+_ZN2nn5audio14AddBufferMixerEPNS0_19AudioRendererConfigEPNS0_15BufferMixerTypeEPNS0_12FinalMixTypeE	nn::audio::AddBufferMixer(nn::audio::AudioRendererConfig*, nn::audio::BufferMixerType*, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	AddBufferMixer	nn::audio::AudioRendererConfig*, nn::audio::BufferMixerType*, nn::audio::FinalMixType*	scalars	
+_ZN2nn5audio14AddI3dl2ReverbEPNS0_19AudioRendererConfigEPNS0_15I3dl2ReverbTypeEPvjPNS0_10SubMixTypeEi	nn::audio::AddI3dl2Reverb(nn::audio::AudioRendererConfig*, nn::audio::I3dl2ReverbType*, void*, unsigned int, nn::audio::SubMixType*, int)	GLOBAL	qualified	nn::audio	AddI3dl2Reverb	nn::audio::AudioRendererConfig*, nn::audio::I3dl2ReverbType*, void*, unsigned int, nn::audio::SubMixType*, int	scalars	
+_ZN2nn5audio14AddI3dl2ReverbEPNS0_19AudioRendererConfigEPNS0_15I3dl2ReverbTypeEPvjPNS0_12FinalMixTypeEi	nn::audio::AddI3dl2Reverb(nn::audio::AudioRendererConfig*, nn::audio::I3dl2ReverbType*, void*, unsigned int, nn::audio::FinalMixType*, int)	GLOBAL	qualified	nn::audio	AddI3dl2Reverb	nn::audio::AudioRendererConfig*, nn::audio::I3dl2ReverbType*, void*, unsigned int, nn::audio::FinalMixType*, int	scalars	
+_ZN2nn5audio14IsAuxRemovableEPKNS0_7AuxTypeE	nn::audio::IsAuxRemovable(nn::audio::AuxType const*)	GLOBAL	qualified	nn::audio	IsAuxRemovable	nn::audio::AuxType const*	scalars	
+_ZN2nn5audio15AcquireFinalMixEPNS0_19AudioRendererConfigEPNS0_12FinalMixTypeEi	nn::audio::AcquireFinalMix(nn::audio::AudioRendererConfig*, nn::audio::FinalMixType*, int)	GLOBAL	qualified	nn::audio	AcquireFinalMix	nn::audio::AudioRendererConfig*, nn::audio::FinalMixType*, int	scalars	
+_ZN2nn5audio15AcquireSplitterEPNS0_19AudioRendererConfigEPNS0_12SplitterTypeEiii	nn::audio::AcquireSplitter(nn::audio::AudioRendererConfig*, nn::audio::SplitterType*, int, int, int)	GLOBAL	qualified	nn::audio	AcquireSplitter	nn::audio::AudioRendererConfig*, nn::audio::SplitterType*, int, int, int	scalars	
+_ZN2nn5audio15ReleaseFinalMixEPNS0_19AudioRendererConfigEPNS0_12FinalMixTypeE	nn::audio::ReleaseFinalMix(nn::audio::AudioRendererConfig*, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	ReleaseFinalMix	nn::audio::AudioRendererConfig*, nn::audio::FinalMixType*	scalars	
+_ZN2nn5audio15ReleaseSplitterEPNS0_19AudioRendererConfigEPNS0_12SplitterTypeE	nn::audio::ReleaseSplitter(nn::audio::AudioRendererConfig*, nn::audio::SplitterType*)	GLOBAL	qualified	nn::audio	ReleaseSplitter	nn::audio::AudioRendererConfig*, nn::audio::SplitterType*	scalars	
+_ZN2nn5audio16AcquireVoiceSlotEPNS0_19AudioRendererConfigEPNS0_9VoiceTypeEiiNS0_12SampleFormatEiPKvj	nn::audio::AcquireVoiceSlot(nn::audio::AudioRendererConfig*, nn::audio::VoiceType*, int, int, nn::audio::SampleFormat, int, void const*, unsigned int)	GLOBAL	qualified	nn::audio	AcquireVoiceSlot	nn::audio::AudioRendererConfig*, nn::audio::VoiceType*, int, int, nn::audio::SampleFormat, int, void const*, unsigned int	has-byvalue-class	
+_ZN2nn5audio16AppendWaveBufferEPNS0_9VoiceTypeEPKNS0_10WaveBufferE	nn::audio::AppendWaveBuffer(nn::audio::VoiceType*, nn::audio::WaveBuffer const*)	GLOBAL	qualified	nn::audio	AppendWaveBuffer	nn::audio::VoiceType*, nn::audio::WaveBuffer const*	scalars	
+_ZN2nn5audio16ReleaseVoiceSlotEPNS0_19AudioRendererConfigEPNS0_9VoiceTypeE	nn::audio::ReleaseVoiceSlot(nn::audio::AudioRendererConfig*, nn::audio::VoiceType*)	GLOBAL	qualified	nn::audio	ReleaseVoiceSlot	nn::audio::AudioRendererConfig*, nn::audio::VoiceType*	scalars	
+_ZN2nn5audio16RemoveDeviceSinkEPNS0_19AudioRendererConfigEPNS0_14DeviceSinkTypeEPNS0_12FinalMixTypeE	nn::audio::RemoveDeviceSink(nn::audio::AudioRendererConfig*, nn::audio::DeviceSinkType*, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	RemoveDeviceSink	nn::audio::AudioRendererConfig*, nn::audio::DeviceSinkType*, nn::audio::FinalMixType*	scalars	
+_ZN2nn5audio17AcquireMemoryPoolEPNS0_19AudioRendererConfigEPNS0_14MemoryPoolTypeEPvj	nn::audio::AcquireMemoryPool(nn::audio::AudioRendererConfig*, nn::audio::MemoryPoolType*, void*, unsigned int)	GLOBAL	qualified	nn::audio	AcquireMemoryPool	nn::audio::AudioRendererConfig*, nn::audio::MemoryPoolType*, void*, unsigned int	scalars	
+_ZN2nn5audio17GetAuxSampleCountEPKNS0_7AuxTypeE	nn::audio::GetAuxSampleCount(nn::audio::AuxType const*)	GLOBAL	qualified	nn::audio	GetAuxSampleCount	nn::audio::AuxType const*	scalars	
+_ZN2nn5audio17GetVoicePlayStateEPKNS0_9VoiceTypeE	nn::audio::GetVoicePlayState(nn::audio::VoiceType const*)	GLOBAL	qualified	nn::audio	GetVoicePlayState	nn::audio::VoiceType const*	scalars	
+_ZN2nn5audio17OpenAudioRendererEPNS0_19AudioRendererHandleEPNS_2os11SystemEventERKNS0_22AudioRendererParameterEPvj	nn::audio::OpenAudioRenderer(nn::audio::AudioRendererHandle*, nn::os::SystemEvent*, nn::audio::AudioRendererParameter const&, void*, unsigned int)	GLOBAL	qualified	nn::audio	OpenAudioRenderer	nn::audio::AudioRendererHandle*, nn::os::SystemEvent*, nn::audio::AudioRendererParameter const&, void*, unsigned int	scalars	
+_ZN2nn5audio17ReadAuxSendBufferEPNS0_7AuxTypeEPii	nn::audio::ReadAuxSendBuffer(nn::audio::AuxType*, int*, int)	GLOBAL	qualified	nn::audio	ReadAuxSendBuffer	nn::audio::AuxType*, int*, int	scalars	
+_ZN2nn5audio17ReleaseMemoryPoolEPNS0_19AudioRendererConfigEPNS0_14MemoryPoolTypeE	nn::audio::ReleaseMemoryPool(nn::audio::AudioRendererConfig*, nn::audio::MemoryPoolType*)	GLOBAL	qualified	nn::audio	ReleaseMemoryPool	nn::audio::AudioRendererConfig*, nn::audio::MemoryPoolType*	scalars	
+_ZN2nn5audio17RemoveBufferMixerEPNS0_19AudioRendererConfigEPNS0_15BufferMixerTypeEPNS0_10SubMixTypeE	nn::audio::RemoveBufferMixer(nn::audio::AudioRendererConfig*, nn::audio::BufferMixerType*, nn::audio::SubMixType*)	GLOBAL	qualified	nn::audio	RemoveBufferMixer	nn::audio::AudioRendererConfig*, nn::audio::BufferMixerType*, nn::audio::SubMixType*	scalars	
+_ZN2nn5audio17RemoveBufferMixerEPNS0_19AudioRendererConfigEPNS0_15BufferMixerTypeEPNS0_12FinalMixTypeE	nn::audio::RemoveBufferMixer(nn::audio::AudioRendererConfig*, nn::audio::BufferMixerType*, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	RemoveBufferMixer	nn::audio::AudioRendererConfig*, nn::audio::BufferMixerType*, nn::audio::FinalMixType*	scalars	
+_ZN2nn5audio17RemoveI3dl2ReverbEPNS0_19AudioRendererConfigEPNS0_15I3dl2ReverbTypeEPNS0_10SubMixTypeE	nn::audio::RemoveI3dl2Reverb(nn::audio::AudioRendererConfig*, nn::audio::I3dl2ReverbType*, nn::audio::SubMixType*)	GLOBAL	qualified	nn::audio	RemoveI3dl2Reverb	nn::audio::AudioRendererConfig*, nn::audio::I3dl2ReverbType*, nn::audio::SubMixType*	scalars	
+_ZN2nn5audio17RemoveI3dl2ReverbEPNS0_19AudioRendererConfigEPNS0_15I3dl2ReverbTypeEPNS0_12FinalMixTypeE	nn::audio::RemoveI3dl2Reverb(nn::audio::AudioRendererConfig*, nn::audio::I3dl2ReverbType*, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	RemoveI3dl2Reverb	nn::audio::AudioRendererConfig*, nn::audio::I3dl2ReverbType*, nn::audio::FinalMixType*	scalars	
+_ZN2nn5audio17SetAuxInputOutputEPNS0_7AuxTypeEPKaS4_i	nn::audio::SetAuxInputOutput(nn::audio::AuxType*, signed char const*, signed char const*, int)	GLOBAL	qualified	nn::audio	SetAuxInputOutput	nn::audio::AuxType*, signed char const*, signed char const*, int	scalars	
+_ZN2nn5audio17SetVoiceMixVolumeEPNS0_9VoiceTypeEPNS0_10SubMixTypeEfii	nn::audio::SetVoiceMixVolume(nn::audio::VoiceType*, nn::audio::SubMixType*, float, int, int)	GLOBAL	qualified	nn::audio	SetVoiceMixVolume	nn::audio::VoiceType*, nn::audio::SubMixType*, float, int, int	scalars	
+_ZN2nn5audio17SetVoiceMixVolumeEPNS0_9VoiceTypeEPNS0_12FinalMixTypeEfii	nn::audio::SetVoiceMixVolume(nn::audio::VoiceType*, nn::audio::FinalMixType*, float, int, int)	GLOBAL	qualified	nn::audio	SetVoiceMixVolume	nn::audio::VoiceType*, nn::audio::FinalMixType*, float, int, int	scalars	
+_ZN2nn5audio17SetVoicePlayStateEPNS0_9VoiceTypeENS1_9PlayStateE	nn::audio::SetVoicePlayState(nn::audio::VoiceType*, nn::audio::VoiceType::PlayState)	GLOBAL	qualified	nn::audio	SetVoicePlayState	nn::audio::VoiceType*, nn::audio::VoiceType::PlayState	has-byvalue-class	
+_ZN2nn5audio17StopAudioRendererENS0_19AudioRendererHandleE	nn::audio::StopAudioRenderer(nn::audio::AudioRendererHandle)	GLOBAL	qualified	nn::audio	StopAudioRenderer	nn::audio::AudioRendererHandle	has-byvalue-class	
+_ZN2nn5audio18CloseAudioRendererENS0_19AudioRendererHandleE	nn::audio::CloseAudioRenderer(nn::audio::AudioRendererHandle)	GLOBAL	qualified	nn::audio	CloseAudioRenderer	nn::audio::AudioRendererHandle	has-byvalue-class	
+_ZN2nn5audio18CopyMemoryPoolDataEPKNS0_14MemoryPoolTypeEPvPKvj	nn::audio::CopyMemoryPoolData(nn::audio::MemoryPoolType const*, void*, void const*, unsigned int)	GLOBAL	qualified	nn::audio	CopyMemoryPoolData	nn::audio::MemoryPoolType const*, void*, void const*, unsigned int	scalars	
+_ZN2nn5audio18GetMemoryPoolStateEPKNS0_14MemoryPoolTypeE	nn::audio::GetMemoryPoolState(nn::audio::MemoryPoolType const*)	GLOBAL	qualified	nn::audio	GetMemoryPoolState	nn::audio::MemoryPoolType const*	scalars	
+_ZN2nn5audio18SetSubMixMixVolumeEPNS0_10SubMixTypeEPNS0_12FinalMixTypeEfii	nn::audio::SetSubMixMixVolume(nn::audio::SubMixType*, nn::audio::FinalMixType*, float, int, int)	GLOBAL	qualified	nn::audio	SetSubMixMixVolume	nn::audio::SubMixType*, nn::audio::FinalMixType*, float, int, int	scalars	
+_ZN2nn5audio18SetSubMixMixVolumeEPNS0_10SubMixTypeES2_fii	nn::audio::SetSubMixMixVolume(nn::audio::SubMixType*, nn::audio::SubMixType*, float, int, int)	GLOBAL	qualified	nn::audio	SetSubMixMixVolume	nn::audio::SubMixType*, nn::audio::SubMixType*, float, int, int	scalars	
+_ZN2nn5audio18StartAudioRendererENS0_19AudioRendererHandleE	nn::audio::StartAudioRenderer(nn::audio::AudioRendererHandle)	GLOBAL	qualified	nn::audio	StartAudioRenderer	nn::audio::AudioRendererHandle	has-byvalue-class	
+_ZN2nn5audio19SetDownMixParameterEPNS0_14DeviceSinkTypeEPKNS1_16DownMixParameterE	nn::audio::SetDownMixParameter(nn::audio::DeviceSinkType*, nn::audio::DeviceSinkType::DownMixParameter const*)	GLOBAL	qualified	nn::audio	SetDownMixParameter	nn::audio::DeviceSinkType*, nn::audio::DeviceSinkType::DownMixParameter const*	scalars	
+_ZN2nn5audio19SetVoiceDestinationEPNS0_19AudioRendererConfigEPNS0_9VoiceTypeEPNS0_10SubMixTypeE	nn::audio::SetVoiceDestination(nn::audio::AudioRendererConfig*, nn::audio::VoiceType*, nn::audio::SubMixType*)	GLOBAL	qualified	nn::audio	SetVoiceDestination	nn::audio::AudioRendererConfig*, nn::audio::VoiceType*, nn::audio::SubMixType*	scalars	
+_ZN2nn5audio19SetVoiceDestinationEPNS0_19AudioRendererConfigEPNS0_9VoiceTypeEPNS0_12FinalMixTypeE	nn::audio::SetVoiceDestination(nn::audio::AudioRendererConfig*, nn::audio::VoiceType*, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	SetVoiceDestination	nn::audio::AudioRendererConfig*, nn::audio::VoiceType*, nn::audio::FinalMixType*	scalars	
+_ZN2nn5audio19SetVoiceDestinationEPNS0_19AudioRendererConfigEPNS0_9VoiceTypeEPNS0_12SplitterTypeE	nn::audio::SetVoiceDestination(nn::audio::AudioRendererConfig*, nn::audio::VoiceType*, nn::audio::SplitterType*)	GLOBAL	qualified	nn::audio	SetVoiceDestination	nn::audio::AudioRendererConfig*, nn::audio::VoiceType*, nn::audio::SplitterType*	scalars	
+_ZN2nn5audio20GetVoiceChannelCountEPKNS0_9VoiceTypeE	nn::audio::GetVoiceChannelCount(nn::audio::VoiceType const*)	GLOBAL	qualified	nn::audio	GetVoiceChannelCount	nn::audio::VoiceType const*	scalars	
+_ZN2nn5audio20IsMemoryPoolAttachedEPKNS0_14MemoryPoolTypeE	nn::audio::IsMemoryPoolAttached(nn::audio::MemoryPoolType const*)	GLOBAL	qualified	nn::audio	IsMemoryPoolAttached	nn::audio::MemoryPoolType const*	scalars	
+_ZN2nn5audio20SetBufferMixerVolumeEPNS0_15BufferMixerTypeEif	nn::audio::SetBufferMixerVolume(nn::audio::BufferMixerType*, int, float)	GLOBAL	qualified	nn::audio	SetBufferMixerVolume	nn::audio::BufferMixerType*, int, float	scalars	
+_ZN2nn5audio20SetSplitterMixVolumeEPNS0_12SplitterTypeEiPNS0_10SubMixTypeEfii	nn::audio::SetSplitterMixVolume(nn::audio::SplitterType*, int, nn::audio::SubMixType*, float, int, int)	GLOBAL	qualified	nn::audio	SetSplitterMixVolume	nn::audio::SplitterType*, int, nn::audio::SubMixType*, float, int, int	scalars	
+_ZN2nn5audio20SetSplitterMixVolumeEPNS0_12SplitterTypeEiPNS0_12FinalMixTypeEfii	nn::audio::SetSplitterMixVolume(nn::audio::SplitterType*, int, nn::audio::FinalMixType*, float, int, int)	GLOBAL	qualified	nn::audio	SetSplitterMixVolume	nn::audio::SplitterType*, int, nn::audio::FinalMixType*, float, int, int	scalars	
+_ZN2nn5audio20SetSubMixDestinationEPNS0_19AudioRendererConfigEPNS0_10SubMixTypeEPNS0_12FinalMixTypeE	nn::audio::SetSubMixDestination(nn::audio::AudioRendererConfig*, nn::audio::SubMixType*, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	SetSubMixDestination	nn::audio::AudioRendererConfig*, nn::audio::SubMixType*, nn::audio::FinalMixType*	scalars	
+_ZN2nn5audio20SetSubMixDestinationEPNS0_19AudioRendererConfigEPNS0_10SubMixTypeEPNS0_12SplitterTypeE	nn::audio::SetSubMixDestination(nn::audio::AudioRendererConfig*, nn::audio::SubMixType*, nn::audio::SplitterType*)	GLOBAL	qualified	nn::audio	SetSubMixDestination	nn::audio::AudioRendererConfig*, nn::audio::SubMixType*, nn::audio::SplitterType*	scalars	
+_ZN2nn5audio20SetSubMixDestinationEPNS0_19AudioRendererConfigEPNS0_10SubMixTypeES4_	nn::audio::SetSubMixDestination(nn::audio::AudioRendererConfig*, nn::audio::SubMixType*, nn::audio::SubMixType*)	GLOBAL	qualified	nn::audio	SetSubMixDestination	nn::audio::AudioRendererConfig*, nn::audio::SubMixType*, nn::audio::SubMixType*	scalars	
+_ZN2nn5audio20WriteAuxReturnBufferEPNS0_7AuxTypeEPKii	nn::audio::WriteAuxReturnBuffer(nn::audio::AuxType*, int const*, int)	GLOBAL	qualified	nn::audio	WriteAuxReturnBuffer	nn::audio::AuxType*, int const*, int	scalars	
+_ZN2nn5audio21GetReleasedWaveBufferEPNS0_9VoiceTypeE	nn::audio::GetReleasedWaveBuffer(nn::audio::VoiceType*)	GLOBAL	qualified	nn::audio	GetReleasedWaveBuffer	nn::audio::VoiceType*	scalars	
+_ZN2nn5audio21SetBufferMixerEnabledEPNS0_15BufferMixerTypeEb	nn::audio::SetBufferMixerEnabled(nn::audio::BufferMixerType*, bool)	GLOBAL	qualified	nn::audio	SetBufferMixerEnabled	nn::audio::BufferMixerType*, bool	scalars	
+_ZN2nn5audio21SetI3dl2ReverbDryGainEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbDryGain(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbDryGain	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio21SetI3dl2ReverbEnabledEPNS0_15I3dl2ReverbTypeEb	nn::audio::SetI3dl2ReverbEnabled(nn::audio::I3dl2ReverbType*, bool)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbEnabled	nn::audio::I3dl2ReverbType*, bool	scalars	
+_ZN2nn5audio22IsBufferMixerRemovableEPKNS0_15BufferMixerTypeE	nn::audio::IsBufferMixerRemovable(nn::audio::BufferMixerType const*)	GLOBAL	qualified	nn::audio	IsBufferMixerRemovable	nn::audio::BufferMixerType const*	scalars	
+_ZN2nn5audio22IsI3dl2ReverbRemovableEPKNS0_15I3dl2ReverbTypeE	nn::audio::IsI3dl2ReverbRemovable(nn::audio::I3dl2ReverbType const*)	GLOBAL	qualified	nn::audio	IsI3dl2ReverbRemovable	nn::audio::I3dl2ReverbType const*	scalars	
+_ZN2nn5audio22SetI3dl2ReverbRoomGainEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbRoomGain(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbRoomGain	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio22SetSplitterDestinationEPNS0_19AudioRendererConfigEPNS0_12SplitterTypeEiPNS0_10SubMixTypeE	nn::audio::SetSplitterDestination(nn::audio::AudioRendererConfig*, nn::audio::SplitterType*, int, nn::audio::SubMixType*)	GLOBAL	qualified	nn::audio	SetSplitterDestination	nn::audio::AudioRendererConfig*, nn::audio::SplitterType*, int, nn::audio::SubMixType*	scalars	
+_ZN2nn5audio22SetSplitterDestinationEPNS0_19AudioRendererConfigEPNS0_12SplitterTypeEiPNS0_12FinalMixTypeE	nn::audio::SetSplitterDestination(nn::audio::AudioRendererConfig*, nn::audio::SplitterType*, int, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	SetSplitterDestination	nn::audio::AudioRendererConfig*, nn::audio::SplitterType*, int, nn::audio::FinalMixType*	scalars	
+_ZN2nn5audio23RequestAttachMemoryPoolEPNS0_14MemoryPoolTypeE	nn::audio::RequestAttachMemoryPool(nn::audio::MemoryPoolType*)	GLOBAL	qualified	nn::audio	RequestAttachMemoryPool	nn::audio::MemoryPoolType*	scalars	
+_ZN2nn5audio23RequestDetachMemoryPoolEPNS0_14MemoryPoolTypeE	nn::audio::RequestDetachMemoryPool(nn::audio::MemoryPoolType*)	GLOBAL	qualified	nn::audio	RequestDetachMemoryPool	nn::audio::MemoryPoolType*	scalars	
+_ZN2nn5audio24GetActiveAudioDeviceNameEPNS0_15AudioDeviceNameE	nn::audio::GetActiveAudioDeviceName(nn::audio::AudioDeviceName*)	GLOBAL	qualified	nn::audio	GetActiveAudioDeviceName	nn::audio::AudioDeviceName*	scalars	
+_ZN2nn5audio24SetI3dl2ReverbReverbGainEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbReverbGain(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbReverbGain	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio24SetI3dl2ReverbRoomHfGainEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbRoomHfGain(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbRoomHfGain	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio25GetVoicePlayedSampleCountEPKNS0_9VoiceTypeE	nn::audio::GetVoicePlayedSampleCount(nn::audio::VoiceType const*)	GLOBAL	qualified	nn::audio	GetVoicePlayedSampleCount	nn::audio::VoiceType const*	scalars	
+_ZN2nn5audio25SetBufferMixerInputOutputEPNS0_15BufferMixerTypeEPKaS4_i	nn::audio::SetBufferMixerInputOutput(nn::audio::BufferMixerType*, signed char const*, signed char const*, int)	GLOBAL	qualified	nn::audio	SetBufferMixerInputOutput	nn::audio::BufferMixerType*, signed char const*, signed char const*, int	scalars	
+_ZN2nn5audio25SetI3dl2ReverbHfReferenceEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbHfReference(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbHfReference	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio25SetI3dl2ReverbInputOutputEPNS0_15I3dl2ReverbTypeEPKaS4_i	nn::audio::SetI3dl2ReverbInputOutput(nn::audio::I3dl2ReverbType*, signed char const*, signed char const*, int)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbInputOutput	nn::audio::I3dl2ReverbType*, signed char const*, signed char const*, int	scalars	
+_ZN2nn5audio26RequestUpdateAudioRendererENS0_19AudioRendererHandleEPKNS0_19AudioRendererConfigE	nn::audio::RequestUpdateAudioRenderer(nn::audio::AudioRendererHandle, nn::audio::AudioRendererConfig const*)	GLOBAL	qualified	nn::audio	RequestUpdateAudioRenderer	nn::audio::AudioRendererHandle, nn::audio::AudioRendererConfig const*	has-byvalue-class	
+_ZN2nn5audio26SetAudioDeviceOutputVolumeEPKNS0_15AudioDeviceNameEf	nn::audio::SetAudioDeviceOutputVolume(nn::audio::AudioDeviceName const*, float)	GLOBAL	qualified	nn::audio	SetAudioDeviceOutputVolume	nn::audio::AudioDeviceName const*, float	scalars	
+_ZN2nn5audio26SetDownMixParameterEnabledEPNS0_14DeviceSinkTypeEb	nn::audio::SetDownMixParameterEnabled(nn::audio::DeviceSinkType*, bool)	GLOBAL	qualified	nn::audio	SetDownMixParameterEnabled	nn::audio::DeviceSinkType*, bool	scalars	
+_ZN2nn5audio29InitializeAudioRendererConfigEPNS0_19AudioRendererConfigERKNS0_22AudioRendererParameterEPvj	nn::audio::InitializeAudioRendererConfig(nn::audio::AudioRendererConfig*, nn::audio::AudioRendererParameter const&, void*, unsigned int)	GLOBAL	qualified	nn::audio	InitializeAudioRendererConfig	nn::audio::AudioRendererConfig*, nn::audio::AudioRendererParameter const&, void*, unsigned int	scalars	
+_ZN2nn5audio29SetI3dl2ReverbReflectionsGainEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbReflectionsGain(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbReflectionsGain	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio29SetVoiceBiquadFilterParameterEPNS0_9VoiceTypeEiRKNS0_21BiquadFilterParameterE	nn::audio::SetVoiceBiquadFilterParameter(nn::audio::VoiceType*, int, nn::audio::BiquadFilterParameter const&)	GLOBAL	qualified	nn::audio	SetVoiceBiquadFilterParameter	nn::audio::VoiceType*, int, nn::audio::BiquadFilterParameter const&	scalars	
+_ZN2nn5audio30GetAudioRendererWorkBufferSizeERKNS0_22AudioRendererParameterE	nn::audio::GetAudioRendererWorkBufferSize(nn::audio::AudioRendererParameter const&)	GLOBAL	qualified	nn::audio	GetAudioRendererWorkBufferSize	nn::audio::AudioRendererParameter const&	scalars	
+_ZN2nn5audio31SetI3dl2ReverbLateReverbDensityEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbLateReverbDensity(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbLateReverbDensity	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio32InitializeAudioRendererParameterEPNS0_22AudioRendererParameterE	nn::audio::InitializeAudioRendererParameter(nn::audio::AudioRendererParameter*)	GLOBAL	qualified	nn::audio	InitializeAudioRendererParameter	nn::audio::AudioRendererParameter*	scalars	
+_ZN2nn5audio33SetI3dl2ReverbLateReverbDecayTimeEPNS0_15I3dl2ReverbTypeENS_8TimeSpanE	nn::audio::SetI3dl2ReverbLateReverbDecayTime(nn::audio::I3dl2ReverbType*, nn::TimeSpan)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbLateReverbDecayTime	nn::audio::I3dl2ReverbType*, nn::TimeSpan	has-byvalue-class	
+_ZN2nn5audio33SetI3dl2ReverbLateReverbDelayTimeEPNS0_15I3dl2ReverbTypeENS_8TimeSpanE	nn::audio::SetI3dl2ReverbLateReverbDelayTime(nn::audio::I3dl2ReverbType*, nn::TimeSpan)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbLateReverbDelayTime	nn::audio::I3dl2ReverbType*, nn::TimeSpan	has-byvalue-class	
+_ZN2nn5audio33SetI3dl2ReverbLateReverbDiffusionEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbLateReverbDiffusion(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbLateReverbDiffusion	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio33SetI3dl2ReverbReflectionDelayTimeEPNS0_15I3dl2ReverbTypeENS_8TimeSpanE	nn::audio::SetI3dl2ReverbReflectionDelayTime(nn::audio::I3dl2ReverbType*, nn::TimeSpan)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbReflectionDelayTime	nn::audio::I3dl2ReverbType*, nn::TimeSpan	has-byvalue-class	
+_ZN2nn5audio35GetRequiredBufferSizeForI3dl2ReverbEii	nn::audio::GetRequiredBufferSizeForI3dl2Reverb(int, int)	GLOBAL	qualified	nn::audio	GetRequiredBufferSizeForI3dl2Reverb	int, int	scalars	namespace nn::audio { void GetRequiredBufferSizeForI3dl2Reverb(int, int) asm("_ZN2nn5audio35GetRequiredBufferSizeForI3dl2ReverbEii"); }
+_ZN2nn5audio36AcquireAudioDeviceSwitchNotificationEPNS_2os11SystemEventE	nn::audio::AcquireAudioDeviceSwitchNotification(nn::os::SystemEvent*)	GLOBAL	qualified	nn::audio	AcquireAudioDeviceSwitchNotification	nn::os::SystemEvent*	scalars	
+_ZN2nn5audio36GetAudioRendererConfigWorkBufferSizeERKNS0_22AudioRendererParameterE	nn::audio::GetAudioRendererConfigWorkBufferSize(nn::audio::AudioRendererParameter const&)	GLOBAL	qualified	nn::audio	GetAudioRendererConfigWorkBufferSize	nn::audio::AudioRendererParameter const&	scalars	
+_ZN2nn5audio36SetI3dl2ReverbLateReverbHfDecayRatioEPNS0_15I3dl2ReverbTypeEf	nn::audio::SetI3dl2ReverbLateReverbHfDecayRatio(nn::audio::I3dl2ReverbType*, float)	GLOBAL	qualified	nn::audio	SetI3dl2ReverbLateReverbHfDecayRatio	nn::audio::I3dl2ReverbType*, float	scalars	
+_ZN2nn5audio43GetRequiredBufferSizeForAuxSendReturnBufferEPKNS0_22AudioRendererParameterEii	nn::audio::GetRequiredBufferSizeForAuxSendReturnBuffer(nn::audio::AudioRendererParameter const*, int, int)	GLOBAL	qualified	nn::audio	GetRequiredBufferSizeForAuxSendReturnBuffer	nn::audio::AudioRendererParameter const*, int, int	scalars	
+_ZN2nn5audio6AddAuxEPNS0_19AudioRendererConfigEPNS0_7AuxTypeEPNS0_10SubMixTypeEPvS7_j	nn::audio::AddAux(nn::audio::AudioRendererConfig*, nn::audio::AuxType*, nn::audio::SubMixType*, void*, void*, unsigned int)	GLOBAL	qualified	nn::audio	AddAux	nn::audio::AudioRendererConfig*, nn::audio::AuxType*, nn::audio::SubMixType*, void*, void*, unsigned int	scalars	
+_ZN2nn5audio6AddAuxEPNS0_19AudioRendererConfigEPNS0_7AuxTypeEPNS0_12FinalMixTypeEPvS7_j	nn::audio::AddAux(nn::audio::AudioRendererConfig*, nn::audio::AuxType*, nn::audio::FinalMixType*, void*, void*, unsigned int)	GLOBAL	qualified	nn::audio	AddAux	nn::audio::AudioRendererConfig*, nn::audio::AuxType*, nn::audio::FinalMixType*, void*, void*, unsigned int	scalars	
+_ZN2nn5audio9RemoveAuxEPNS0_19AudioRendererConfigEPNS0_7AuxTypeEPNS0_10SubMixTypeE	nn::audio::RemoveAux(nn::audio::AudioRendererConfig*, nn::audio::AuxType*, nn::audio::SubMixType*)	GLOBAL	qualified	nn::audio	RemoveAux	nn::audio::AudioRendererConfig*, nn::audio::AuxType*, nn::audio::SubMixType*	scalars	
+_ZN2nn5audio9RemoveAuxEPNS0_19AudioRendererConfigEPNS0_7AuxTypeEPNS0_12FinalMixTypeE	nn::audio::RemoveAux(nn::audio::AudioRendererConfig*, nn::audio::AuxType*, nn::audio::FinalMixType*)	GLOBAL	qualified	nn::audio	RemoveAux	nn::audio::AudioRendererConfig*, nn::audio::AuxType*, nn::audio::FinalMixType*	scalars	
+_ZN2nn5codec11OpusDecoderC1Ev	nn::codec::OpusDecoder::OpusDecoder()	GLOBAL	ctor	nn::codec::OpusDecoder	OpusDecoder		void	
+_ZN2nn5codec17GetOpusPacketSizeEPKhj	nn::codec::GetOpusPacketSize(unsigned char const*, unsigned int)	GLOBAL	qualified	nn::codec	GetOpusPacketSize	unsigned char const*, unsigned int	scalars	namespace nn::codec { void GetOpusPacketSize(unsigned char const*, unsigned int) asm("_ZN2nn5codec17GetOpusPacketSizeEPKhj"); }
+_ZN2nn5codec32GetOpusPacketSampleCountPerFrameEPiPKhji	nn::codec::GetOpusPacketSampleCountPerFrame(int*, unsigned char const*, unsigned int, int)	GLOBAL	qualified	nn::codec	GetOpusPacketSampleCountPerFrame	int*, unsigned char const*, unsigned int, int	scalars	namespace nn::codec { void GetOpusPacketSampleCountPerFrame(int*, unsigned char const*, unsigned int, int) asm("_ZN2nn5codec32GetOpusPacketSampleCountPerFrameEPiPKhji"); }
+_ZN2nn5swkbd10MakePresetEPNS0_14KeyboardConfigENS0_6PresetE	nn::swkbd::MakePreset(nn::swkbd::KeyboardConfig*, nn::swkbd::Preset)	GLOBAL	qualified	nn::swkbd	MakePreset	nn::swkbd::KeyboardConfig*, nn::swkbd::Preset	has-byvalue-class	
+_ZN2nn5swkbd12ShowKeyboardEPNS0_6StringERKNS0_15ShowKeyboardArgE	nn::swkbd::ShowKeyboard(nn::swkbd::String*, nn::swkbd::ShowKeyboardArg const&)	GLOBAL	qualified	nn::swkbd	ShowKeyboard	nn::swkbd::String*, nn::swkbd::ShowKeyboardArg const&	scalars	
+_ZN2nn5swkbd12UserWordInfo25GetRequiredWorkBufferSizeEi	nn::swkbd::UserWordInfo::GetRequiredWorkBufferSize(int)	GLOBAL	qualified	nn::swkbd::UserWordInfo	GetRequiredWorkBufferSize	int	scalars	namespace nn::swkbd::UserWordInfo { void GetRequiredWorkBufferSize(int) asm("_ZN2nn5swkbd12UserWordInfo25GetRequiredWorkBufferSizeEi"); }
+_ZN2nn5swkbd13SetOkTextUtf8EPNS0_14KeyboardConfigEPKc	nn::swkbd::SetOkTextUtf8(nn::swkbd::KeyboardConfig*, char const*)	GLOBAL	qualified	nn::swkbd	SetOkTextUtf8	nn::swkbd::KeyboardConfig*, char const*	scalars	
+_ZN2nn5swkbd14InlineKeyboard10InitializeEPv	nn::swkbd::InlineKeyboard::Initialize(void*)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	Initialize	void*	scalars	namespace nn::swkbd::InlineKeyboard { void Initialize(void*) asm("_ZN2nn5swkbd14InlineKeyboard10InitializeEPv"); }
+_ZN2nn5swkbd14InlineKeyboard11SetUtf8ModeEb	nn::swkbd::InlineKeyboard::SetUtf8Mode(bool)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetUtf8Mode	bool	scalars	namespace nn::swkbd::InlineKeyboard { void SetUtf8Mode(bool) asm("_ZN2nn5swkbd14InlineKeyboard11SetUtf8ModeEb"); }
+_ZN2nn5swkbd14InlineKeyboard12SetCursorPosEi	nn::swkbd::InlineKeyboard::SetCursorPos(int)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetCursorPos	int	scalars	namespace nn::swkbd::InlineKeyboard { void SetCursorPos(int) asm("_ZN2nn5swkbd14InlineKeyboard12SetCursorPosEi"); }
+_ZN2nn5swkbd14InlineKeyboard12SetInputTextERKNS0_9InputTextE	nn::swkbd::InlineKeyboard::SetInputText(nn::swkbd::InputText const&)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetInputText	nn::swkbd::InputText const&	scalars	
+_ZN2nn5swkbd14InlineKeyboard14SetKeytopAlphaEf	nn::swkbd::InlineKeyboard::SetKeytopAlpha(float)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetKeytopAlpha	float	scalars	namespace nn::swkbd::InlineKeyboard { void SetKeytopAlpha(float) asm("_ZN2nn5swkbd14InlineKeyboard14SetKeytopAlphaEf"); }
+_ZN2nn5swkbd14InlineKeyboard14SetKeytopScaleEf	nn::swkbd::InlineKeyboard::SetKeytopScale(float)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetKeytopScale	float	scalars	namespace nn::swkbd::InlineKeyboard { void SetKeytopScale(float) asm("_ZN2nn5swkbd14InlineKeyboard14SetKeytopScaleEf"); }
+_ZN2nn5swkbd14InlineKeyboard15SetCustomizeDicEPKvjRKNS0_16CustomizeDicInfoE	nn::swkbd::InlineKeyboard::SetCustomizeDic(void const*, unsigned int, nn::swkbd::CustomizeDicInfo const&)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetCustomizeDic	void const*, unsigned int, nn::swkbd::CustomizeDicInfo const&	scalars	
+_ZN2nn5swkbd14InlineKeyboard15SetUserWordInfoERKNS0_12UserWordInfoE	nn::swkbd::InlineKeyboard::SetUserWordInfo(nn::swkbd::UserWordInfo const&)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetUserWordInfo	nn::swkbd::UserWordInfo const&	scalars	
+_ZN2nn5swkbd14InlineKeyboard17UnsetCustomizeDicEv	nn::swkbd::InlineKeyboard::UnsetCustomizeDic()	GLOBAL	qualified	nn::swkbd::InlineKeyboard	UnsetCustomizeDic		void	namespace nn::swkbd::InlineKeyboard { void UnsetCustomizeDic() asm("_ZN2nn5swkbd14InlineKeyboard17UnsetCustomizeDicEv"); }
+_ZN2nn5swkbd14InlineKeyboard17UnsetUserWordInfoEv	nn::swkbd::InlineKeyboard::UnsetUserWordInfo()	GLOBAL	qualified	nn::swkbd::InlineKeyboard	UnsetUserWordInfo		void	namespace nn::swkbd::InlineKeyboard { void UnsetUserWordInfo() asm("_ZN2nn5swkbd14InlineKeyboard17UnsetUserWordInfoEv"); }
+_ZN2nn5swkbd14InlineKeyboard18SetKeytopTranslateEff	nn::swkbd::InlineKeyboard::SetKeytopTranslate(float, float)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetKeytopTranslate	float, float	scalars	namespace nn::swkbd::InlineKeyboard { void SetKeytopTranslate(float, float) asm("_ZN2nn5swkbd14InlineKeyboard18SetKeytopTranslateEff"); }
+_ZN2nn5swkbd14InlineKeyboard24SetDecidedCancelCallbackEPFvvE	nn::swkbd::InlineKeyboard::SetDecidedCancelCallback(void (*)())	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetDecidedCancelCallback	void (*)()	scalars	
+_ZN2nn5swkbd14InlineKeyboard25GetImageMemoryRequirementEPjS2_	nn::swkbd::InlineKeyboard::GetImageMemoryRequirement(unsigned int*, unsigned int*)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	GetImageMemoryRequirement	unsigned int*, unsigned int*	scalars	namespace nn::swkbd::InlineKeyboard { void GetImageMemoryRequirement(unsigned int*, unsigned int*) asm("_ZN2nn5swkbd14InlineKeyboard25GetImageMemoryRequirementEPjS2_"); }
+_ZN2nn5swkbd14InlineKeyboard25GetRequiredWorkBufferSizeEv	nn::swkbd::InlineKeyboard::GetRequiredWorkBufferSize()	GLOBAL	qualified	nn::swkbd::InlineKeyboard	GetRequiredWorkBufferSize		void	namespace nn::swkbd::InlineKeyboard { void GetRequiredWorkBufferSize() asm("_ZN2nn5swkbd14InlineKeyboard25GetRequiredWorkBufferSizeEv"); }
+_ZN2nn5swkbd14InlineKeyboard26IsUsedTouchPointByKeyboardEii	nn::swkbd::InlineKeyboard::IsUsedTouchPointByKeyboard(int, int)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	IsUsedTouchPointByKeyboard	int, int	scalars	namespace nn::swkbd::InlineKeyboard { void IsUsedTouchPointByKeyboard(int, int) asm("_ZN2nn5swkbd14InlineKeyboard26IsUsedTouchPointByKeyboardEii"); }
+_ZN2nn5swkbd14InlineKeyboard26SetMovedCursorCallbackUtf8EPFvPKNS0_18MovedCursorArgUtf8EE	nn::swkbd::InlineKeyboard::SetMovedCursorCallbackUtf8(void (*)(nn::swkbd::MovedCursorArgUtf8 const*))	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetMovedCursorCallbackUtf8	void (*)(nn::swkbd::MovedCursorArgUtf8 const*)	scalars	
+_ZN2nn5swkbd14InlineKeyboard27SetDecidedEnterCallbackUtf8EPFvPKNS0_19DecidedEnterArgUtf8EE	nn::swkbd::InlineKeyboard::SetDecidedEnterCallbackUtf8(void (*)(nn::swkbd::DecidedEnterArgUtf8 const*))	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetDecidedEnterCallbackUtf8	void (*)(nn::swkbd::DecidedEnterArgUtf8 const*)	scalars	
+_ZN2nn5swkbd14InlineKeyboard27SetFinishedKeyboardCallbackEPFvvE	nn::swkbd::InlineKeyboard::SetFinishedKeyboardCallback(void (*)())	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetFinishedKeyboardCallback	void (*)()	scalars	
+_ZN2nn5swkbd14InlineKeyboard28SetChangedStringCallbackUtf8EPFvPKNS0_20ChangedStringArgUtf8EE	nn::swkbd::InlineKeyboard::SetChangedStringCallbackUtf8(void (*)(nn::swkbd::ChangedStringArgUtf8 const*))	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetChangedStringCallbackUtf8	void (*)(nn::swkbd::ChangedStringArgUtf8 const*)	scalars	
+_ZN2nn5swkbd14InlineKeyboard29SetFinishedInitializeCallbackEPFvvE	nn::swkbd::InlineKeyboard::SetFinishedInitializeCallback(void (*)())	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetFinishedInitializeCallback	void (*)()	scalars	
+_ZN2nn5swkbd14InlineKeyboard31SetReleasedUserWordInfoCallbackEPFvvE	nn::swkbd::InlineKeyboard::SetReleasedUserWordInfoCallback(void (*)())	GLOBAL	qualified	nn::swkbd::InlineKeyboard	SetReleasedUserWordInfoCallback	void (*)()	scalars	
+_ZN2nn5swkbd14InlineKeyboard4CalcEv	nn::swkbd::InlineKeyboard::Calc()	GLOBAL	qualified	nn::swkbd::InlineKeyboard	Calc		void	namespace nn::swkbd::InlineKeyboard { void Calc() asm("_ZN2nn5swkbd14InlineKeyboard4CalcEv"); }
+_ZN2nn5swkbd14InlineKeyboard6AppearERKNS0_9AppearArgE	nn::swkbd::InlineKeyboard::Appear(nn::swkbd::AppearArg const&)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	Appear	nn::swkbd::AppearArg const&	scalars	
+_ZN2nn5swkbd14InlineKeyboard8FinalizeEv	nn::swkbd::InlineKeyboard::Finalize()	GLOBAL	qualified	nn::swkbd::InlineKeyboard	Finalize		void	namespace nn::swkbd::InlineKeyboard { void Finalize() asm("_ZN2nn5swkbd14InlineKeyboard8FinalizeEv"); }
+_ZN2nn5swkbd14InlineKeyboard8GetImageEPvj	nn::swkbd::InlineKeyboard::GetImage(void*, unsigned int)	GLOBAL	qualified	nn::swkbd::InlineKeyboard	GetImage	void*, unsigned int	scalars	namespace nn::swkbd::InlineKeyboard { void GetImage(void*, unsigned int) asm("_ZN2nn5swkbd14InlineKeyboard8GetImageEPvj"); }
+_ZN2nn5swkbd14InlineKeyboard9DisappearEv	nn::swkbd::InlineKeyboard::Disappear()	GLOBAL	qualified	nn::swkbd::InlineKeyboard	Disappear		void	namespace nn::swkbd::InlineKeyboard { void Disappear() asm("_ZN2nn5swkbd14InlineKeyboard9DisappearEv"); }
+_ZN2nn5swkbd14InlineKeyboardC1Ev	nn::swkbd::InlineKeyboard::InlineKeyboard()	GLOBAL	ctor	nn::swkbd::InlineKeyboard	InlineKeyboard		void	
+_ZN2nn5swkbd14InlineKeyboardD1Ev	nn::swkbd::InlineKeyboard::~InlineKeyboard()	GLOBAL	dtor	nn::swkbd::InlineKeyboard	~InlineKeyboard		void	
+_ZN2nn5swkbd14SetInitialTextEPNS0_15ShowKeyboardArgEPKDs	nn::swkbd::SetInitialText(nn::swkbd::ShowKeyboardArg*, char16_t const*)	GLOBAL	qualified	nn::swkbd	SetInitialText	nn::swkbd::ShowKeyboardArg*, char16_t const*	scalars	
+_ZN2nn5swkbd14SetSubTextUtf8EPNS0_14KeyboardConfigEPKc	nn::swkbd::SetSubTextUtf8(nn::swkbd::KeyboardConfig*, char const*)	GLOBAL	qualified	nn::swkbd	SetSubTextUtf8	nn::swkbd::KeyboardConfig*, char const*	scalars	
+_ZN2nn5swkbd16SetGuideTextUtf8EPNS0_14KeyboardConfigEPKc	nn::swkbd::SetGuideTextUtf8(nn::swkbd::KeyboardConfig*, char const*)	GLOBAL	qualified	nn::swkbd	SetGuideTextUtf8	nn::swkbd::KeyboardConfig*, char const*	scalars	
+_ZN2nn5swkbd17SetHeaderTextUtf8EPNS0_14KeyboardConfigEPKc	nn::swkbd::SetHeaderTextUtf8(nn::swkbd::KeyboardConfig*, char const*)	GLOBAL	qualified	nn::swkbd	SetHeaderTextUtf8	nn::swkbd::KeyboardConfig*, char const*	scalars	
+_ZN2nn5swkbd25GetRequiredWorkBufferSizeEb	nn::swkbd::GetRequiredWorkBufferSize(bool)	GLOBAL	qualified	nn::swkbd	GetRequiredWorkBufferSize	bool	scalars	namespace nn::swkbd { void GetRequiredWorkBufferSize(bool) asm("_ZN2nn5swkbd25GetRequiredWorkBufferSizeEb"); }
+_ZN2nn5swkbd27GetRequiredStringBufferSizeEv	nn::swkbd::GetRequiredStringBufferSize()	GLOBAL	qualified	nn::swkbd	GetRequiredStringBufferSize		void	namespace nn::swkbd { void GetRequiredStringBufferSize() asm("_ZN2nn5swkbd27GetRequiredStringBufferSizeEv"); }
+_ZN2nn5swkbd9InputText3SetEPKDs	nn::swkbd::InputText::Set(char16_t const*)	GLOBAL	qualified	nn::swkbd::InputText	Set	char16_t const*	scalars	namespace nn::swkbd::InputText { void Set(char16_t const*) asm("_ZN2nn5swkbd9InputText3SetEPKDs"); }
+_ZN2nn5swkbd9SetOkTextEPNS0_14KeyboardConfigEPKDs	nn::swkbd::SetOkText(nn::swkbd::KeyboardConfig*, char16_t const*)	GLOBAL	qualified	nn::swkbd	SetOkText	nn::swkbd::KeyboardConfig*, char16_t const*	scalars	
+_ZN2nn6crypto16GenerateSha1HashEPvjPKvj	nn::crypto::GenerateSha1Hash(void*, unsigned int, void const*, unsigned int)	GLOBAL	qualified	nn::crypto	GenerateSha1Hash	void*, unsigned int, void const*, unsigned int	scalars	namespace nn::crypto { void GenerateSha1Hash(void*, unsigned int, void const*, unsigned int) asm("_ZN2nn6crypto16GenerateSha1HashEPvjPKvj"); }
+_ZN2nn6crypto6detail7AesImplILj16EE10InitializeEPKvjb	nn::crypto::detail::AesImpl<16u>::Initialize(void const*, unsigned int, bool)	GLOBAL	qualified	nn::crypto::detail::AesImpl<16u>	Initialize	void const*, unsigned int, bool	scalars	
+_ZN2nn6crypto6detail7Md5Impl10InitializeEv	nn::crypto::detail::Md5Impl::Initialize()	GLOBAL	qualified	nn::crypto::detail::Md5Impl	Initialize		void	namespace nn::crypto::detail::Md5Impl { void Initialize() asm("_ZN2nn6crypto6detail7Md5Impl10InitializeEv"); }
+_ZN2nn6crypto6detail7Md5Impl6UpdateEPKvj	nn::crypto::detail::Md5Impl::Update(void const*, unsigned int)	GLOBAL	qualified	nn::crypto::detail::Md5Impl	Update	void const*, unsigned int	scalars	namespace nn::crypto::detail::Md5Impl { void Update(void const*, unsigned int) asm("_ZN2nn6crypto6detail7Md5Impl6UpdateEPKvj"); }
+_ZN2nn6crypto6detail7Md5Impl7GetHashEPvj	nn::crypto::detail::Md5Impl::GetHash(void*, unsigned int)	GLOBAL	qualified	nn::crypto::detail::Md5Impl	GetHash	void*, unsigned int	scalars	namespace nn::crypto::detail::Md5Impl { void GetHash(void*, unsigned int) asm("_ZN2nn6crypto6detail7Md5Impl7GetHashEPvj"); }
+_ZN2nn6crypto6detail8Sha1Impl10InitializeEv	nn::crypto::detail::Sha1Impl::Initialize()	GLOBAL	qualified	nn::crypto::detail::Sha1Impl	Initialize		void	namespace nn::crypto::detail::Sha1Impl { void Initialize() asm("_ZN2nn6crypto6detail8Sha1Impl10InitializeEv"); }
+_ZN2nn6crypto6detail8Sha1Impl6UpdateEPKvj	nn::crypto::detail::Sha1Impl::Update(void const*, unsigned int)	GLOBAL	qualified	nn::crypto::detail::Sha1Impl	Update	void const*, unsigned int	scalars	namespace nn::crypto::detail::Sha1Impl { void Update(void const*, unsigned int) asm("_ZN2nn6crypto6detail8Sha1Impl6UpdateEPKvj"); }
+_ZN2nn6crypto6detail8Sha1Impl7GetHashEPvj	nn::crypto::detail::Sha1Impl::GetHash(void*, unsigned int)	GLOBAL	qualified	nn::crypto::detail::Sha1Impl	GetHash	void*, unsigned int	scalars	namespace nn::crypto::detail::Sha1Impl { void GetHash(void*, unsigned int) asm("_ZN2nn6crypto6detail8Sha1Impl7GetHashEPvj"); }
+_ZN2nn6socket10GetSockOptEiiiPvPj	nn::socket::GetSockOpt(int, int, int, void*, unsigned int*)	GLOBAL	qualified	nn::socket	GetSockOpt	int, int, int, void*, unsigned int*	scalars	namespace nn::socket { void GetSockOpt(int, int, int, void*, unsigned int*) asm("_ZN2nn6socket10GetSockOptEiiiPvPj"); }
+_ZN2nn6socket10InitializeEPvjji	nn::socket::Initialize(void*, unsigned int, unsigned int, int)	GLOBAL	qualified	nn::socket	Initialize	void*, unsigned int, unsigned int, int	scalars	namespace nn::socket { void Initialize(void*, unsigned int, unsigned int, int) asm("_ZN2nn6socket10InitializeEPvjji"); }
+_ZN2nn6socket10SetSockOptEiiiPKvj	nn::socket::SetSockOpt(int, int, int, void const*, unsigned int)	GLOBAL	qualified	nn::socket	SetSockOpt	int, int, int, void const*, unsigned int	scalars	namespace nn::socket { void SetSockOpt(int, int, int, void const*, unsigned int) asm("_ZN2nn6socket10SetSockOptEiiiPKvj"); }
+_ZN2nn6socket11GAIStrErrorEi	nn::socket::GAIStrError(int)	GLOBAL	qualified	nn::socket	GAIStrError	int	scalars	namespace nn::socket { void GAIStrError(int) asm("_ZN2nn6socket11GAIStrErrorEi"); }
+_ZN2nn6socket11GetAddrInfoEPKcS2_PK8addrinfoPPS3_	nn::socket::GetAddrInfo(char const*, char const*, addrinfo const*, addrinfo**)	GLOBAL	qualified	nn::socket	GetAddrInfo	char const*, char const*, addrinfo const*, addrinfo**	scalars	
+_ZN2nn6socket11GetPeerNameEiP8sockaddrPj	nn::socket::GetPeerName(int, sockaddr*, unsigned int*)	GLOBAL	qualified	nn::socket	GetPeerName	int, sockaddr*, unsigned int*	scalars	
+_ZN2nn6socket11GetSockNameEiP8sockaddrPj	nn::socket::GetSockName(int, sockaddr*, unsigned int*)	GLOBAL	qualified	nn::socket	GetSockName	int, sockaddr*, unsigned int*	scalars	
+_ZN2nn6socket12FreeAddrInfoEP8addrinfo	nn::socket::FreeAddrInfo(addrinfo*)	GLOBAL	qualified	nn::socket	FreeAddrInfo	addrinfo*	scalars	
+_ZN2nn6socket12GetLastErrnoEv	nn::socket::GetLastErrno()	GLOBAL	qualified	nn::socket	GetLastErrno		void	namespace nn::socket { void GetLastErrno() asm("_ZN2nn6socket12GetLastErrnoEv"); }
+_ZN2nn6socket13GetHostByNameEPKc	nn::socket::GetHostByName(char const*)	GLOBAL	qualified	nn::socket	GetHostByName	char const*	scalars	namespace nn::socket { void GetHostByName(char const*) asm("_ZN2nn6socket13GetHostByNameEPKc"); }
+_ZN2nn6socket4BindEiPK8sockaddrj	nn::socket::Bind(int, sockaddr const*, unsigned int)	GLOBAL	qualified	nn::socket	Bind	int, sockaddr const*, unsigned int	scalars	
+_ZN2nn6socket4PollEP6pollfdmi	nn::socket::Poll(pollfd*, unsigned long, int)	GLOBAL	qualified	nn::socket	Poll	pollfd*, unsigned long, int	scalars	
+_ZN2nn6socket4RecvEiPvji	nn::socket::Recv(int, void*, unsigned int, int)	GLOBAL	qualified	nn::socket	Recv	int, void*, unsigned int, int	scalars	namespace nn::socket { void Recv(int, void*, unsigned int, int) asm("_ZN2nn6socket4RecvEiPvji"); }
+_ZN2nn6socket4SendEiPKvji	nn::socket::Send(int, void const*, unsigned int, int)	GLOBAL	qualified	nn::socket	Send	int, void const*, unsigned int, int	scalars	namespace nn::socket { void Send(int, void const*, unsigned int, int) asm("_ZN2nn6socket4SendEiPKvji"); }
+_ZN2nn6socket5CloseEi	nn::socket::Close(int)	GLOBAL	qualified	nn::socket	Close	int	scalars	namespace nn::socket { void Close(int) asm("_ZN2nn6socket5CloseEi"); }
+_ZN2nn6socket5FcntlEiiz	nn::socket::Fcntl(int, int, ...)	GLOBAL	qualified	nn::socket	Fcntl	int, int, ...	scalars	namespace nn::socket { void Fcntl(int, int, ...) asm("_ZN2nn6socket5FcntlEiiz"); }
+_ZN2nn6socket6AcceptEiP8sockaddrPj	nn::socket::Accept(int, sockaddr*, unsigned int*)	GLOBAL	qualified	nn::socket	Accept	int, sockaddr*, unsigned int*	scalars	
+_ZN2nn6socket6ListenEii	nn::socket::Listen(int, int)	GLOBAL	qualified	nn::socket	Listen	int, int	scalars	namespace nn::socket { void Listen(int, int) asm("_ZN2nn6socket6ListenEii"); }
+_ZN2nn6socket6SendToEiPKvjiPK8sockaddrj	nn::socket::SendTo(int, void const*, unsigned int, int, sockaddr const*, unsigned int)	GLOBAL	qualified	nn::socket	SendTo	int, void const*, unsigned int, int, sockaddr const*, unsigned int	scalars	
+_ZN2nn6socket6SocketEiii	nn::socket::Socket(int, int, int)	GLOBAL	qualified	nn::socket	Socket	int, int, int	scalars	namespace nn::socket { void Socket(int, int, int) asm("_ZN2nn6socket6SocketEiii"); }
+_ZN2nn6socket7ConnectEiPK8sockaddrj	nn::socket::Connect(int, sockaddr const*, unsigned int)	GLOBAL	qualified	nn::socket	Connect	int, sockaddr const*, unsigned int	scalars	
+_ZN2nn6socket8FinalizeEv	nn::socket::Finalize()	GLOBAL	qualified	nn::socket	Finalize		void	namespace nn::socket { void Finalize() asm("_ZN2nn6socket8FinalizeEv"); }
+_ZN2nn6socket8InetAtonEPKcP7in_addr	nn::socket::InetAton(char const*, in_addr*)	GLOBAL	qualified	nn::socket	InetAton	char const*, in_addr*	scalars	
+_ZN2nn6socket8InetNtoaE7in_addr	nn::socket::InetNtoa(in_addr)	GLOBAL	qualified	nn::socket	InetNtoa	in_addr	mixed	
+_ZN2nn6socket8InetNtopEiPKvPcj	nn::socket::InetNtop(int, void const*, char*, unsigned int)	GLOBAL	qualified	nn::socket	InetNtop	int, void const*, char*, unsigned int	scalars	namespace nn::socket { void InetNtop(int, void const*, char*, unsigned int) asm("_ZN2nn6socket8InetNtopEiPKvPcj"); }
+_ZN2nn6socket8InetPtonEiPKcPv	nn::socket::InetPton(int, char const*, void*)	GLOBAL	qualified	nn::socket	InetPton	int, char const*, void*	scalars	namespace nn::socket { void InetPton(int, char const*, void*) asm("_ZN2nn6socket8InetPtonEiPKcPv"); }
+_ZN2nn6socket8RecvFromEiPvjiP8sockaddrPj	nn::socket::RecvFrom(int, void*, unsigned int, int, sockaddr*, unsigned int*)	GLOBAL	qualified	nn::socket	RecvFrom	int, void*, unsigned int, int, sockaddr*, unsigned int*	scalars	
+_ZN2nn6socket8ShutdownEii	nn::socket::Shutdown(int, int)	GLOBAL	qualified	nn::socket	Shutdown	int, int	scalars	namespace nn::socket { void Shutdown(int, int) asm("_ZN2nn6socket8ShutdownEii"); }
+_ZN2nn6socket9InetHtonlEj	nn::socket::InetHtonl(unsigned int)	GLOBAL	qualified	nn::socket	InetHtonl	unsigned int	scalars	namespace nn::socket { void InetHtonl(unsigned int) asm("_ZN2nn6socket9InetHtonlEj"); }
+_ZN2nn6socket9InetHtonsEt	nn::socket::InetHtons(unsigned short)	GLOBAL	qualified	nn::socket	InetHtons	unsigned short	scalars	namespace nn::socket { void InetHtons(unsigned short) asm("_ZN2nn6socket9InetHtonsEt"); }
+_ZN2nn6socket9InetNtohlEj	nn::socket::InetNtohl(unsigned int)	GLOBAL	qualified	nn::socket	InetNtohl	unsigned int	scalars	namespace nn::socket { void InetNtohl(unsigned int) asm("_ZN2nn6socket9InetNtohlEj"); }
+_ZN2nn6socket9InetNtohsEt	nn::socket::InetNtohs(unsigned short)	GLOBAL	qualified	nn::socket	InetNtohs	unsigned short	scalars	namespace nn::socket { void InetNtohs(unsigned short) asm("_ZN2nn6socket9InetNtohsEt"); }
+_ZN2nn7account10InitializeEv	nn::account::Initialize()	GLOBAL	qualified	nn::account	Initialize		void	namespace nn::account { void Initialize() asm("_ZN2nn7account10InitializeEv"); }
+_ZN2nn7account11GetNicknameEPNS0_8NicknameERKNS0_3UidE	nn::account::GetNickname(nn::account::Nickname*, nn::account::Uid const&)	GLOBAL	qualified	nn::account	GetNickname	nn::account::Nickname*, nn::account::Uid const&	scalars	
+_ZN2nn7account12AsyncContext14GetSystemEventEPNS_2os11SystemEventE	nn::account::AsyncContext::GetSystemEvent(nn::os::SystemEvent*)	GLOBAL	qualified	nn::account::AsyncContext	GetSystemEvent	nn::os::SystemEvent*	scalars	
+_ZN2nn7account12AsyncContext6CancelEv	nn::account::AsyncContext::Cancel()	GLOBAL	qualified	nn::account::AsyncContext	Cancel		void	namespace nn::account::AsyncContext { void Cancel() asm("_ZN2nn7account12AsyncContext6CancelEv"); }
+_ZN2nn7account12AsyncContext7HasDoneEPb	nn::account::AsyncContext::HasDone(bool*)	GLOBAL	qualified	nn::account::AsyncContext	HasDone	bool*	scalars	namespace nn::account::AsyncContext { void HasDone(bool*) asm("_ZN2nn7account12AsyncContext7HasDoneEPb"); }
+_ZN2nn7account12AsyncContext9GetResultEv	nn::account::AsyncContext::GetResult()	GLOBAL	qualified	nn::account::AsyncContext	GetResult		void	namespace nn::account::AsyncContext { void GetResult() asm("_ZN2nn7account12AsyncContext9GetResultEv"); }
+_ZN2nn7account12AsyncContextC1Ev	nn::account::AsyncContext::AsyncContext()	GLOBAL	ctor	nn::account::AsyncContext	AsyncContext		void	
+_ZN2nn7account12AsyncContextD1Ev	nn::account::AsyncContext::~AsyncContext()	GLOBAL	dtor	nn::account::AsyncContext	~AsyncContext		void	
+_ZN2nn7account12GetUserCountEPi	nn::account::GetUserCount(int*)	GLOBAL	qualified	nn::account	GetUserCount	int*	scalars	namespace nn::account { void GetUserCount(int*) asm("_ZN2nn7account12GetUserCountEPi"); }
+_ZN2nn7account12ListAllUsersEPiPNS0_3UidEi	nn::account::ListAllUsers(int*, nn::account::Uid*, int)	GLOBAL	qualified	nn::account	ListAllUsers	int*, nn::account::Uid*, int	scalars	
+_ZN2nn7account16GetUserExistenceEPbRKNS0_3UidE	nn::account::GetUserExistence(bool*, nn::account::Uid const&)	GLOBAL	qualified	nn::account	GetUserExistence	bool*, nn::account::Uid const&	scalars	
+_ZN2nn7account16LoadProfileImageEPjPvjRKNS0_3UidE	nn::account::LoadProfileImage(unsigned int*, void*, unsigned int, nn::account::Uid const&)	GLOBAL	qualified	nn::account	LoadProfileImage	unsigned int*, void*, unsigned int, nn::account::Uid const&	scalars	
+_ZN2nn7account16ShowUserSelectorEPNS0_3UidERKNS0_21UserSelectionSettingsE	nn::account::ShowUserSelector(nn::account::Uid*, nn::account::UserSelectionSettings const&)	GLOBAL	qualified	nn::account	ShowUserSelector	nn::account::Uid*, nn::account::UserSelectionSettings const&	scalars	
+_ZN2nn7account19OpenPreselectedUserEPNS0_10UserHandleE	nn::account::OpenPreselectedUser(nn::account::UserHandle*)	GLOBAL	qualified	nn::account	OpenPreselectedUser	nn::account::UserHandle*	scalars	
+_ZN2nn7account26GetNetworkServiceAccountIdEPNS0_23NetworkServiceAccountIdERKNS0_10UserHandleE	nn::account::GetNetworkServiceAccountId(nn::account::NetworkServiceAccountId*, nn::account::UserHandle const&)	GLOBAL	qualified	nn::account	GetNetworkServiceAccountId	nn::account::NetworkServiceAccountId*, nn::account::UserHandle const&	scalars	
+_ZN2nn7account27StoreSaveDataThumbnailImageERKNS0_3UidEPKvj	nn::account::StoreSaveDataThumbnailImage(nn::account::Uid const&, void const*, unsigned int)	GLOBAL	qualified	nn::account	StoreSaveDataThumbnailImage	nn::account::Uid const&, void const*, unsigned int	scalars	
+_ZN2nn7account28DeleteSaveDataThumbnailImageERKNS0_3UidE	nn::account::DeleteSaveDataThumbnailImage(nn::account::Uid const&)	GLOBAL	qualified	nn::account	DeleteSaveDataThumbnailImage	nn::account::Uid const&	scalars	
+_ZN2nn7account32IsNetworkServiceAccountAvailableEPbRKNS0_10UserHandleE	nn::account::IsNetworkServiceAccountAvailable(bool*, nn::account::UserHandle const&)	GLOBAL	qualified	nn::account	IsNetworkServiceAccountAvailable	bool*, nn::account::UserHandle const&	scalars	
+_ZN2nn7account36EnsureNetworkServiceAccountAvailableERKNS0_10UserHandleE	nn::account::EnsureNetworkServiceAccountAvailable(nn::account::UserHandle const&)	GLOBAL	qualified	nn::account	EnsureNetworkServiceAccountAvailable	nn::account::UserHandle const&	scalars	
+_ZN2nn7account37LoadNetworkServiceAccountIdTokenCacheEPjPcjRKNS0_10UserHandleE	nn::account::LoadNetworkServiceAccountIdTokenCache(unsigned int*, char*, unsigned int, nn::account::UserHandle const&)	GLOBAL	qualified	nn::account	LoadNetworkServiceAccountIdTokenCache	unsigned int*, char*, unsigned int, nn::account::UserHandle const&	scalars	
+_ZN2nn7account44EnsureNetworkServiceAccountIdTokenCacheAsyncEPNS0_12AsyncContextERKNS0_10UserHandleE	nn::account::EnsureNetworkServiceAccountIdTokenCacheAsync(nn::account::AsyncContext*, nn::account::UserHandle const&)	GLOBAL	qualified	nn::account	EnsureNetworkServiceAccountIdTokenCacheAsync	nn::account::AsyncContext*, nn::account::UserHandle const&	scalars	
+_ZN2nn7account8OpenUserEPNS0_10UserHandleERKNS0_3UidE	nn::account::OpenUser(nn::account::UserHandle*, nn::account::Uid const&)	GLOBAL	qualified	nn::account	OpenUser	nn::account::UserHandle*, nn::account::Uid const&	scalars	
+_ZN2nn7account9CloseUserERKNS0_10UserHandleE	nn::account::CloseUser(nn::account::UserHandle const&)	GLOBAL	qualified	nn::account	CloseUser	nn::account::UserHandle const&	scalars	
+_ZN2nn7account9GetUserIdEPNS0_3UidERKNS0_10UserHandleE	nn::account::GetUserId(nn::account::Uid*, nn::account::UserHandle const&)	GLOBAL	qualified	nn::account	GetUserId	nn::account::Uid*, nn::account::UserHandle const&	scalars	
+_ZN2nn7friends10InitializeEv	nn::friends::Initialize()	GLOBAL	qualified	nn::friends	Initialize		void	namespace nn::friends { void Initialize() asm("_ZN2nn7friends10InitializeEv"); }
+_ZN2nn7friends12AsyncContext7HasDoneEPb	nn::friends::AsyncContext::HasDone(bool*)	GLOBAL	qualified	nn::friends::AsyncContext	HasDone	bool*	scalars	namespace nn::friends::AsyncContext { void HasDone(bool*) asm("_ZN2nn7friends12AsyncContext7HasDoneEPb"); }
+_ZN2nn7friends12AsyncContextC1Ev	nn::friends::AsyncContext::AsyncContext()	GLOBAL	ctor	nn::friends::AsyncContext	AsyncContext		void	
+_ZN2nn7friends12AsyncContextD1Ev	nn::friends::AsyncContext::~AsyncContext()	GLOBAL	dtor	nn::friends::AsyncContext	~AsyncContext		void	
+_ZN2nn7friends12SetAllocatorEPFPvjEPFvS1_jE	nn::friends::SetAllocator(void* (*)(unsigned int), void (*)(void*, unsigned int))	GLOBAL	qualified	nn::friends	SetAllocator	void* (*)(unsigned int), void (*)(void*, unsigned int)	scalars	
+_ZN2nn7friends12UserPresence10InitializeEv	nn::friends::UserPresence::Initialize()	GLOBAL	qualified	nn::friends::UserPresence	Initialize		void	namespace nn::friends::UserPresence { void Initialize() asm("_ZN2nn7friends12UserPresence10InitializeEv"); }
+_ZN2nn7friends12UserPresence11SetAppValueEPKcS3_	nn::friends::UserPresence::SetAppValue(char const*, char const*)	GLOBAL	qualified	nn::friends::UserPresence	SetAppValue	char const*, char const*	scalars	namespace nn::friends::UserPresence { void SetAppValue(char const*, char const*) asm("_ZN2nn7friends12UserPresence11SetAppValueEPKcS3_"); }
+_ZN2nn7friends12UserPresence6CommitEv	nn::friends::UserPresence::Commit()	GLOBAL	qualified	nn::friends::UserPresence	Commit		void	namespace nn::friends::UserPresence { void Commit() asm("_ZN2nn7friends12UserPresence6CommitEv"); }
+_ZN2nn7friends12UserPresenceC1Ev	nn::friends::UserPresence::UserPresence()	GLOBAL	ctor	nn::friends::UserPresence	UserPresence		void	
+_ZN2nn7friends13GetFriendListEPiPNS0_6FriendEiiRKNS0_12FriendFilterE	nn::friends::GetFriendList(int*, nn::friends::Friend*, int, int, nn::friends::FriendFilter const&)	GLOBAL	qualified	nn::friends	GetFriendList	int*, nn::friends::Friend*, int, int, nn::friends::FriendFilter const&	scalars	
+_ZN2nn7friends13GetFriendListEPiPNS_7account23NetworkServiceAccountIdEiiRKNS0_12FriendFilterE	nn::friends::GetFriendList(int*, nn::account::NetworkServiceAccountId*, int, int, nn::friends::FriendFilter const&)	GLOBAL	qualified	nn::friends	GetFriendList	int*, nn::account::NetworkServiceAccountId*, int, int, nn::friends::FriendFilter const&	scalars	
+_ZN2nn7friends14AddPlayHistoryERKNS_7account3UidERKNS0_26PlayHistoryRegistrationKeyERKNS0_15InAppScreenNameESA_	nn::friends::AddPlayHistory(nn::account::Uid const&, nn::friends::PlayHistoryRegistrationKey const&, nn::friends::InAppScreenName const&, nn::friends::InAppScreenName const&)	GLOBAL	qualified	nn::friends	AddPlayHistory	nn::account::Uid const&, nn::friends::PlayHistoryRegistrationKey const&, nn::friends::InAppScreenName const&, nn::friends::InAppScreenName const&	scalars	
+_ZN2nn7friends16UpdateFriendInfoEPNS0_6FriendEPKNS_7account23NetworkServiceAccountIdEi	nn::friends::UpdateFriendInfo(nn::friends::Friend*, nn::account::NetworkServiceAccountId const*, int)	GLOBAL	qualified	nn::friends	UpdateFriendInfo	nn::friends::Friend*, nn::account::NetworkServiceAccountId const*, int	scalars	
+_ZN2nn7friends17SendFriendRequestEPNS0_12AsyncContextERKNS_7account3UidENS3_23NetworkServiceAccountIdERKNS0_15InAppScreenNameESA_	nn::friends::SendFriendRequest(nn::friends::AsyncContext*, nn::account::Uid const&, nn::account::NetworkServiceAccountId, nn::friends::InAppScreenName const&, nn::friends::InAppScreenName const&)	GLOBAL	qualified	nn::friends	SendFriendRequest	nn::friends::AsyncContext*, nn::account::Uid const&, nn::account::NetworkServiceAccountId, nn::friends::InAppScreenName const&, nn::friends::InAppScreenName const&	has-byvalue-class	
+_ZN2nn7friends21AddFacedFriendRequestERKNS_7account3UidERKNS0_33FacedFriendRequestRegistrationKeyERKNS1_8NicknameEPKvjRKNS0_15InAppScreenNameESF_	nn::friends::AddFacedFriendRequest(nn::account::Uid const&, nn::friends::FacedFriendRequestRegistrationKey const&, nn::account::Nickname const&, void const*, unsigned int, nn::friends::InAppScreenName const&, nn::friends::InAppScreenName const&)	GLOBAL	qualified	nn::friends	AddFacedFriendRequest	nn::account::Uid const&, nn::friends::FacedFriendRequestRegistrationKey const&, nn::account::Nickname const&, void const*, unsigned int, nn::friends::InAppScreenName const&, nn::friends::InAppScreenName const&	scalars	
+_ZN2nn7friends28DeclareOpenOnlinePlaySessionERKNS_7account3UidE	nn::friends::DeclareOpenOnlinePlaySession(nn::account::Uid const&)	GLOBAL	qualified	nn::friends	DeclareOpenOnlinePlaySession	nn::account::Uid const&	scalars	
+_ZN2nn7friends29DeclareCloseOnlinePlaySessionERKNS_7account3UidE	nn::friends::DeclareCloseOnlinePlaySession(nn::account::Uid const&)	GLOBAL	qualified	nn::friends	DeclareCloseOnlinePlaySession	nn::account::Uid const&	scalars	
+_ZN2nn7friends29GetPlayHistoryRegistrationKeyEPNS0_26PlayHistoryRegistrationKeyERKNS_7account3UidEb	nn::friends::GetPlayHistoryRegistrationKey(nn::friends::PlayHistoryRegistrationKey*, nn::account::Uid const&, bool)	GLOBAL	qualified	nn::friends	GetPlayHistoryRegistrationKey	nn::friends::PlayHistoryRegistrationKey*, nn::account::Uid const&, bool	scalars	
+_ZN2nn7friends36GetFacedFriendRequestRegistrationKeyEPNS0_33FacedFriendRequestRegistrationKeyERKNS_7account3UidE	nn::friends::GetFacedFriendRequestRegistrationKey(nn::friends::FacedFriendRequestRegistrationKey*, nn::account::Uid const&)	GLOBAL	qualified	nn::friends	GetFacedFriendRequestRegistrationKey	nn::friends::FacedFriendRequestRegistrationKey*, nn::account::Uid const&	scalars	
+_ZN2nn7friends6FriendC1Ev	nn::friends::Friend::Friend()	GLOBAL	ctor	nn::friends::Friend	Friend		void	
+_ZN2nn8settings12LanguageCode4MakeENS0_8LanguageE	nn::settings::LanguageCode::Make(nn::settings::Language)	GLOBAL	qualified	nn::settings::LanguageCode	Make	nn::settings::Language	has-byvalue-class	
+_ZN2nn8settingseqERKNS0_12LanguageCodeES3_	nn::settings::operator==(nn::settings::LanguageCode const&, nn::settings::LanguageCode const&)	GLOBAL	operator	nn::settings	operator==	nn::settings::LanguageCode const&, nn::settings::LanguageCode const&	scalars	
+_ZN2nv18InitializeGraphicsEPvj	nv::InitializeGraphics(void*, unsigned int)	GLOBAL	qualified	nv	InitializeGraphics	void*, unsigned int	scalars	namespace nv { void InitializeGraphics(void*, unsigned int) asm("_ZN2nv18InitializeGraphicsEPvj"); }
+_ZN2nv20SetGraphicsAllocatorEPFPvjjS0_EPFvS0_S0_EPFS0_S0_jS0_ES0_	nv::SetGraphicsAllocator(void* (*)(unsigned int, unsigned int, void*), void (*)(void*, void*), void* (*)(void*, unsigned int, void*), void*)	GLOBAL	qualified	nv	SetGraphicsAllocator	void* (*)(unsigned int, unsigned int, void*), void (*)(void*, void*), void* (*)(void*, unsigned int, void*), void*	scalars	
+_ZN5movie11SetCoreMaskEy	movie::SetCoreMask(unsigned long long)	GLOBAL	qualified	movie	SetCoreMask	unsigned long long	scalars	namespace movie { void SetCoreMask(unsigned long long) asm("_ZN5movie11SetCoreMaskEy"); }
+_ZN5movie12SetAllocatorEPFPvjjS0_EPFvS0_S0_EPFS0_S0_jS0_ES0_	movie::SetAllocator(void* (*)(unsigned int, unsigned int, void*), void (*)(void*, void*), void* (*)(void*, unsigned int, void*), void*)	GLOBAL	qualified	movie	SetAllocator	void* (*)(unsigned int, unsigned int, void*), void (*)(void*, void*), void* (*)(void*, unsigned int, void*), void*	scalars	
+_ZN5movie6Buffer18SetDataAndCapacityEPvj	movie::Buffer::SetDataAndCapacity(void*, unsigned int)	GLOBAL	qualified	movie::Buffer	SetDataAndCapacity	void*, unsigned int	scalars	namespace movie::Buffer { void SetDataAndCapacity(void*, unsigned int) asm("_ZN5movie6Buffer18SetDataAndCapacityEPvj"); }
+_ZN5movie6Buffer8SetRangeEii	movie::Buffer::SetRange(int, int)	GLOBAL	qualified	movie::Buffer	SetRange	int, int	scalars	namespace movie::Buffer { void SetRange(int, int) asm("_ZN5movie6Buffer8SetRangeEii"); }
+_ZN5movie6BufferC1Ev	movie::Buffer::Buffer()	GLOBAL	ctor	movie::Buffer	Buffer		void	
+_ZN5movie6BufferD1Ev	movie::Buffer::~Buffer()	GLOBAL	dtor	movie::Buffer	~Buffer		void	
+_ZN5movie7DecoderC1ENS_11DecoderTypeENS_19DecoderOutputFormatENS_11DecoderModeE	movie::Decoder::Decoder(movie::DecoderType, movie::DecoderOutputFormat, movie::DecoderMode)	GLOBAL	ctor	movie::Decoder	Decoder	movie::DecoderType, movie::DecoderOutputFormat, movie::DecoderMode	has-byvalue-class	
+_ZN5movie9ExtractorC1ENS_13ContainerTypeENS_9CacheSizeE	movie::Extractor::Extractor(movie::ContainerType, movie::CacheSize)	GLOBAL	ctor	movie::Extractor	Extractor	movie::ContainerType, movie::CacheSize	has-byvalue-class	
+_ZN5movie9MediaData5ClearEv	movie::MediaData::Clear()	GLOBAL	qualified	movie::MediaData	Clear		void	namespace movie::MediaData { void Clear() asm("_ZN5movie9MediaData5ClearEv"); }
+_ZN5movie9MediaDataC1Ev	movie::MediaData::MediaData()	GLOBAL	ctor	movie::MediaData	MediaData		void	
+_ZN5movie9MediaDataD1Ev	movie::MediaData::~MediaData()	GLOBAL	dtor	movie::MediaData	~MediaData		void	
+_ZNK2nn3err9ErrorCode7IsValidEv	nn::err::ErrorCode::IsValid() const	GLOBAL	member-const	nn::err::ErrorCode	IsValid		void	
+_ZNK2nn3hid13VibrationNode19GetCurrentVibrationEv	nn::hid::VibrationNode::GetCurrentVibration() const	GLOBAL	member-const	nn::hid::VibrationNode	GetCurrentVibration		void	
+_ZNK2nn3hid14VibrationMixer10GetMixModeEv	nn::hid::VibrationMixer::GetMixMode() const	GLOBAL	member-const	nn::hid::VibrationMixer	GetMixMode		void	
+_ZNK2nn3hid15VibrationPlayer15GetLoopIntervalEv	nn::hid::VibrationPlayer::GetLoopInterval() const	GLOBAL	member-const	nn::hid::VibrationPlayer	GetLoopInterval		void	
+_ZNK2nn3hid15VibrationPlayer18GetCurrentPositionEv	nn::hid::VibrationPlayer::GetCurrentPosition() const	GLOBAL	member-const	nn::hid::VibrationPlayer	GetCurrentPosition		void	
+_ZNK2nn3hid15VibrationPlayer18GetLoopEndPositionEv	nn::hid::VibrationPlayer::GetLoopEndPosition() const	GLOBAL	member-const	nn::hid::VibrationPlayer	GetLoopEndPosition		void	
+_ZNK2nn3hid15VibrationPlayer20GetLoopStartPositionEv	nn::hid::VibrationPlayer::GetLoopStartPosition() const	GLOBAL	member-const	nn::hid::VibrationPlayer	GetLoopStartPosition		void	
+_ZNK2nn3hid15VibrationPlayer6IsLoopEv	nn::hid::VibrationPlayer::IsLoop() const	GLOBAL	member-const	nn::hid::VibrationPlayer	IsLoop		void	
+_ZNK2nn3hid15VibrationPlayer9IsPlayingEv	nn::hid::VibrationPlayer::IsPlaying() const	GLOBAL	member-const	nn::hid::VibrationPlayer	IsPlaying		void	
+_ZNK2nn3hid15VibrationTarget26IsVibrationDeviceHandleSetEv	nn::hid::VibrationTarget::IsVibrationDeviceHandleSet() const	GLOBAL	member-const	nn::hid::VibrationTarget	IsVibrationDeviceHandleSet		void	
+_ZNK2nn3hid23VibrationNodeConnection11IsConnectedEv	nn::hid::VibrationNodeConnection::IsConnected() const	GLOBAL	member-const	nn::hid::VibrationNodeConnection	IsConnected		void	
+_ZNK2nn3hid23VibrationNodeConnection13GetModulationEv	nn::hid::VibrationNodeConnection::GetModulation() const	GLOBAL	member-const	nn::hid::VibrationNodeConnection	GetModulation		void	
+_ZNK2nn3mem17StandardAllocator4DumpEv	nn::mem::StandardAllocator::Dump() const	GLOBAL	member-const	nn::mem::StandardAllocator	Dump		void	
+_ZNK2nn3mem17StandardAllocator9GetSizeOfEPKv	nn::mem::StandardAllocator::GetSizeOf(void const*) const	GLOBAL	member-const	nn::mem::StandardAllocator	GetSizeOf	void const*	scalars	
+_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv	nn::web::WebPageReturnValue::GetLastUrl() const	GLOBAL	member-const	nn::web::WebPageReturnValue	GetLastUrl		void	
+_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv	nn::web::WebPageReturnValue::GetLastUrlSize() const	GLOBAL	member-const	nn::web::WebPageReturnValue	GetLastUrlSize		void	
+_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv	nn::web::WebPageReturnValue::GetWebExitReason() const	GLOBAL	member-const	nn::web::WebPageReturnValue	GetWebExitReason		void	
+_ZNK2nn3web26OfflineHtmlPageReturnValue10GetLastUrlEv	nn::web::OfflineHtmlPageReturnValue::GetLastUrl() const	GLOBAL	member-const	nn::web::OfflineHtmlPageReturnValue	GetLastUrl		void	
+_ZNK2nn3web26OfflineHtmlPageReturnValue14GetLastUrlSizeEv	nn::web::OfflineHtmlPageReturnValue::GetLastUrlSize() const	GLOBAL	member-const	nn::web::OfflineHtmlPageReturnValue	GetLastUrlSize		void	
+_ZNK2nn3web26OfflineHtmlPageReturnValue20GetOfflineExitReasonEv	nn::web::OfflineHtmlPageReturnValue::GetOfflineExitReason() const	GLOBAL	member-const	nn::web::OfflineHtmlPageReturnValue	GetOfflineExitReason		void	
+_ZNK2nn4bcat21DeliveryCacheProgress9GetResultEv	nn::bcat::DeliveryCacheProgress::GetResult() const	GLOBAL	member-const	nn::bcat::DeliveryCacheProgress	GetResult		void	
+_ZNK2nn4bcat21DeliveryCacheProgress9GetStatusEv	nn::bcat::DeliveryCacheProgress::GetStatus() const	GLOBAL	member-const	nn::bcat::DeliveryCacheProgress	GetStatus		void	
+_ZNK2nn5swkbd14InlineKeyboard13GetWindowSizeEPiS2_	nn::swkbd::InlineKeyboard::GetWindowSize(int*, int*) const	GLOBAL	member-const	nn::swkbd::InlineKeyboard	GetWindowSize	int*, int*	scalars	
+_ZNK2nn6crypto6detail7AesImplILj16EE12DecryptBlockEPvjPKvj	nn::crypto::detail::AesImpl<16u>::DecryptBlock(void*, unsigned int, void const*, unsigned int) const	GLOBAL	member-const	nn::crypto::detail::AesImpl<16u>	DecryptBlock	void*, unsigned int, void const*, unsigned int	scalars	
+_ZNK2nn6crypto6detail7AesImplILj16EE12EncryptBlockEPvjPKvj	nn::crypto::detail::AesImpl<16u>::EncryptBlock(void*, unsigned int, void const*, unsigned int) const	GLOBAL	member-const	nn::crypto::detail::AesImpl<16u>	EncryptBlock	void*, unsigned int, void const*, unsigned int	scalars	
+_ZNK2nn7friends14FriendPresence11GetAppValueEPKc	nn::friends::FriendPresence::GetAppValue(char const*) const	GLOBAL	member-const	nn::friends::FriendPresence	GetAppValue	char const*	scalars	
+_ZNK2nn7friends14FriendPresence30IsSamePresenceGroupApplicationEv	nn::friends::FriendPresence::IsSamePresenceGroupApplication() const	GLOBAL	member-const	nn::friends::FriendPresence	IsSamePresenceGroupApplication		void	
+_ZNK2nn7friends14FriendPresence9GetStatusEv	nn::friends::FriendPresence::GetStatus() const	GLOBAL	member-const	nn::friends::FriendPresence	GetStatus		void	
+_ZNK2nn7friends6Friend11GetNicknameEv	nn::friends::Friend::GetNickname() const	GLOBAL	member-const	nn::friends::Friend	GetNickname		void	
+_ZNK2nn7friends6Friend11GetPresenceEv	nn::friends::Friend::GetPresence() const	GLOBAL	member-const	nn::friends::Friend	GetPresence		void	
+_ZNK2nn7friends6Friend12GetAccountIdEv	nn::friends::Friend::GetAccountId() const	GLOBAL	member-const	nn::friends::Friend	GetAccountId		void	
+_ZNK2nn7friends6Friend7IsValidEv	nn::friends::Friend::IsValid() const	GLOBAL	member-const	nn::friends::Friend	IsValid		void	
+_ZNK5movie6Buffer4SizeEv	movie::Buffer::Size() const	GLOBAL	member-const	movie::Buffer	Size		void	
+_ZNK5movie6Buffer6OffsetEv	movie::Buffer::Offset() const	GLOBAL	member-const	movie::Buffer	Offset		void	
+_ZNK5movie9MediaData10FindStringEPKcPS2_	movie::MediaData::FindString(char const*, char const**) const	GLOBAL	member-const	movie::MediaData	FindString	char const*, char const**	scalars	
+_ZNK5movie9MediaData8FindRectEPKcPiS3_S3_S3_	movie::MediaData::FindRect(char const*, int*, int*, int*, int*) const	GLOBAL	member-const	movie::MediaData	FindRect	char const*, int*, int*, int*, int*	scalars	
+_ZNK5movie9MediaData9FindInt32EPKcPi	movie::MediaData::FindInt32(char const*, int*) const	GLOBAL	member-const	movie::MediaData	FindInt32	char const*, int*	scalars	
+_ZNK5movie9MediaData9FindInt64EPKcPx	movie::MediaData::FindInt64(char const*, long long*) const	GLOBAL	member-const	movie::MediaData	FindInt64	char const*, long long*	scalars	
+_ZNKSt3__120__vector_base_commonILb1EE20__throw_length_errorEv	std::__1::__vector_base_common<true>::__throw_length_error() const	GLOBAL	member-const	std::__1::__vector_base_common<true>	__throw_length_error		void	
+_ZNKSt3__120__vector_base_commonILb1EE20__throw_out_of_rangeEv	std::__1::__vector_base_common<true>::__throw_out_of_range() const	GLOBAL	member-const	std::__1::__vector_base_common<true>	__throw_out_of_range		void	
+_ZNSt3__16__sortIRNS_6__lessIiiEEPiEEvT0_S5_T_	void std::__1::__sort<std::__1::__less<int, int>&, int*>(int*, int*, std::__1::__less<int, int>&)	GLOBAL	template	void std::__1	__sort<std::__1::__less<int, int>&, int*>	int*, int*, std::__1::__less<int, int>&	scalars	
+_ZTVN10__cxxabiv117__class_type_infoE	vtable for __cxxabiv1::__class_type_info	GLOBAL	vtable		vtable for __cxxabiv1::__class_type_info			
+_ZTVN10__cxxabiv120__si_class_type_infoE	vtable for __cxxabiv1::__si_class_type_info	GLOBAL	vtable		vtable for __cxxabiv1::__si_class_type_info			
+_ZTVN10__cxxabiv121__vmi_class_type_infoE	vtable for __cxxabiv1::__vmi_class_type_info	GLOBAL	vtable		vtable for __cxxabiv1::__vmi_class_type_info			
+__aeabi_d2lz	__aeabi_d2lz	GLOBAL	c-symbol		__aeabi_d2lz			
+__aeabi_d2ulz	__aeabi_d2ulz	GLOBAL	c-symbol		__aeabi_d2ulz			
+__aeabi_f2lz	__aeabi_f2lz	GLOBAL	c-symbol		__aeabi_f2lz			
+__aeabi_f2ulz	__aeabi_f2ulz	GLOBAL	c-symbol		__aeabi_f2ulz			
+__aeabi_l2d	__aeabi_l2d	GLOBAL	c-symbol		__aeabi_l2d			
+__aeabi_l2f	__aeabi_l2f	GLOBAL	c-symbol		__aeabi_l2f			
+__aeabi_ldivmod	__aeabi_ldivmod	GLOBAL	c-symbol		__aeabi_ldivmod			
+__aeabi_memclr	__aeabi_memclr	GLOBAL	c-symbol		__aeabi_memclr			
+__aeabi_memclr4	__aeabi_memclr4	GLOBAL	c-symbol		__aeabi_memclr4			
+__aeabi_memclr8	__aeabi_memclr8	GLOBAL	c-symbol		__aeabi_memclr8			
+__aeabi_memcpy	__aeabi_memcpy	GLOBAL	c-symbol		__aeabi_memcpy			
+__aeabi_memcpy4	__aeabi_memcpy4	GLOBAL	c-symbol		__aeabi_memcpy4			
+__aeabi_memcpy8	__aeabi_memcpy8	GLOBAL	c-symbol		__aeabi_memcpy8			
+__aeabi_memmove	__aeabi_memmove	GLOBAL	c-symbol		__aeabi_memmove			
+__aeabi_memmove4	__aeabi_memmove4	GLOBAL	c-symbol		__aeabi_memmove4			
+__aeabi_memmove8	__aeabi_memmove8	GLOBAL	c-symbol		__aeabi_memmove8			
+__aeabi_memset	__aeabi_memset	GLOBAL	c-symbol		__aeabi_memset			
+__aeabi_memset4	__aeabi_memset4	GLOBAL	c-symbol		__aeabi_memset4			
+__aeabi_memset8	__aeabi_memset8	GLOBAL	c-symbol		__aeabi_memset8			
+__aeabi_ul2d	__aeabi_ul2d	GLOBAL	c-symbol		__aeabi_ul2d			
+__aeabi_ul2f	__aeabi_ul2f	GLOBAL	c-symbol		__aeabi_ul2f			
+__aeabi_uldivmod	__aeabi_uldivmod	GLOBAL	c-symbol		__aeabi_uldivmod			
+__aeabi_unwind_cpp_pr0	__aeabi_unwind_cpp_pr0	GLOBAL	c-symbol		__aeabi_unwind_cpp_pr0			
+__aeabi_unwind_cpp_pr1	__aeabi_unwind_cpp_pr1	GLOBAL	c-symbol		__aeabi_unwind_cpp_pr1			
+__cxa_guard_acquire	__cxa_guard_acquire	GLOBAL	c-symbol		__cxa_guard_acquire			
+__cxa_guard_release	__cxa_guard_release	GLOBAL	c-symbol		__cxa_guard_release			
+__cxa_pure_virtual	__cxa_pure_virtual	GLOBAL	c-symbol		__cxa_pure_virtual			
+__errno_location	__errno_location	GLOBAL	c-symbol		__errno_location			
+__nnDetailNintendoSdkNsoFile	__nnDetailNintendoSdkNsoFile	GLOBAL	c-symbol		__nnDetailNintendoSdkNsoFile			
+__nnmusl_fini_dso	__nnmusl_fini_dso	GLOBAL	c-symbol		__nnmusl_fini_dso			
+__nnmusl_init_dso	__nnmusl_init_dso	GLOBAL	c-symbol		__nnmusl_init_dso			
+__rela_dyn_end	__rela_dyn_end	WEAK	c-symbol		__rela_dyn_end			
+__rela_dyn_start	__rela_dyn_start	WEAK	c-symbol		__rela_dyn_start			
+__rela_plt_end	__rela_plt_end	WEAK	c-symbol		__rela_plt_end			
+__rela_plt_start	__rela_plt_start	WEAK	c-symbol		__rela_plt_start			
+abort	abort	GLOBAL	c-symbol		abort			
+abs	abs	GLOBAL	c-symbol		abs			
+acosf	acosf	GLOBAL	c-symbol		acosf			
+asinf	asinf	GLOBAL	c-symbol		asinf			
+atan2f	atan2f	GLOBAL	c-symbol		atan2f			
+atanf	atanf	GLOBAL	c-symbol		atanf			
+atof	atof	GLOBAL	c-symbol		atof			
+atoi	atoi	GLOBAL	c-symbol		atoi			
+atol	atol	GLOBAL	c-symbol		atol			
+bsearch	bsearch	GLOBAL	c-symbol		bsearch			
+cosf	cosf	GLOBAL	c-symbol		cosf			
+exit	exit	GLOBAL	c-symbol		exit			
+exp2f	exp2f	GLOBAL	c-symbol		exp2f			
+expf	expf	GLOBAL	c-symbol		expf			
+fclose	fclose	GLOBAL	c-symbol		fclose			
+fmodf	fmodf	GLOBAL	c-symbol		fmodf			
+fopen	fopen	GLOBAL	c-symbol		fopen			
+fread	fread	GLOBAL	c-symbol		fread			
+fseek	fseek	GLOBAL	c-symbol		fseek			
+ftell	ftell	GLOBAL	c-symbol		ftell			
+getenv	getenv	GLOBAL	c-symbol		getenv			
+gmtime	gmtime	GLOBAL	c-symbol		gmtime			
+isalnum	isalnum	GLOBAL	c-symbol		isalnum			
+isalpha	isalpha	GLOBAL	c-symbol		isalpha			
+isspace	isspace	GLOBAL	c-symbol		isspace			
+isupper	isupper	GLOBAL	c-symbol		isupper			
+isxdigit	isxdigit	GLOBAL	c-symbol		isxdigit			
+ldexp	ldexp	GLOBAL	c-symbol		ldexp			
+localtime	localtime	GLOBAL	c-symbol		localtime			
+log	log	GLOBAL	c-symbol		log			
+log10f	log10f	GLOBAL	c-symbol		log10f			
+logf	logf	GLOBAL	c-symbol		logf			
+memchr	memchr	GLOBAL	c-symbol		memchr			
+memcmp	memcmp	GLOBAL	c-symbol		memcmp			
+memcpy	memcpy	GLOBAL	c-symbol		memcpy			
+memmove	memmove	GLOBAL	c-symbol		memmove			
+memset	memset	GLOBAL	c-symbol		memset			
+mktime	mktime	GLOBAL	c-symbol		mktime			
+nnResultGetDescription	nnResultGetDescription	GLOBAL	c-symbol		nnResultGetDescription			
+nnResultGetModule	nnResultGetModule	GLOBAL	c-symbol		nnResultGetModule			
+nnResultIsFailure	nnResultIsFailure	GLOBAL	c-symbol		nnResultIsFailure			
+nnResultIsSuccess	nnResultIsSuccess	GLOBAL	c-symbol		nnResultIsSuccess			
+nndetailDiagAbortFormatImpl	nndetailDiagAbortFormatImpl	GLOBAL	c-symbol		nndetailDiagAbortFormatImpl			
+nnosConvertTickToNanoSeconds	nnosConvertTickToNanoSeconds	GLOBAL	c-symbol		nnosConvertTickToNanoSeconds			
+nnosCreateThread	nnosCreateThread	GLOBAL	c-symbol		nnosCreateThread			
+nnosDestroyThread	nnosDestroyThread	GLOBAL	c-symbol		nnosDestroyThread			
+nnosFinalizeEvent	nnosFinalizeEvent	GLOBAL	c-symbol		nnosFinalizeEvent			
+nnosFinalizeMutex	nnosFinalizeMutex	GLOBAL	c-symbol		nnosFinalizeMutex			
+nnosGetCurrentThread	nnosGetCurrentThread	GLOBAL	c-symbol		nnosGetCurrentThread			
+nnosGetSystemTick	nnosGetSystemTick	GLOBAL	c-symbol		nnosGetSystemTick			
+nnosGetSystemTickFrequency	nnosGetSystemTickFrequency	GLOBAL	c-symbol		nnosGetSystemTickFrequency			
+nnosGetThreadPriority	nnosGetThreadPriority	GLOBAL	c-symbol		nnosGetThreadPriority			
+nnosInitializeEvent	nnosInitializeEvent	GLOBAL	c-symbol		nnosInitializeEvent			
+nnosInitializeMutex	nnosInitializeMutex	GLOBAL	c-symbol		nnosInitializeMutex			
+nnosLockMutex	nnosLockMutex	GLOBAL	c-symbol		nnosLockMutex			
+nnosSetThreadNamePointer	nnosSetThreadNamePointer	GLOBAL	c-symbol		nnosSetThreadNamePointer			
+nnosSignalEvent	nnosSignalEvent	GLOBAL	c-symbol		nnosSignalEvent			
+nnosSleepThread	nnosSleepThread	GLOBAL	c-symbol		nnosSleepThread			
+nnosStartThread	nnosStartThread	GLOBAL	c-symbol		nnosStartThread			
+nnosUnlockMutex	nnosUnlockMutex	GLOBAL	c-symbol		nnosUnlockMutex			
+nnosWaitEvent	nnosWaitEvent	GLOBAL	c-symbol		nnosWaitEvent			
+nnosWaitThread	nnosWaitThread	GLOBAL	c-symbol		nnosWaitThread			
+nnsocketBind	nnsocketBind	GLOBAL	c-symbol		nnsocketBind			
+nnsocketCancel	nnsocketCancel	GLOBAL	c-symbol		nnsocketCancel			
+nnsocketClose	nnsocketClose	GLOBAL	c-symbol		nnsocketClose			
+nnsocketConnect	nnsocketConnect	GLOBAL	c-symbol		nnsocketConnect			
+nnsocketFcntl	nnsocketFcntl	GLOBAL	c-symbol		nnsocketFcntl			
+nnsocketGetHostByNameWithOptions	nnsocketGetHostByNameWithOptions	GLOBAL	c-symbol		nnsocketGetHostByNameWithOptions			
+nnsocketGetLastErrno	nnsocketGetLastErrno	GLOBAL	c-symbol		nnsocketGetLastErrno			
+nnsocketGetPeerName	nnsocketGetPeerName	GLOBAL	c-symbol		nnsocketGetPeerName			
+nnsocketGetSockName	nnsocketGetSockName	GLOBAL	c-symbol		nnsocketGetSockName			
+nnsocketGetSockOpt	nnsocketGetSockOpt	GLOBAL	c-symbol		nnsocketGetSockOpt			
+nnsocketInetHtons	nnsocketInetHtons	GLOBAL	c-symbol		nnsocketInetHtons			
+nnsocketInetNtohs	nnsocketInetNtohs	GLOBAL	c-symbol		nnsocketInetNtohs			
+nnsocketPoll	nnsocketPoll	GLOBAL	c-symbol		nnsocketPoll			
+nnsocketRecv	nnsocketRecv	GLOBAL	c-symbol		nnsocketRecv			
+nnsocketRequestCancelHandle	nnsocketRequestCancelHandle	GLOBAL	c-symbol		nnsocketRequestCancelHandle			
+nnsocketSend	nnsocketSend	GLOBAL	c-symbol		nnsocketSend			
+nnsocketSetLastErrno	nnsocketSetLastErrno	GLOBAL	c-symbol		nnsocketSetLastErrno			
+nnsocketSetSockOpt	nnsocketSetSockOpt	GLOBAL	c-symbol		nnsocketSetSockOpt			
+nnsocketSocket	nnsocketSocket	GLOBAL	c-symbol		nnsocketSocket			
+nnsslConnectionCreate	nnsslConnectionCreate	GLOBAL	c-symbol		nnsslConnectionCreate			
+nnsslConnectionDestroy	nnsslConnectionDestroy	GLOBAL	c-symbol		nnsslConnectionDestroy			
+nnsslConnectionDoHandshakeWithCertBuffer	nnsslConnectionDoHandshakeWithCertBuffer	GLOBAL	c-symbol		nnsslConnectionDoHandshakeWithCertBuffer			
+nnsslConnectionGetConnectionId	nnsslConnectionGetConnectionId	GLOBAL	c-symbol		nnsslConnectionGetConnectionId			
+nnsslConnectionGetVerifyCertError	nnsslConnectionGetVerifyCertError	GLOBAL	c-symbol		nnsslConnectionGetVerifyCertError			
+nnsslConnectionPeek	nnsslConnectionPeek	GLOBAL	c-symbol		nnsslConnectionPeek			
+nnsslConnectionPending	nnsslConnectionPending	GLOBAL	c-symbol		nnsslConnectionPending			
+nnsslConnectionRead	nnsslConnectionRead	GLOBAL	c-symbol		nnsslConnectionRead			
+nnsslConnectionSetHostName	nnsslConnectionSetHostName	GLOBAL	c-symbol		nnsslConnectionSetHostName			
+nnsslConnectionSetIoMode	nnsslConnectionSetIoMode	GLOBAL	c-symbol		nnsslConnectionSetIoMode			
+nnsslConnectionSetOption	nnsslConnectionSetOption	GLOBAL	c-symbol		nnsslConnectionSetOption			
+nnsslConnectionSetSessionCacheMode	nnsslConnectionSetSessionCacheMode	GLOBAL	c-symbol		nnsslConnectionSetSessionCacheMode			
+nnsslConnectionSetSocketDescriptor	nnsslConnectionSetSocketDescriptor	GLOBAL	c-symbol		nnsslConnectionSetSocketDescriptor			
+nnsslConnectionSetVerifyOption	nnsslConnectionSetVerifyOption	GLOBAL	c-symbol		nnsslConnectionSetVerifyOption			
+nnsslConnectionWrite	nnsslConnectionWrite	GLOBAL	c-symbol		nnsslConnectionWrite			
+nnsslContextDestroy	nnsslContextDestroy	GLOBAL	c-symbol		nnsslContextDestroy			
+nnsslContextGetContextId	nnsslContextGetContextId	GLOBAL	c-symbol		nnsslContextGetContextId			
+nnsslFinalize	nnsslFinalize	GLOBAL	c-symbol		nnsslFinalize			
+nnsslInitialize	nnsslInitialize	GLOBAL	c-symbol		nnsslInitialize			
+nvnBootstrapLoader	nvnBootstrapLoader	GLOBAL	c-symbol		nvnBootstrapLoader			
+pow	pow	GLOBAL	c-symbol		pow			
+powf	powf	GLOBAL	c-symbol		powf			
+printf	printf	GLOBAL	c-symbol		printf			
+qsort	qsort	GLOBAL	c-symbol		qsort			
+sinf	sinf	GLOBAL	c-symbol		sinf			
+snprintf	snprintf	GLOBAL	c-symbol		snprintf			
+sprintf	sprintf	GLOBAL	c-symbol		sprintf			
+sqrt	sqrt	GLOBAL	c-symbol		sqrt			
+sqrtf	sqrtf	GLOBAL	c-symbol		sqrtf			
+sscanf	sscanf	GLOBAL	c-symbol		sscanf			
+stderr	stderr	GLOBAL	c-symbol		stderr			
+stdin	stdin	GLOBAL	c-symbol		stdin			
+stdout	stdout	GLOBAL	c-symbol		stdout			
+strcasecmp	strcasecmp	GLOBAL	c-symbol		strcasecmp			
+strcat	strcat	GLOBAL	c-symbol		strcat			
+strchr	strchr	GLOBAL	c-symbol		strchr			
+strcmp	strcmp	GLOBAL	c-symbol		strcmp			
+strcpy	strcpy	GLOBAL	c-symbol		strcpy			
+strcspn	strcspn	GLOBAL	c-symbol		strcspn			
+strdup	strdup	GLOBAL	c-symbol		strdup			
+strerror	strerror	GLOBAL	c-symbol		strerror			
+strftime	strftime	GLOBAL	c-symbol		strftime			
+strlen	strlen	GLOBAL	c-symbol		strlen			
+strncasecmp	strncasecmp	GLOBAL	c-symbol		strncasecmp			
+strncat	strncat	GLOBAL	c-symbol		strncat			
+strncmp	strncmp	GLOBAL	c-symbol		strncmp			
+strncpy	strncpy	GLOBAL	c-symbol		strncpy			
+strnlen	strnlen	GLOBAL	c-symbol		strnlen			
+strpbrk	strpbrk	GLOBAL	c-symbol		strpbrk			
+strrchr	strrchr	GLOBAL	c-symbol		strrchr			
+strstr	strstr	GLOBAL	c-symbol		strstr			
+strtok	strtok	GLOBAL	c-symbol		strtok			
+strtol	strtol	GLOBAL	c-symbol		strtol			
+strtoul	strtoul	GLOBAL	c-symbol		strtoul			
+strtoull	strtoull	GLOBAL	c-symbol		strtoull			
+swprintf	swprintf	GLOBAL	c-symbol		swprintf			
+tanf	tanf	GLOBAL	c-symbol		tanf			
+tolower	tolower	GLOBAL	c-symbol		tolower			
+toupper	toupper	GLOBAL	c-symbol		toupper			
+vsnprintf	vsnprintf	GLOBAL	c-symbol		vsnprintf			
+wcslen	wcslen	GLOBAL	c-symbol		wcslen			
