@@ -194,9 +194,11 @@ own output); drafts and attempts are binary-adjacent evidence. Working assumptio
 to `src/` on a match, keep attempts under `baserom/work/attempts/`, and possibly commit a
 textual near-miss summary later (the sm64ds shape) — to be confirmed.
 
-**Open — the model endpoint.** Local OpenAI-compatible HTTP server vs. a CLI invocation
-dictates the client interface. If a keyed endpoint is ever used, follow the no-hardcoded-secrets
-rule.
+**Built — the model client (HTTP).** `tools/loop/model.py` is the OpenAI-compatible
+`/v1/chat/completions` client (standard-library `urllib`, no framework), configured by
+`config/model.json` (no secret stored — the API key is read from the environment variable the
+config names). A CLI-invocation variant remains **open**: the client is behind a ``Model``
+protocol so a second backend is additive, not a rewrite.
 
 ---
 
@@ -212,7 +214,7 @@ rule.
 | 6 | Match authority | **Decided** — the gate is the only writer of `verify` (independent verify) |
 | 7 | Attempt/near-miss storage | **Proposed** — git-ignored `baserom/work/attempts/`; confirm later |
 | 8 | Link-time resolution of unmatched internal symbols | **Decided** — scaffold compile-only; Model C weak stubs; Model B byte substitution |
-| 9 | Model endpoint shape (HTTP vs. CLI) | **Open** |
+| 9 | Model endpoint shape (HTTP vs. CLI) | **Partially decided** — OpenAI-compatible HTTP client built (`tools/loop/model.py`); CLI variant open |
 | 10 | Disassembly-derived function extent | **Open** (shared with the gate; `--body` is the stopgap) |
 
 ---
@@ -223,12 +225,12 @@ rule.
 tools/loop/
   worklist.py     # ledger query -> ordered verify=none entries
   bundle.py       # per-entry context bundle -> baserom/work/context/
-  model.py        # endpoint client (HTTP or CLI)
+  model.py        # endpoint client (HTTP)          [built]
   run.py          # the driver: select -> bundle -> model -> write -> gate -> bank
   nearmiss.py     # near-miss bank + eval pin
   attempts.py     # append-only, parent-linked attempt log
-tests/loop/       # unit tests mirroring tools/loop/
-include/          # committed, incrementally-reconstructed declarations + types
+tests/loop/       # unit tests mirroring tools/loop/    [model.py covered]
+include/          # committed declarations + types     [seed built: include/generated/]
 src/<module>/<group>.cpp   # candidates (committed); one function per file by default
 ```
 

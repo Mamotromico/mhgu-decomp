@@ -1,0 +1,11 @@
+{
+  "_comment": "The local model endpoint for the reconstruction loop (docs/llm-harness-design.md -> The harness). URL: set an explicit full 'endpoint' for providers that do not use the /v1 convention; otherwise 'base_url' is used and '/v1/chat/completions' is appended. 'proxy': 'none' (direct, default), 'env' (honor http_proxy/https_proxy), or an explicit http(s):// URL. No secret is stored here: an API key, if the endpoint needs one, is read from the environment variable named by 'api_key_env' (optional — a local llama.cpp server needs none). See tools/loop/model.py.",
+  "base_url": "http://172.17.0.1:8080",
+  "endpoint": null,
+  "model": "local-model",
+  "proxy": "none",
+  "temperature": 0.0,
+  "max_tokens": null,
+  "timeout_s": 120,
+  "api_key_env": "SOAR_MODEL_API_KEY"
+}
