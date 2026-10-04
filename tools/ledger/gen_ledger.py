@@ -32,16 +32,19 @@ Everything is seeded as one module, ``main``. The image has no overlays, so a si
 ``(module, addr)`` namespace is correct; modules stay a ledger column and can be split later
 by editing it, never by renaming files.
 
-Determinism / CI
-----------------
-The output depends only on the export inputs and the sort order. ``--check`` regenerates in
-memory and compares against the committed file, exiting non-zero on drift — the reconciler
-CI gate (see *File layout & generated build*).
+Frozen seed, not a regenerator
+-------------------------------
+The committed ledger is **hand-owned**: it is seeded once from the export and carries
+authored state (renamed ``name``/``group``, and the ``verify``/``review``/``enroll``/
+``guess`` status axes) that a regeneration must never destroy. So this tool **refuses to
+overwrite an existing ledger** unless ``--force`` is passed, and it deliberately has no
+``--check``: re-seeding is a rare, deliberate, reviewable event, not a CI routine. The CI
+gate is the invariant validator ``tools/ledger/validate.py`` instead.
 
 Usage::
 
-    python3 tools/ledger/gen_ledger.py                 # write config/main/ledger.tsv
-    python3 tools/ledger/gen_ledger.py --check         # verify no drift (CI)
+    python3 tools/ledger/gen_ledger.py                 # seed a fresh ledger (errors if it exists)
+    python3 tools/ledger/gen_ledger.py --force         # overwrite an existing ledger (deliberate)
     python3 tools/ledger/gen_ledger.py --in-dir DIR --out FILE --module NAME
 """
 
@@ -53,31 +56,11 @@ import io
 import sys
 from pathlib import Path
 
+from ledgerlib import LEDGER_COLUMNS, STATUS_DEFAULTS
+
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_IN_DIR = REPO / "baserom" / "work" / "inventory"
 DEFAULT_OUT = REPO / "config" / "main" / "ledger.tsv"
-
-# The ledger schema. `module` + `addr` is the key (externals have no addr). Identity columns
-# first, then the linker/identity attributes, then the four status axes (see architecture.md
-# → *Status layer & the shared "matched" predicate*). `reloc` is derived by the link build and
-# is deliberately NOT stored.
-LEDGER_COLUMNS = [
-    "module",
-    "addr",
-    "kind",       # function | data | external
-    "name",       # ledger identity: func_/D_/discovered, never the Ghidra raw name
-    "block",      # memory block (.text/.rodata/.data/.bss); "" for externals
-    "group",      # translation-unit membership; one-function-per-file default = name
-    "size",       # bytes; "" for externals
-    "name_class", # discovered | generated
-    "bind",       # ELF binding, externals only (LOCAL|GLOBAL|WEAK)
-    "guess",      # 0/1 — a *guessed* real name (never a placeholder)
-    "verify",     # none | behaviour | match
-    "review",     # generated | reviewed
-    "enroll",     # rombytes | complete ("" for externals)
-]
-
-STATUS_DEFAULTS = {"verify": "none", "review": "generated", "enroll": "rombytes"}
 
 
 def ledger_name(kind: str, addr: str, raw: str, name_class: str) -> str:
@@ -98,21 +81,23 @@ def read_tsv(path: Path) -> list[dict]:
         return list(csv.DictReader(f, delimiter="\t"))
 
 
-def read_block_ends(in_dir: Path) -> dict[str, int]:
-    """``block -> end address`` for content blocks, from ``inventory.blocks.tsv``.
+def read_block_extents(in_dir: Path) -> dict[str, tuple[int, int]]:
+    """``block -> (start, end)`` for content blocks, from ``inventory.blocks.tsv``.
 
-    Lets the last cut point in a block be bounded (see ``partition_sizes``). Absent file →
-    empty map (the last entry then keeps its draft size, and the caller warns).
+    Bounds the last cut point in a block and lets a block's *head* be closed too (see
+    ``fill_block_heads``). Absent file -> empty map (the last entry then keeps its draft
+    size, and the caller warns).
     """
     path = in_dir / "inventory.blocks.tsv"
     if not path.exists():
         return {}
-    ends: dict[str, int] = {}
+    extents: dict[str, tuple[int, int]] = {}
     for r in read_tsv(path):
         if r["class"] != "content":
             continue
-        ends[r["block"]] = int(r["addr"], 16) + int(r["size"])
-    return ends
+        start = int(r["addr"], 16)
+        extents[r["block"]] = (start, start + int(r["size"]))
+    return extents
 
 
 def build_entries(in_dir: Path, module: str) -> tuple[list[dict], dict]:
@@ -190,6 +175,49 @@ def build_entries(in_dir: Path, module: str) -> tuple[list[dict], dict]:
         stats["externals"] += 1
 
     return entries, stats
+
+
+def fill_block_heads(entries: list[dict], extents: dict[str, tuple[int, int]],
+                     module: str) -> int:
+    """Materialise any unrepresented head of a content block as a ``D_<addr>`` blob.
+
+    The gaps pass only covers *initialized* blocks, so a block whose first symbol does not
+    sit at the block start (``.bss``: 0x6184b000 but first symbol 0x6184b05c) leaves its
+    head untilled. Closing it here makes every content block a complete partition from the
+    block start — no separate export change needed (``partition_sizes`` bounds the tail).
+    """
+    per_block: dict[str, list[dict]] = {}
+    for e in entries:
+        if e["kind"] != "external":
+            per_block.setdefault(e["block"], []).append(e)
+    filled = 0
+    for block, (start, _end) in extents.items():
+        rows = per_block.get(block)
+        if not rows:
+            continue
+        first = min(rows, key=lambda e: int(e["addr"], 16))
+        gap = int(first["addr"], 16) - start
+        if gap <= 0:
+            continue
+        addr = f"{start:08x}"
+        name = f"D_{addr}"
+        entries.append(
+            {
+                "module": module,
+                "addr": addr,
+                "kind": "data",
+                "name": name,
+                "block": block,
+                "group": name,
+                "size": str(gap),
+                "name_class": "generated",
+                "bind": "",
+                "guess": "0",
+                **STATUS_DEFAULTS,
+            }
+        )
+        filled += 1
+    return filled
 
 
 def partition_sizes(entries: list[dict], block_ends: dict[str, int]) -> int:
@@ -303,6 +331,7 @@ def report(entries: list[dict], stats: dict, audit_result: dict, out: Path) -> s
         f"  overlapping ranges (draft): {len(audit_result['overlaps'])}",
         f"  sizes partitioned:        {stats['partitioned']}",
         f"  block ends applied:       {stats['blocks']}",
+        f"  block heads filled:       {stats.get('heads_filled', 0)}",
     ]
     return "\n".join(lines)
 
@@ -312,7 +341,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--in-dir", type=Path, default=DEFAULT_IN_DIR, help="inventory export directory")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="committed ledger path")
     ap.add_argument("--module", default="main", help="module name (single-module seed: main)")
-    ap.add_argument("--check", action="store_true", help="verify the committed ledger is up to date; do not write")
+    ap.add_argument("--force", action="store_true",
+                    help="overwrite an existing ledger (deliberate re-seed; the ledger is hand-owned)")
     args = ap.parse_args(argv)
 
     for name in ("inventory.tsv", "inventory.gaps.tsv", "inventory.externals.tsv"):
@@ -322,14 +352,15 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     entries, stats = build_entries(args.in_dir, args.module)
+    extents = read_block_extents(args.in_dir)
+    stats["blocks"] = "yes" if extents else "no (draft sizes)"
+    if not extents:
+        print("warning: inventory.blocks.tsv missing — block heads/tails unbounded; "
+              "rerun tools/ghidra/inventory.sh", file=sys.stderr)
+    stats["heads_filled"] = fill_block_heads(entries, extents, args.module)
     entries = sort_entries(entries)
+    stats["partitioned"] = partition_sizes(entries, {b: e for b, (_s, e) in extents.items()})
     audit_result = audit(entries)
-    block_ends = read_block_ends(args.in_dir)
-    stats["blocks"] = "yes" if block_ends else "no (draft sizes)"
-    if not block_ends:
-        print("warning: inventory.blocks.tsv missing — last cut point per block keeps its "
-              "draft size; rerun tools/ghidra/inventory.sh", file=sys.stderr)
-    stats["partitioned"] = partition_sizes(entries, block_ends)
 
     print(report(entries, stats, audit_result, args.out))
 
@@ -339,21 +370,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {module} {addr}", file=sys.stderr)
         return 1
 
-    content = serialize(entries)
-
-    if args.check:
-        if not args.out.exists():
-            print(f"error: {args.out} does not exist", file=sys.stderr)
-            return 1
-        current = args.out.read_text()
-        if current != content:
-            print(f"error: {args.out} is out of date — re-run without --check", file=sys.stderr)
-            return 1
-        print("check: up to date")
-        return 0
+    if args.out.exists() and not args.force:
+        print(f"error: {args.out} already exists — the ledger is hand-owned and carries "
+              "authored status; pass --force to overwrite it deliberately", file=sys.stderr)
+        return 1
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(content)
+    args.out.write_text(serialize(entries))
     print(f"wrote {args.out}")
     return 0
 

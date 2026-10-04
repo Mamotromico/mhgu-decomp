@@ -353,8 +353,14 @@ Curated prior art (study for conventions; do not copy blindly):
       [`docs/architecture.md`](docs/architecture.md), *File layout & generated build*).
 - [x] Define the committed ledger schema + generator → `config/main/ledger.tsv` (single module;
       content-only cut points + materialised `content` gaps + externals), produced by
-      `tools/ledger/gen_ledger.py` from the inventory export with a `--check` CI gate. `size`
+      `tools/ledger/gen_ledger.py` from the inventory export as a frozen seed (CI gated
+      by `tools/ledger/validate.py`). `size`
       is the block *partition* (distance to the next cut point), not Ghidra's body span — see
       [`docs/architecture.md`](docs/architecture.md) → *Ledger — concrete schema*.
+- [x] Build the Model C gate rig → `tools/ledger/bytegate.py` (compile one function, byte-diff
+      vs. the original), `tools/ledger/validate.py` (ledger invariants, the CI gate),
+      `tools/ledger/ledgerlib.py` (schema + the one shared matched predicate), reference bytes
+      from `tools/ghidra/dump_blocks.sh`, and the compiler pin in `config/toolchain.json`. The
+      ledger is a **frozen seed** (`gen_ledger.py` refuses to overwrite barring `--force`).
 
 *(Expand this file as each item is resolved.)*

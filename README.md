@@ -209,9 +209,10 @@ declares `clangd` for C/C++ tooling.
 > │   └── lib/               #   helpers: slice .text, byte-compare, diff
 > ├── tools/                 # Decompilation helper scripts
 > │   ├── ghidra/            #   GhidraScripts (import, dump, inventory export)
-> │   ├── ledger/            #   ledger generator (inventory draft → committed ledger)
+> │   ├── ledger/            #   the ledger: generator, validator, byte gate, shared lib
 > │   └── nso/               #   NSO extraction / section compare / text align
-> ├── config/                # Committed symbol ledger
+> ├── config/                # Toolchain pin + the committed symbol ledger
+> │   ├── toolchain.json     #   the pinned clang flags
 > │   └── main/
 > │       └── ledger.tsv     #   the (module, addr) ledger — the denominator & build seed
 > └── src/                   # Translated C++ source                        [planned]

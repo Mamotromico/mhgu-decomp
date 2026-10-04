@@ -210735,6 +210735,7 @@ main	61837f14	data	D_61837f14	.data	D_61837f14	4	generated		0	none	generated	rom
 main	61837f18	data	D_61837f18	.data	D_61837f18	4	generated		0	none	generated	rombytes
 main	61837f1c	data	D_61837f1c	.data	D_61837f1c	12	generated		0	none	generated	rombytes
 main	61837fd8	data	D_61837fd8	.data.1	D_61837fd8	40	generated		0	none	generated	rombytes
+main	6184b000	data	D_6184b000	.bss	D_6184b000	92	generated		0	none	generated	rombytes
 main	6184b05c	data	D_6184b05c	.bss	D_6184b05c	32	generated		0	none	generated	rombytes
 main	6184b07c	data	D_6184b07c	.bss	D_6184b07c	36	generated		0	none	generated	rombytes
 main	6184b0a0	data	D_6184b0a0	.bss	D_6184b0a0	8	generated		0	none	generated	rombytes

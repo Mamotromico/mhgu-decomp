@@ -1,0 +1,18 @@
+{
+  "_comment": "The de facto compiler pin. See docs/compiler-identification.md and AGENTS.md. The two -mllvm knobs are hidden backend diagnostics used as a reproduction device, not real vendor build settings; -mcpu is deliberately absent (VFP-only, NEON off). One source of truth, consumed by tools/ledger/bytegate.py and the future build.",
+  "clang": "clang",
+  "cflags": [
+    "-target", "armv8a-none-eabi",
+    "-mfpu=vfpv4-d16",
+    "-O2",
+    "-fomit-frame-pointer",
+    "-fPIC",
+    "-fno-exceptions",
+    "-fno-rtti",
+    "-ffreestanding",
+    "-std=c++1z",
+    "-mllvm", "-pre-RA-sched=source",
+    "-mllvm", "-hoist-cheap-insts=true"
+  ],
+  "section_flags": ["-ffunction-sections", "-fdata-sections"]
+}

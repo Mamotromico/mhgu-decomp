@@ -148,7 +148,8 @@ same inputs are byte-identical.
 ## Downstream — the committed ledger
 
 `tools/ledger/gen_ledger.py` promotes this draft into the committed ledger
-(`config/main/ledger.tsv` + a `--check` CI gate) — see
+(`config/main/ledger.tsv`, a frozen hand-owned seed; CI is gated by
+`tools/ledger/validate.py`) — see
 [`architecture.md`](architecture.md) → *Ledger — concrete schema*. It is a near-identity
 mapping: content cut points + materialised `content` gaps + externals, with generated names
 replaced by `func_<addr>`/`D_<addr>` placeholders.

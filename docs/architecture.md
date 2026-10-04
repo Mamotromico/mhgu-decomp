@@ -50,7 +50,7 @@ single committed record of both *identity* and *status*, keyed by the same `(mod
 - **One committed artifact.** Status shares the ledger's `(module, addr)` key, so there is no join
   to reconcile and no second file to drift. Cost accepted: the ledger's git history mixes identity
   edits with match progress — that churn is mechanics, not meaning, and the single-writer
-  reconciler plus CI `--check` (see *File layout & generated build*) keep it honest. The entry
+  reconciler plus the CI invariant validator (`tools/ledger/validate.py`) keep it honest. The entry
   *set* remains the stable denominator; only status attributes change per match.
 - **Status is not a funnel.** A single lifecycle enum cannot express "matched but not linked",
   "linked but generated", or "behaviour-matched, deliberately not enrolled" — and the two published
@@ -255,9 +255,12 @@ hole (1,057 draft overlaps) and leaves the interior literal-pool/jump-table byte
 ledger disjoint *and* complete — every content block becomes an exact partition.
 
 Status seeds at `verify=none` / `review=generated` / `enroll=rombytes`; `reloc` is derived by
-the link build and never stored. `--check` re-generates in memory and compares, failing on
-drift (the CI gate). The generator is content-only (metadata blocks dropped), materialises
-`content` gaps as `D_<addr>` blobs, appends externals, and is a near-identity mapping of the
+the link build and never stored. The ledger is a **frozen seed**: the generator writes it once
+and refuses to overwrite an existing file (barring an explicit `--force`), because the authored
+status axes must survive; CI is gated instead by the invariant validator
+(`tools/ledger/validate.py`). The generator is content-only (metadata blocks dropped),
+materialises `content` gaps as `D_<addr>` blobs, closes each content block's partition (head and
+tail) from `inventory.blocks.tsv`, appends externals, and is a near-identity mapping of the
 export so a diff shows exactly where a human overrode the draft.
 
 ### Symbol & data naming
@@ -359,6 +362,12 @@ unmatched symbol's `enroll` resolves to (see *Status layer & the shared "matched
 Precedent: OdysseyDecomp / Lego City (stubs; address-agnostic per-function `tools/check`);
 sm64ds `tools/enroll.py` (`rombytes`/`complete`); nx-decomp-tools `delinks` for the
 relocation-checked end state.
+
+Implemented by `tools/ledger/` — `bytegate.py` (the gate: compile one function, diff it against
+the original), `validate.py` (the ledger's invariants, the CI gate), and `ledgerlib.py` (the
+schema and the one shared matched predicate). The compiler pin lives in
+`config/toolchain.json`. The reconstruction loop that *consumes* the gate is designed —
+not yet built — in [`llm-harness-design.md`](llm-harness-design.md).
 
 ### Progress metrics (two numbers)
 
