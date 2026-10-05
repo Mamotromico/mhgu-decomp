@@ -100,18 +100,10 @@ def behaviour(e: dict) -> bool:
 
 def matched_counts(entries: list[dict]) -> dict:
     """The published buckets, all derived from the one predicate."""
-    n_counted = n_decompiled = n_behaviour = 0
-    for e in entries:
-        if counted(e):
-            n_counted += 1
-            if e["verify"] == "match":
-                n_decompiled += 1
-            elif e["verify"] == "behaviour":
-                n_behaviour += 1
     return {
-        "counted": n_counted,
-        "decompiled": n_decompiled,
-        "behaviour": n_behaviour,
+        "counted": sum(1 for e in entries if counted(e)),
+        "decompiled": sum(1 for e in entries if decompiled(e)),
+        "behaviour": sum(1 for e in entries if behaviour(e)),
     }
 
 

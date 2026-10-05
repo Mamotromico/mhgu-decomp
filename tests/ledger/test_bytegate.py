@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the byte gate's comparison rule.
 
 The rule this pins down is the fix for the partition-vs-body defect: the ledger's ``size``
@@ -21,7 +20,7 @@ from pathlib import Path
 # The ledger tools are plain scripts (no package), so put their directory on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "ledger"))
 
-from bytegate import compare_body, gate_result
+from bytegate import compare_body, gate_result, should_color
 
 
 class CompareBodyTests(unittest.TestCase):
@@ -124,6 +123,32 @@ class GateResultTests(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertEqual(r["status"], "mismatch")
         self.assertEqual(r["name"], "func_601a72e4")
+
+
+class ShouldColorTests(unittest.TestCase):
+    """Colour is suppressed for --no-color, NO_COLOR, or non-TTY output."""
+
+    class Stream:
+        def __init__(self, tty: bool):
+            self._tty = tty
+
+        def isatty(self) -> bool:
+            return self._tty
+
+    def test_tty_without_overrides_colours(self):
+        self.assertTrue(should_color(False, self.Stream(True), {}))
+
+    def test_no_color_flag_wins(self):
+        self.assertFalse(should_color(True, self.Stream(True), {}))
+
+    def test_no_color_env_wins(self):
+        self.assertFalse(should_color(False, self.Stream(True), {"NO_COLOR": "1"}))
+
+    def test_non_tty_is_plain(self):
+        self.assertFalse(should_color(False, self.Stream(False), {}))
+
+    def test_stream_without_isatty_is_plain(self):
+        self.assertFalse(should_color(False, object(), {}))
 
 
 if __name__ == "__main__":

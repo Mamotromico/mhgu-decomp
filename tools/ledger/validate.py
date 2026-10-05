@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate the committed symbol ledger's invariants (the CI gate).
 
 The ledger is a *frozen, hand-owned* artifact: it is seeded once from the Ghidra
@@ -32,6 +31,12 @@ Usage::
     python3 tools/ledger/validate.py                    # the committed ledger
     python3 tools/ledger/validate.py --blocks FILE      # also close the partition
     python3 tools/ledger/validate.py --ledger FILE
+
+Exit codes::
+
+    0  all invariants hold
+    1  one or more invariant violations
+    2  usage error (e.g. --blocks does not exist)
 """
 
 from __future__ import annotations
@@ -40,6 +45,7 @@ import argparse
 import csv
 import itertools
 import re
+import sys
 from pathlib import Path
 
 from ledgerlib import (
@@ -61,8 +67,11 @@ BINDS = ("LOCAL", "GLOBAL", "WEAK")
 
 
 def _read_header(path: Path) -> list[str]:
+    """The header row, or ``[]`` for an empty file."""
     with path.open(newline="") as f:
-        return next(csv.reader(f, delimiter="\t"))
+        for row in csv.reader(f, delimiter="\t"):
+            return row
+    return []
 
 
 def validate(path: Path, blocks: Path | None) -> list[str]:
@@ -70,11 +79,16 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
 
     if not path.exists():
         return [f"{path}: does not exist"]
+    if blocks is not None and not Path(blocks).exists():
+        return [f"{blocks}: does not exist"]
 
     header = _read_header(path)
+    if not header:
+        return [f"{path}: empty ledger"]
     if header != LEDGER_COLUMNS:
-        errors.append(
-            f"header mismatch:\n    got  {header}\n    want {LEDGER_COLUMNS}")
+        # Without the shared schema the row checks below cannot be evaluated (and would
+        # KeyError on a renamed/missing column), so report the header and stop.
+        return [f"header mismatch:\n    got  {header}\n    want {LEDGER_COLUMNS}"]
 
     entries = read_entries(path)
     seen_keys: set[tuple[str, str]] = set()
@@ -140,7 +154,8 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
         # --- addressed (function / data) --------------------------------------------------
         if seen_external:
             errors.append(f"{where}: addressed entry after externals")
-        if not ADDR_RE.match(e["addr"]):
+        addr_ok = bool(ADDR_RE.match(e["addr"]))
+        if not addr_ok:
             errors.append(f"{where}: addr {e['addr']!r} is not 8-hex lowercase")
         else:
             a = int(e["addr"], 16)
@@ -159,12 +174,19 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
         if e["enroll"] not in ENROLL_VALUES:
             errors.append(f"{where}: bad enroll {e['enroll']!r}")
         try:
-            if int(e["size"]) <= 0:
-                errors.append(f"{where}: size must be positive")
+            size_ok = int(e["size"]) > 0
         except ValueError:
             errors.append(f"{where}: size {e['size']!r} is not an integer")
+            size_ok = False
+        else:
+            if not size_ok:
+                errors.append(f"{where}: size must be positive")
 
-        per_block.setdefault((e["module"], e["block"]), []).append(e)
+        # Only rows with a parseable address and size can be geometry-checked; a row that
+        # already failed those checks keeps its error but is left out of the partition map
+        # (the int() calls below would otherwise crash instead of reporting).
+        if addr_ok and size_ok:
+            per_block.setdefault((e["module"], e["block"]), []).append(e)
 
     # --- partition: adjacency within each block ------------------------------------------
     for (module, block), rows in sorted(per_block.items()):
@@ -175,8 +197,6 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
                 errors.append(
                     f"{module}:{block}: {prev['addr']}+{prev['size']} = {end:08x} "
                     f"but next is {nxt['addr']} (hole or overlap)")
-            if nxt["module"] != module:
-                errors.append(f"{nxt['addr']}: module changed within block")
 
     # --- optional: close the partition against true block bounds -------------------------
     if blocks is not None:
@@ -203,14 +223,20 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
+    ap.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER,
+                    help="committed ledger (default config/main/ledger.tsv)")
     ap.add_argument("--blocks", type=Path, default=None,
                     help="optional inventory.blocks.tsv to close the partition")
     args = ap.parse_args(argv)
 
+    if args.blocks is not None and not args.blocks.exists():
+        print(f"error: {args.blocks}: does not exist", file=sys.stderr)
+        return 2
+
     errors = validate(args.ledger, args.blocks)
     entries = read_entries(args.ledger) if args.ledger.exists() else []
-    counted = sum(1 for e in entries if e["kind"] != "external")
+    # .get, not []: a wrong header has no "kind" column and must not crash the summary
+    counted = sum(1 for e in entries if e.get("kind") != "external")
     print(f"validate: {args.ledger}")
     print(f"  entries           {len(entries)}")
     print(f"  counted (non-ext) {counted}")
