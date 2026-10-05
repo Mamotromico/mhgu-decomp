@@ -56,6 +56,13 @@ Options:
     --body N        authoritative body length; requires an exact length match
     --show          print the full byte diff on mismatch
     --update        set verify=match in the ledger when the function matches
+    --report FILE   write a machine-readable JSON result (closeness input; see gate_result)
+
+Exit codes:
+    0  match
+    1  byte mismatch (compiled cleanly, bytes differ)
+    2  usage/config error (no entry, no source, bad ELF, clang missing)
+    3  compilation failed (distinct from a mismatch, so callers cannot confuse the two)
 """
 
 from __future__ import annotations
@@ -250,6 +257,27 @@ def compare_body(cand: bytes, block: bytes, off: int, partition: int,
     return True, ref, ("short-body" if n < partition else "match")
 
 
+def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: bool,
+                status: str, body: int | None, partition: int,
+                has_reloc: bool) -> dict:
+    """The machine-readable result of one gate run (the near-miss bank's closeness input).
+
+    Pure, so it is unit-tested and stable: ``diff_count`` is the divergence count over the
+    compared span, and ``body`` is the authoritative extent when one was asserted.
+    """
+    span = min(len(cand), len(ref))
+    diff_count = sum(1 for i in range(span) if cand[i] != ref[i])
+    first_diff = next((i for i in range(span) if cand[i] != ref[i]), None)
+    return {
+        "module": module, "addr": addr, "name": name,
+        "ok": ok, "status": status,
+        "body": body, "partition": partition,
+        "cand_len": len(cand), "ref_len": len(ref),
+        "diff_count": diff_count, "first_diff": first_diff,
+        "has_reloc": has_reloc,
+    }
+
+
 def print_status(status: str, cand_len: int, partition: int,
                  body: int | None) -> None:
     """Explain a non-plain-mismatch status on its own line."""
@@ -282,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="authoritative body length in bytes; requires an exact length match")
     ap.add_argument("--show", action="store_true")
     ap.add_argument("--update", action="store_true")
+    ap.add_argument("--report", type=Path, default=None,
+                    help="write a machine-readable JSON result (see gate_result) here")
     args = ap.parse_args(argv)
 
     addr = args.addr.lower().removeprefix("0x").zfill(8)
@@ -319,7 +349,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: clang not found ({clang}); run inside the devcontainer", file=sys.stderr)
         return 2
     except subprocess.CalledProcessError as e:
-        return e.returncode
+        print(f"error: compilation failed (clang exit {e.returncode}); see the compiler output "
+              f"above", file=sys.stderr)
+        return 3
 
     try:
         cand, sym, has_reloc = extract_function(obj, [entry["name"], entry["group"]])
@@ -342,6 +374,12 @@ def main(argv: list[str] | None = None) -> int:
     block = ref_bin.read_bytes()
     off = int(addr, 16) - block_start(ref_bin)
     ok, ref, status = compare_body(cand, block, off, size, args.body)
+
+    if args.report is not None:
+        result = gate_result(args.module, addr, entry["name"], cand, ref, ok, status,
+                             args.body, size, has_reloc)
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
 
     where = f"{entry['addr']} in {entry['block']}"
     print()

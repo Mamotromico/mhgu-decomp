@@ -139,6 +139,18 @@ Two properties are non-negotiable:
   partition-vs-body gap the gate was fixed for; `--body` / a disassembly-derived extent is the
   shared mechanism.
 
+**Built — `tools/loop/bundle.py`.** The extent is resolved from the full-analysis inventory
+(`baserom/work/inventory/inventory.tsv`, whose function `size` is the real body and matches the
+`poc/` probes exactly: `func_601a72e4` is 60 B, not its 1368 B partition) or an explicit
+`--body`; the ledger partition is never used. One Ghidra headless run dumps the memory blocks
+and the body range together (`tools/ghidra/AnnotateFunctions.java`, a sibling of the frozen
+`DisasmFunctions.java` — the PoC's copy is left untouched); it emits addresses, not names, so
+name resolution stays in Python where the committed ledger is the naming authority. Branch and
+`bl`/`blx` targets become `-> loc_<addr>` / `-> <ledger name>`; a pc-relative load's operand is
+resolved to its absolute slot and the loaded word is shown (`= 0x…`). Output is a deterministic
+markdown bundle under the git-ignored `baserom/work/context/` (verified byte-identical across
+runs).
+
 **Decided — the Ghidra decompiler draft is excluded from the LLM context.** The decompiler
 emits semantically-correct, readability-optimised C, but byte-matching is *instruction idiom
 and scheduling*, not semantics (the whole of [`compiler-identification.md`](compiler-identification.md)
@@ -175,24 +187,41 @@ The loop, per entry:
 6. On **match:** `set_field(verify=match)` (line-surgical; leaves `enroll`/`review` alone).
    On **near miss:** record it, don't discard it.
 
-**Near misses are evidence, not waste** (`AGENTS.md`). Two append-only records, both
-git-ignored under `baserom/work/`:
+**Built — `tools/loop/run.py` (the driver).** It wires the above together and is the one place
+that could overstep, so **containment is by construction**: the model only ever returns text,
+and every path the driver writes is derived **solely from the ledger** (`src/<module>/<group>.cpp`
+and `baserom/work/attempts/…`) behind a resolve-and-require-under-root guard — ledger components
+to a separator or `..` are refused outright. Model text is written to a file and never enters
+argv, a shell, `eval`, or a compiler flag; compilation is a fixed-argv, in-container subprocess.
+The gate is invoked with `--update` (it is the **only** writer of `verify`, and only on a real
+match).
 
-- **Attempt log** — every attempt, including `no_progress`, parent-linked so retries form a
-  tree.
-- **Near-miss bank** — strictly-improving upsert with
-  `closeness = (divergences, |cand_size − size|)`, and `floor` marks for compiler-internal
-  residuals.
+**Near misses are evidence, not waste** (`AGENTS.md`). Two append-only records, both
+git-ignored under `baserom/work/` — **built** as `tools/loop/attempts.py` and
+`tools/loop/nearmiss.py`:
+
+- **Attempt log** (`attempts.py`) — every attempt, parent-linked so retries form a tree, in
+  `baserom/work/attempts/log.jsonl`, with each candidate kept at
+  `baserom/work/attempts/<module>/<addr>/<id>.cpp`.
+- **Near-miss bank** (`nearmiss.py`) — strictly-improving upsert with
+  `closeness = (divergences, |cand_size − size|)`, in `baserom/work/nearmiss/bank.json`. The
+  closeness pairs come straight from the gate's structured `--report`, never re-derived, so the
+  gate stays the sole authority on a comparison. (`floor` marks for compiler-internal residuals
+  remain to be added.)
 
 **The eval pin** fingerprints the compiler pin (`config/toolchain.json`) and the closeness
 metric. If either changes, the bank **warns** rather than silently comparing incomparable
-numbers. This is also the mechanism that makes any future experiment (e.g. "does a decompiler
-draft help?") trustworthy: A/B it against a pinned eval, not by vibes.
+numbers (a record written under a different pin is treated as absent). This is also the
+mechanism that makes any future experiment (e.g. "does a decompiler draft help?")
+trustworthy: A/B it against a pinned eval, not by vibes.
 
-**Open — where the losing candidate lives.** Matched source is committed (it is the project's
-own output); drafts and attempts are binary-adjacent evidence. Working assumption: only write
-to `src/` on a match, keep attempts under `baserom/work/attempts/`, and possibly commit a
-textual near-miss summary later (the sm64ds shape) — to be confirmed.
+**Decided — where the losing candidate lives.** Matched source is the project's own output and
+lives in `src/`; drafts and attempts are binary-adjacent evidence and live, git-ignored, under
+`baserom/work/attempts/`. The driver writes the candidate to its ledger-derived `src/` path only
+long enough for the gate to compile it, and moves it into the attempt store on anything but a
+match — so `src/` holds **matched code only**, and a merged translation unit (several entries
+sharing a `group`) is never disturbed. A committed, textual near-miss summary remains open (the
+sm64ds shape).
 
 **Built — the model client (HTTP).** `tools/loop/model.py` is the OpenAI-compatible
 `/v1/chat/completions` client (standard-library `urllib`, no framework), configured by
@@ -212,26 +241,28 @@ protocol so a second backend is additive, not a rewrite.
 | 4 | Bundle order | **Decided** — disassembly-first, annotated; deterministic, one-way, git-ignored |
 | 5 | Harness shape | **Decided** — custom repo-local Python; not a framework |
 | 6 | Match authority | **Decided** — the gate is the only writer of `verify` (independent verify) |
-| 7 | Attempt/near-miss storage | **Proposed** — git-ignored `baserom/work/attempts/`; confirm later |
+| 7 | Attempt/near-miss storage | **Built** — parent-linked log (`attempts.py`) + strictly-improving bank with the eval pin (`nearmiss.py`); `floor` marks remain |
 | 8 | Link-time resolution of unmatched internal symbols | **Decided** — scaffold compile-only; Model C weak stubs; Model B byte substitution |
 | 9 | Model endpoint shape (HTTP vs. CLI) | **Partially decided** — OpenAI-compatible HTTP client built (`tools/loop/model.py`); CLI variant open |
-| 10 | Disassembly-derived function extent | **Open** (shared with the gate; `--body` is the stopgap) |
+| 10 | Disassembly-derived function extent | **Resolved for the bundle** — the full-analysis inventory's function `size` (validated against the `poc/` probes); `--body` overrides; the ledger partition is never used. Entries absent from the inventory still require `--body` (shared with the gate, which keeps its own `--body` stopgap) |
 
 ---
 
-## Proposed layout (not yet built)
+## Layout
 
 ```text
 tools/loop/
-  worklist.py     # ledger query -> ordered verify=none entries
-  bundle.py       # per-entry context bundle -> baserom/work/context/
+  worklist.py     # ledger query -> ordered verify=none entries   [built]
+  bundle.py       # per-entry context bundle -> baserom/work/context/  [built]
   model.py        # endpoint client (HTTP)          [built]
-  run.py          # the driver: select -> bundle -> model -> write -> gate -> bank
-  nearmiss.py     # near-miss bank + eval pin
-  attempts.py     # append-only, parent-linked attempt log
-tests/loop/       # unit tests mirroring tools/loop/    [model.py covered]
+  run.py          # the driver: select -> bundle -> model -> write -> gate -> bank  [built]
+  nearmiss.py     # near-miss bank + eval pin         [built]
+  attempts.py     # append-only, parent-linked attempt log  [built]
+tests/loop/       # unit tests mirroring tools/loop/    [model, worklist, bundle, run, attempts, nearmiss covered]
 include/          # committed declarations + types     [seed built: include/generated/]
 src/<module>/<group>.cpp   # candidates (committed); one function per file by default
 ```
 
-`tests/` follows the existing `tests/<tool>/` convention (see `tests/ledger/`).
+`tests/` follows the existing `tests/<tool>/` convention (see `tests/ledger/`). Every file is
+a plain stdlib `unittest` script, runnable on its own; run them all with
+`python3 tools/run_tests.py`.

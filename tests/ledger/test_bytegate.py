@@ -21,7 +21,7 @@ from pathlib import Path
 # The ledger tools are plain scripts (no package), so put their directory on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "ledger"))
 
-from bytegate import compare_body
+from bytegate import compare_body, gate_result
 
 
 class CompareBodyTests(unittest.TestCase):
@@ -94,6 +94,36 @@ class CompareBodyTests(unittest.TestCase):
         ok, _ref, status = compare_body(bytes(body), self.BLOCK, self.OFF, 1368, 60)
         self.assertFalse(ok)
         self.assertEqual(status, "mismatch")
+
+
+class GateResultTests(unittest.TestCase):
+    """The machine-readable result the near-miss bank consumes."""
+
+    def result(self, cand, ref, ok=True, status="match", body=60, partition=1368):
+        return gate_result("main", "601a72e4", "func_601a72e4", cand, ref, ok, status,
+                           body, partition, has_reloc=False)
+
+    def test_exact_match_has_no_divergences(self):
+        r = self.result(b"abcd", b"abcd")
+        self.assertEqual((r["diff_count"], r["first_diff"]), (0, None))
+        self.assertEqual((r["cand_len"], r["ref_len"]), (4, 4))
+        self.assertEqual(r["partition"], 1368)
+
+    def test_counts_divergences_and_first_offset(self):
+        r = self.result(b"abXdYf", b"abcccf")
+        self.assertEqual(r["diff_count"], 3)
+        self.assertEqual(r["first_diff"], 2)
+
+    def test_span_is_the_shorter_length(self):
+        r = self.result(b"abcd", b"abcdef")
+        self.assertEqual(r["diff_count"], 0)
+        self.assertEqual((r["cand_len"], r["ref_len"]), (4, 6))
+
+    def test_carries_status_and_identity(self):
+        r = self.result(b"abcd", b"abce", ok=False, status="mismatch")
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["status"], "mismatch")
+        self.assertEqual(r["name"], "func_601a72e4")
 
 
 if __name__ == "__main__":

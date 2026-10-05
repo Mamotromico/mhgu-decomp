@@ -97,17 +97,24 @@ def chat_endpoint(base_url: str) -> str:
     return base + "/v1/chat/completions"
 
 
-def build_payload(model: str, prompt: str, system: str | None, temperature: float,
-                  max_tokens: int | None) -> dict:
-    """The OpenAI-compatible request body (deterministic key order for testability)."""
+def build_payload(model: str, prompt: str, system: str | None, temperature: float | None,
+                  max_tokens: int | None, seed: int | None = None) -> dict:
+    """The OpenAI-compatible request body.
+
+    ``temperature`` and ``seed`` are sent only when set, so omitting one leaves the server's
+    own default (e.g. a router preset) in force rather than overriding it with a client value.
+    """
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-    payload: dict = {"model": model, "messages": messages, "temperature": temperature,
-                     "stream": False}
+    payload: dict = {"model": model, "messages": messages, "stream": False}
+    if temperature is not None:
+        payload["temperature"] = temperature
     if max_tokens is not None:
         payload["max_tokens"] = max_tokens
+    if seed is not None:
+        payload["seed"] = seed
     return payload
 
 
@@ -162,8 +169,8 @@ class HttpModel:
 
     def __init__(self, base_url: str = "", model: str = "", *, endpoint: str | None = None,
                  api_key: str | None = None, proxy: str = "none", timeout_s: float = 120.0,
-                 temperature: float = 0.0, max_tokens: int | None = None,
-                 system: str | None = SYSTEM_PROMPT):
+                 temperature: float | None = None, max_tokens: int | None = None,
+                 seed: int | None = None, system: str | None = SYSTEM_PROMPT):
         if endpoint:
             self.endpoint = endpoint
         elif base_url:
@@ -180,12 +187,13 @@ class HttpModel:
         self.timeout_s = timeout_s
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.seed = seed
         self.system = system
 
     def complete(self, prompt: str, *, system: str | None = None) -> Completion:
         payload = build_payload(self.model, prompt,
                                 self.system if system is None else system,
-                                self.temperature, self.max_tokens)
+                                self.temperature, self.max_tokens, self.seed)
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -201,6 +209,11 @@ class HttpModel:
             if e.code in (401, 403) and not self.api_key:
                 hint = " — this endpoint requires a key; set the env var named by api_key_env"
             raise ModelError(f"HTTP {e.code} from {self.endpoint}: {detail}{hint}") from e
+        except TimeoutError as e:
+            # A read timeout (e.g. a cold model still loading) — surface it cleanly.
+            raise ModelError(
+                f"timed out after {self.timeout_s:.0f}s waiting for {self.endpoint} "
+                f"(a first call that loads the model can take a while; raise --timeout)") from e
         except urllib.error.URLError as e:
             raise ModelError(
                 f"cannot reach {self.endpoint}: {e.reason} — is the model server running?") from e
@@ -217,7 +230,10 @@ class HttpModel:
 def from_config(path: Path, *, override_base_url: str | None = None,
                 override_model: str | None = None,
                 override_endpoint: str | None = None,
-                override_proxy: str | None = None) -> HttpModel:
+                override_proxy: str | None = None,
+                override_timeout: float | None = None,
+                override_temperature: float | None = None,
+                override_seed: int | None = None) -> HttpModel:
     """Build the configured client; the API key comes from the environment, never the file.
 
     URL precedence: an explicit ``endpoint`` (config or override) wins over ``base_url``; a
@@ -235,11 +251,16 @@ def from_config(path: Path, *, override_base_url: str | None = None,
     proxy = override_proxy if override_proxy is not None else cfg.get("proxy", "none")
     key_env = cfg.get("api_key_env")
     api_key = os.environ.get(key_env) if key_env else None
+    temperature = (override_temperature if override_temperature is not None
+                   else cfg.get("temperature"))
+    seed = override_seed if override_seed is not None else cfg.get("seed")
     return HttpModel(
         base_url=base_url, model=model, endpoint=endpoint, api_key=api_key, proxy=proxy,
-        timeout_s=float(cfg.get("timeout_s", 120)),
-        temperature=float(cfg.get("temperature", 0.0)),
+        timeout_s=float(override_timeout if override_timeout is not None
+                        else cfg.get("timeout_s", 120)),
+        temperature=None if temperature is None else float(temperature),
         max_tokens=cfg.get("max_tokens"),
+        seed=None if seed is None else int(seed),
     )
 
 
@@ -255,6 +276,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=None, help="override the configured model name")
     ap.add_argument("--proxy", default=None,
                     help="'none' (direct, default), 'env', or a http(s):// proxy URL")
+    ap.add_argument("--timeout", type=float, default=None,
+                    help="request timeout in seconds (default: the config's timeout_s)")
+    ap.add_argument("--temperature", type=float, default=None,
+                    help="sampling temperature (omit to use the server/preset default)")
+    ap.add_argument("--seed", type=int, default=None, help="sampling seed (optional)")
     ap.add_argument("--prompt", default=None)
     ap.add_argument("--prompt-file", type=Path, default=None)
     ap.add_argument("--smoke", action="store_true",
@@ -277,7 +303,8 @@ def main(argv: list[str] | None = None) -> int:
 
     model = from_config(args.config, override_base_url=args.base_url,
                         override_model=args.model, override_endpoint=args.endpoint,
-                        override_proxy=args.proxy)
+                        override_proxy=args.proxy, override_timeout=args.timeout,
+                        override_temperature=args.temperature, override_seed=args.seed)
     print(f"endpoint: {model.endpoint}  model: {model.model}")
     try:
         result = model.complete(prompt)

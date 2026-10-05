@@ -15,6 +15,7 @@ import socket
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.request
 from contextlib import contextmanager
@@ -182,6 +183,30 @@ class HttpModelTests(unittest.TestCase):
                 HttpModel(base, "m", api_key=None).complete("x")
         self.assertIn("requires a key", str(ctx.exception))
 
+    def test_read_timeout_raises_model_error(self):
+        class SlowHandler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                time.sleep(1.0)  # longer than the client's timeout
+                body = b"{}"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        srv = http.server.HTTPServer(("127.0.0.1", 0), SlowHandler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            model = HttpModel(f"http://127.0.0.1:{srv.server_address[1]}", "m", timeout_s=0.2)
+            with self.assertRaises(ModelError) as ctx:
+                model.complete("x")
+        finally:
+            srv.shutdown()
+            srv.server_close()
+        self.assertIn("timed out", str(ctx.exception))
+
     def test_non_json_raises(self):
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_POST(self):
@@ -260,6 +285,11 @@ class FromConfigTests(unittest.TestCase):
         missing = Path(tempfile.mkdtemp()) / "nope.json"
         m = from_config(missing, override_endpoint="http://z/v1/chat/completions")
         self.assertEqual(m.endpoint, "http://z/v1/chat/completions")
+
+    def test_timeout_from_config_and_override(self):
+        path = self.write({"base_url": "http://h:8080", "timeout_s": 45})
+        self.assertEqual(from_config(path).timeout_s, 45.0)
+        self.assertEqual(from_config(path, override_timeout=3.0).timeout_s, 3.0)
 
 
 if __name__ == "__main__":
