@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Print the `;; entry <addr>` block(s) matching the given address(es).
 
 Usage: show_func.py <disasm.txt> <addr> [addr ...]

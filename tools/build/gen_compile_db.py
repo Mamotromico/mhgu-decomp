@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate the build's ``compile_commands.json`` from the committed ledger.
 
 The build is a **function of the ledger** (``docs/architecture.md`` → *File layout &

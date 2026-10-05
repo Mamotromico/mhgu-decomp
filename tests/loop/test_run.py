@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Tests for the reconstruction driver's pure helpers and one stubbed iteration.
 
 The impure steps are stubbed: ``run_subprocess`` is replaced with a fake gate that writes a

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the compile-database generator's pure helpers.
 
 No clang, no ledger, no filesystem beyond a temp dir for the one existence check. Run with::

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Seed the ``include/`` declaration tree from the ledger's externals (Phase A).
 
 The ledger reproduces the exact Itanium-**mangled** name of every external (``dynsym``), and

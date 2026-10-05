@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run the whole test suite in one command.
 
 Every test file is a plain ``unittest`` script that also runs standalone (``python3

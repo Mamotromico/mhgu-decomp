@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Tests for the worklist selector: filtering, ordering, and filter normalization.
 
 Pure-function tests only — no ledger, no filesystem, no binary. Run with::

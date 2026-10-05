@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The model client for the reconstruction loop: an endpoint that returns C++ from a prompt.
 
 Deliberately dependency-light — the standard library only (``urllib``), no ``requests`` and no

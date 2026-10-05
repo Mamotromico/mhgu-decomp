@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Byte-grounded, coloured instruction diff: real function dump vs. compiled candidate.
 
 Fixed-width ARM A32 => 4 bytes per instruction, so instruction i in the real

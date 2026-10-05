@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate the committed symbol ledger from the Ghidra inventory export.
 
 The inventory export (``tools/ghidra/InventoryExport.java`` driven by
@@ -46,6 +45,12 @@ Usage::
     python3 tools/ledger/gen_ledger.py                 # seed a fresh ledger (errors if it exists)
     python3 tools/ledger/gen_ledger.py --force         # overwrite an existing ledger (deliberate)
     python3 tools/ledger/gen_ledger.py --in-dir DIR --out FILE --module NAME
+
+Exit codes::
+
+    0  wrote the ledger
+    1  refused (output exists without --force) or a duplicate (module,addr) in the export
+    2  a required inventory export file is missing
 """
 
 from __future__ import annotations
@@ -346,6 +351,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="overwrite an existing ledger (deliberate re-seed; the ledger is hand-owned)")
     args = ap.parse_args(argv)
 
+    # Refuse before doing any work: the ledger is hand-owned and a re-seed must be deliberate.
+    if args.out.exists() and not args.force:
+        print(f"error: {args.out} already exists — the ledger is hand-owned and carries "
+              "authored status; pass --force to overwrite it deliberately", file=sys.stderr)
+        return 1
+
     for name in ("inventory.tsv", "inventory.gaps.tsv", "inventory.externals.tsv"):
         if not (args.in_dir / name).exists():
             print(f"error: missing {args.in_dir / name}", file=sys.stderr)
@@ -369,11 +380,6 @@ def main(argv: list[str] | None = None) -> int:
         print("error: duplicate (module,addr) entries — alias handling required:", file=sys.stderr)
         for (module, addr) in list(audit_result["dup_keys"])[:10]:
             print(f"  {module} {addr}", file=sys.stderr)
-        return 1
-
-    if args.out.exists() and not args.force:
-        print(f"error: {args.out} already exists — the ledger is hand-owned and carries "
-              "authored status; pass --force to overwrite it deliberately", file=sys.stderr)
         return 1
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

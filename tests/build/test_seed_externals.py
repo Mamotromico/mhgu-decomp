@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the externals-seed demangled-signature parser.
 
 Pure-function tests — no demangler subprocess, no ledger, no binary. Run with::

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The byte gate: compile one reconstructed function and compare it to the original.
 
 This is the Phase-3 per-function claim mechanism (``docs/architecture.md`` →
@@ -56,6 +55,7 @@ Options:
     --body N        authoritative body length; requires an exact length match
     --show          print the full byte diff on mismatch
     --update        set verify=match in the ledger when the function matches
+    --no-color      disable ANSI colour (also honours NO_COLOR and non-TTY output)
     --report FILE   write a machine-readable JSON result (closeness input; see gate_result)
 
 Exit codes:
@@ -69,6 +69,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import struct
 import subprocess
 import sys
@@ -90,8 +91,29 @@ def include_dirs(build_config: Path) -> list[str]:
     raw = json.loads(build_config.read_text())
     return [f"-I{(REPO / d).resolve()}" for d in raw.get("include_dirs", [])]
 
-GREEN, RED, YELLOW, DIM, BOLD, RESET = (
-    "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m", "\033[0m")
+_COLORS = {
+    "GREEN": "\033[32m",
+    "RED": "\033[31m",
+    "YELLOW": "\033[33m",
+    "DIM": "\033[2m",
+    "BOLD": "\033[1m",
+    "RESET": "\033[0m",
+}
+GREEN, RED, YELLOW, DIM, BOLD, RESET = _COLORS.values()
+
+
+def should_color(no_color: bool, stream, env) -> bool:
+    """Whether to emit ANSI colour: off for ``--no-color``, ``NO_COLOR``, or a non-TTY."""
+    if no_color or "NO_COLOR" in env:
+        return False
+    return bool(getattr(stream, "isatty", lambda: False)())
+
+
+def set_color(enabled: bool) -> None:
+    """Enable/disable the module-level ANSI codes (called once from ``main``)."""
+    global GREEN, RED, YELLOW, DIM, BOLD, RESET
+    vals = _COLORS if enabled else {k: "" for k in _COLORS}
+    GREEN, RED, YELLOW, DIM, BOLD, RESET = (vals[k] for k in _COLORS)
 
 
 # --- ELF32 (ARM) ----------------------------------------------------------------------
@@ -310,9 +332,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="authoritative body length in bytes; requires an exact length match")
     ap.add_argument("--show", action="store_true")
     ap.add_argument("--update", action="store_true")
+    ap.add_argument("--no-color", action="store_true",
+                    help="disable ANSI colour (also honours NO_COLOR and non-TTY output)")
     ap.add_argument("--report", type=Path, default=None,
                     help="write a machine-readable JSON result (see gate_result) here")
     args = ap.parse_args(argv)
+
+    set_color(should_color(args.no_color, sys.stdout, os.environ))
 
     addr = args.addr.lower().removeprefix("0x").zfill(8)
     entries = read_entries(args.ledger)
@@ -336,6 +362,9 @@ def main(argv: list[str] | None = None) -> int:
 
     tc = json.loads(args.toolchain.read_text())
     clang = tc.get("clang", "clang")
+    if not args.build_config.exists():
+        print(f"warning: build config {args.build_config} not found — compiling with no "
+              f"include dirs", file=sys.stderr)
     cflags = (list(tc["cflags"]) + list(tc.get("section_flags", []))
               + include_dirs(args.build_config))
 
@@ -368,8 +397,13 @@ def main(argv: list[str] | None = None) -> int:
         ref_bin = args.ref_bin
     else:
         print(f"reference: dumping blocks -> {args.ref_dir}")
-        dump_blocks_ref(args.nso, args.ref_dir)
-        ref_bin = block_bin(args.ref_dir, entry["block"])
+        try:
+            dump_blocks_ref(args.nso, args.ref_dir)
+            ref_bin = block_bin(args.ref_dir, entry["block"])
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"error: could not obtain reference blocks from {args.nso}: {e}",
+                  file=sys.stderr)
+            return 2
 
     block = ref_bin.read_bytes()
     off = int(addr, 16) - block_start(ref_bin)

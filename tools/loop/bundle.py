@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The context bundle: the model's entire view of one function, generated deterministically.
 
 A *bundle* is everything the local model is shown for one ledger entry — the annotated

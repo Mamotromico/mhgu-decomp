@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The attempt log: an append-only, parent-linked record of every reconstruction attempt.
 
 Every attempt is kept — a near miss is evidence, not waste (``AGENTS.md``) — under the

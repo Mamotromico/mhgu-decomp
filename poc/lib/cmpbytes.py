@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Compare the first N bytes of a compiled .text blob against the real function.
 
 Usage: cmpbytes.py <compiled.bin> <real_text.bin> <real_offset_hex> <nbytes>

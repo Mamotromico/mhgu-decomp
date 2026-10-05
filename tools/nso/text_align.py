@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Align two binaries that are *mostly* identical but shifted by insertions.
 
 A plain byte-for-byte comparison of two NSO `.text` sections is misleading: the update

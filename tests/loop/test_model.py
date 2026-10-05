@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Tests for the model client: pure helpers, plus the HTTP client against a fake server.
 
 No real model and no network beyond loopback. Run with::

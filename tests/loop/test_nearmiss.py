@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Tests for the near-miss bank: closeness, the eval pin, and the strictly-improving upsert.
 
     python3 tests/loop/test_nearmiss.py

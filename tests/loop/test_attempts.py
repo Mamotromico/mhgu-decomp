@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Tests for the attempt log: ids, parent links, candidate blobs, containment. Run with::
 
     python3 tests/loop/test_attempts.py
@@ -99,7 +98,9 @@ class AppendTests(unittest.TestCase):
     def test_latest_for(self):
         append(self.store, {"module": "main", "addr": "601a72e4"})
         append(self.store, {"module": "main", "addr": "601a72e4"})
-        self.assertEqual(latest_for(self.store / "log.jsonl", "main", "601a72e4")["id"], 2)
+        found = latest_for(self.store / "log.jsonl", "main", "601a72e4")
+        assert found is not None
+        self.assertEqual(found["id"], 2)
         self.assertIsNone(latest_for(self.store / "log.jsonl", "main", "60000f8c"))
 
     def test_unsafe_ledger_component_is_refused(self):

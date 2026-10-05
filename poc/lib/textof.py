@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Extract a named ELF section's raw bytes to stdout.
 
 ELF32-LE only (our ARM target). Avoids needing llvm-objcopy, which is absent

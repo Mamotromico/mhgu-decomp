@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Decompress a Nintendo Switch NSO executable (pure Python, no dependencies).
 
 MHGU's ``main`` is an ``NSO0`` image whose ``.text``/``.rodata``/``.data`` sections are

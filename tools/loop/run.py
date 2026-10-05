@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The reconstruction driver: one loop iteration per ledger entry.
 
 It is glue, not a new capability — it wires the already-built, independently-testable parts

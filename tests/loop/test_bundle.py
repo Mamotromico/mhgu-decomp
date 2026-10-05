@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Tests for the context-bundle generator's pure helpers (no Ghidra, no binary).
 
 The impure Ghidra runner is not exercised here; everything it feeds — extent resolution,

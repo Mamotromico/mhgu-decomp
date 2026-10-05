@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Summarise the byte-level difference between two binary sections.
 
 Naive byte-for-byte diffing of two ~20 MB images is unhelpful: a single inserted

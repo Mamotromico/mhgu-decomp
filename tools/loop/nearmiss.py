@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The near-miss bank: the best near-miss per entry, with a strictly-improving upsert.
 
 It is the derived, best-of view over the append-only attempt log (``attempts.py``). Where the

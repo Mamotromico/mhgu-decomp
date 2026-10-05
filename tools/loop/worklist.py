@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The reconstruction loop's queue: the committed ledger, filtered and ordered.
 
 There is **no separate worklist file** (``docs/llm-harness-design.md`` → *Worklist — the
