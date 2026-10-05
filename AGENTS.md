@@ -266,6 +266,9 @@ in the near-miss bank and do not count as byte-matches.
   it.
 - **Near-miss bank**: an attempt that compiles to almost-right bytes is evidence, not
   waste. Record it (distance, what was tried) so it isn't redone.
+- **Tests**: each tool's unit tests live under `tests/<tool>/` as plain `unittest`
+  scripts — stdlib only, each runnable on its own while writing. Run the whole suite with
+  `python3 tools/run_tests.py` (no pytest, no config).
 
 ---
 
