@@ -115,8 +115,7 @@ This corroborates the [`Fexty12573/forge`](https://github.com/Fexty12573/forge) 
 (devkitPro/devkitARM + `switch32.ld`). Do **not** assume the AArch64 SDK default.
 
 The extracted executable is `baserom/main.nso` (git-ignored), a verified `NSO0` image —
-the **latest title update** (`b3935415…645ef`). Base `v0` is retained as
-`baserom/main.v0.nso` (`876b8587…d98b02`). See the target-version note below.
+the **latest title update** (`b3935415…645ef`). See the target-version note below.
 
 Loader-built memory map (base `0x60000000`):
 
