@@ -37,10 +37,10 @@ reconstruction that happens to compile to the original's prefix would match. Dis
 that needs a disassembly-derived function extent (a later milestone); ``--body`` is the escape
 hatch until it lands.
 
-Scope: v0 compares raw bytes. That is exactly correct for a **relocation-free leaf** (nothing
-in it depends on where it is placed). A function whose object carries relocations is reported
-and the raw compare still runs, but a clean match for non-leaves needs the address-agnostic,
-relocation-aware diff (a later milestone).
+Scope: the gate currently compares raw bytes (stage 1). That is exactly correct for a
+**relocation-free leaf** (nothing in it depends on where it is placed). A function whose
+object carries relocations is reported and the raw compare still runs, but a clean match for
+non-leaves needs the address-agnostic, relocation-aware diff (a later milestone).
 
 Usage::
 
@@ -361,8 +361,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"function: {entry['name']}  (object symbol {sym})")
     if has_reloc:
-        print(f"  {DIM}note: object carries relocations — v0 compares raw bytes; a clean "
-              f"match for non-leaves needs the relocation-aware diff{RESET}")
+        print(f"  {DIM}note: object carries relocations — the gate compares raw bytes for "
+              f"now; a clean match for non-leaves needs the relocation-aware diff{RESET}")
 
     if args.ref_bin is not None:
         ref_bin = args.ref_bin
