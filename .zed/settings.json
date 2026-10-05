@@ -13,7 +13,12 @@
       "settings": {
         "basedpyright": {
           "analysis": {
-            "extraPaths": ["tools/ledger"],
+            "extraPaths": [
+              "tools/build",
+              "tools/ledger",
+              "tools/loop",
+              "tools/nso"
+            ],
             "exclude": ["**/baserom/**"]
           }
         }
