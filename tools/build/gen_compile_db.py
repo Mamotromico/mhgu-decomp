@@ -44,6 +44,29 @@ CFG_DEFAULTS = {
 }
 
 
+class ConfigError(Exception):
+    """A config file is missing, unreadable, or not a JSON object."""
+
+
+def load_json(path: Path, what: str) -> dict:
+    """Read a JSON object from ``path``, or raise ``ConfigError`` with a clean message.
+
+    These config files are hand-editable and documented as the source of truth, so a typo
+    should read as ``error: toolchain config …: invalid JSON (line 4, column 3: …)`` rather
+    than a Python traceback.
+    """
+    try:
+        raw = json.loads(path.read_text())
+    except OSError as e:
+        raise ConfigError(f"cannot read {what} {path}: {e.strerror or e}")
+    except json.JSONDecodeError as e:
+        raise ConfigError(f"{what} {path}: invalid JSON "
+                          f"(line {e.lineno}, column {e.colno}: {e.msg})")
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{what} {path}: expected a JSON object")
+    return raw
+
+
 # --- pure helpers (unit-tested) -------------------------------------------------------
 
 def load_build_config(raw: dict) -> dict:
@@ -103,9 +126,12 @@ def render(db: list[dict]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
-    ap.add_argument("--toolchain", type=Path, default=DEFAULT_TOOLCHAIN)
-    ap.add_argument("--build-config", type=Path, default=DEFAULT_BUILD)
+    ap.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER,
+                    help="committed ledger (default config/main/ledger.tsv)")
+    ap.add_argument("--toolchain", type=Path, default=DEFAULT_TOOLCHAIN,
+                    help="pinned compiler flags (default config/toolchain.json)")
+    ap.add_argument("--build-config", type=Path, default=DEFAULT_BUILD,
+                    help="shared build layout constants (default config/build.json)")
     ap.add_argument("--repo", type=Path, default=REPO,
                     help="repo root that source paths are relative to")
     ap.add_argument("--check", action="store_true",
@@ -117,19 +143,32 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: missing {path}", file=sys.stderr)
             return 2
 
-    cfg = load_build_config(json.loads(args.build_config.read_text()))
-    toolchain = json.loads(args.toolchain.read_text())
+    try:
+        cfg = load_build_config(load_json(args.build_config, "build config"))
+        toolchain = load_json(args.toolchain, "toolchain config")
+    except ConfigError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    if not toolchain.get("cflags"):
+        print(f"error: toolchain config {args.toolchain} has no \"cflags\"",
+              file=sys.stderr)
+        return 2
+
+    repo = args.repo.resolve()
     entries = read_entries(args.ledger)
-    db = build_db(args.repo, entries, toolchain, cfg)
+    db = build_db(repo, entries, toolchain, cfg)
     text = render(db)
 
-    out = args.repo / cfg["compile_db"]
+    out = repo / cfg["compile_db"]
     groups = len(function_groups(entries))
     print(f"compile db: {len(db)}/{groups} translation unit(s) have a source")
 
     if args.check:
-        current = out.read_text() if out.exists() else ""
-        if current != text:
+        if not out.exists():
+            print(f"error: {out} is missing — run tools/build/gen_compile_db.py",
+                  file=sys.stderr)
+            return 1
+        if out.read_text() != text:
             print(f"error: {out} is out of date — run tools/build/gen_compile_db.py",
                   file=sys.stderr)
             return 1

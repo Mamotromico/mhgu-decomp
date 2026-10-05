@@ -15,10 +15,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "build"))
 
 from gen_compile_db import (
+    ConfigError,
     build_db,
     compile_command,
     function_groups,
     load_build_config,
+    load_json,
     render,
 )
 
@@ -38,6 +40,39 @@ class LoadBuildConfigTests(unittest.TestCase):
         self.assertEqual(cfg["source_root"], "code")
         self.assertEqual(cfg["include_dirs"], ["inc"])
         self.assertEqual(cfg["object_dir"], "build/obj")  # untouched default
+
+
+class LoadJsonTests(unittest.TestCase):
+    """A malformed config must surface as ConfigError, never a raw traceback."""
+
+    def setUp(self):
+        import tempfile
+        self._dir = tempfile.TemporaryDirectory()
+        self._tmp = Path(self._dir.name)
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def test_reads_object(self):
+        p = self._tmp / "c.json"
+        p.write_text('{"a": 1}')
+        self.assertEqual(load_json(p, "thing"), {"a": 1})
+
+    def test_bad_json_is_config_error(self):
+        p = self._tmp / "c.json"
+        p.write_text("{not json")
+        with self.assertRaises(ConfigError):
+            load_json(p, "thing")
+
+    def test_non_object_is_config_error(self):
+        p = self._tmp / "c.json"
+        p.write_text("[1, 2]")
+        with self.assertRaises(ConfigError):
+            load_json(p, "thing")
+
+    def test_missing_file_is_config_error(self):
+        with self.assertRaises(ConfigError):
+            load_json(self._tmp / "nope.json", "thing")
 
 
 class FunctionGroupsTests(unittest.TestCase):

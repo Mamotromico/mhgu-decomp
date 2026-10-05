@@ -22,6 +22,7 @@ from seed_externals import (
     no_signature_kind,
     param_kind,
     parse,
+    report,
     split_qualified,
     split_top,
     summarize_params,
@@ -128,6 +129,16 @@ class PositionTests(unittest.TestCase):
         s = "f(void (*)(int))"
         end = matching_paren(s, find_params_start(s))
         self.assertEqual(s[end], ")")
+
+
+class ReportTests(unittest.TestCase):
+    def test_demangler_is_surfaced(self):
+        out = report([{"kind": "c-symbol", "decl_hint": ""}], Path("/tmp/out"),
+                     ["llvm-cxxfilt"])
+        self.assertIn("llvm-cxxfilt", out)
+
+    def test_no_demangler_line_without_a_tool(self):
+        self.assertNotIn("demangler", report([], Path("/tmp/out")))
 
 
 if __name__ == "__main__":

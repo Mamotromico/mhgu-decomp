@@ -288,12 +288,15 @@ def build_rows(entries: list[dict], tool: list[str]) -> list[dict]:
     return rows
 
 
-def report(rows: list[dict], out_dir: Path) -> str:
+def report(rows: list[dict], out_dir: Path, tool: list[str] | None = None) -> str:
     kinds: dict[str, int] = {}
     for r in rows:
         kinds[r["kind"]] = kinds.get(r["kind"], 0) + 1
     hinted = sum(1 for r in rows if r["decl_hint"])
-    lines = [f"externals seed: {out_dir}", f"  externals   {len(rows)}"]
+    lines = [f"externals seed: {out_dir}"]
+    if tool:
+        lines.append(f"  demangler   {tool[0]}")
+    lines.append(f"  externals   {len(rows)}")
     for k in sorted(kinds, key=lambda x: (-kinds[x], x)):
         lines.append(f"    {k:<12} {kinds[k]}")
     lines.append(f"  candidates  {hinted} declared in externals.hpp")
@@ -303,8 +306,10 @@ def report(rows: list[dict], out_dir: Path) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
-    ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
+    ap.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER,
+                    help="committed ledger (default config/main/ledger.tsv)")
+    ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR,
+                    help="destination for the generated seed (default include/generated)")
     ap.add_argument("--check", action="store_true",
                     help="exit non-zero if the seed is out of date")
     args = ap.parse_args(argv)
@@ -323,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
         "externals.tsv": render_catalog(rows),
         "externals.hpp": render_header(rows),
     }
-    print(report(rows, args.out_dir))
+    print(report(rows, args.out_dir, tool))
 
     if args.check:
         stale = [n for n, t in files.items()
