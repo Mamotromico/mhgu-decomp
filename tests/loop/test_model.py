@@ -56,7 +56,7 @@ def fake_server(response: dict, status: int = 200, extra_headers: dict | None = 
             self.end_headers()
             self.wfile.write(body)
 
-        def log_message(self, *args):  # silence
+        def log_message(self, format, *args):  # silence
             pass
 
     srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
@@ -192,7 +192,7 @@ class HttpModelTests(unittest.TestCase):
                 self.end_headers()
                 self.wfile.write(body)
 
-            def log_message(self, *a):
+            def log_message(self, format, *a):
                 pass
 
         srv = http.server.HTTPServer(("127.0.0.1", 0), SlowHandler)
@@ -215,7 +215,7 @@ class HttpModelTests(unittest.TestCase):
                 self.end_headers()
                 self.wfile.write(body)
 
-            def log_message(self, *a):
+            def log_message(self, format, *a):
                 pass
 
         srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
@@ -232,14 +232,15 @@ class ProxyHandlerTests(unittest.TestCase):
     def test_none_is_an_explicit_empty_handler(self):
         h = proxy_handler("none")
         self.assertIsInstance(h, urllib.request.ProxyHandler)
-        self.assertEqual(h.proxies, {})
+        self.assertEqual(h.proxies, {})  # type: ignore[attr-defined]
 
     def test_env_defers_to_stock_behaviour(self):
         self.assertIsNone(proxy_handler("env"))
 
     def test_url_applies_to_both_schemes(self):
         h = proxy_handler("http://p:3128")
-        self.assertEqual(h.proxies, {"http": "http://p:3128", "https": "http://p:3128"})
+        self.assertEqual(h.proxies,  # type: ignore[attr-defined]
+                         {"http": "http://p:3128", "https": "http://p:3128"})
 
     def test_scheme_less_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -248,7 +249,7 @@ class ProxyHandlerTests(unittest.TestCase):
 
 class OpenerRoutingTests(unittest.TestCase):
     def handler_names(self, model_: HttpModel) -> list[str]:
-        return [type(h).__name__ for h in model_._opener.handlers]
+        return [type(h).__name__ for h in model_._opener.handlers]  # type: ignore[attr-defined]
 
     def test_proxy_none_ignores_the_environment(self):
         with mock.patch.dict(os.environ, {"http_proxy": "http://p:1"}):

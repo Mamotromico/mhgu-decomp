@@ -60,7 +60,10 @@ def eval_pin(toolchain_path: Path) -> str:
     digest = hashlib.sha256()
     digest.update(METRIC.encode("utf-8"))
     digest.update(b"\x00")
-    digest.update(Path(toolchain_path).read_bytes())
+    try:
+        digest.update(Path(toolchain_path).read_bytes())
+    except OSError as e:
+        raise ValueError(f"{toolchain_path}: cannot read compiler pin: {e}") from e
     return digest.hexdigest()[:16]
 
 
@@ -83,11 +86,14 @@ def empty_bank() -> dict:
 
 
 def load_bank(path: Path) -> dict:
-    """Read the bank; a missing file is an empty bank."""
+    """Read the bank; a missing file is an empty bank. A corrupt file raises ``ValueError``."""
     path = Path(path)
     if not path.exists():
         return empty_bank()
-    return json.loads(path.read_text())
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{path}: corrupt near-miss bank: {e}") from e
 
 
 def save_bank(path: Path, bank: dict) -> None:
@@ -160,7 +166,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--module", default=None)
     args = ap.parse_args(argv)
 
-    bank = load_bank(args.bank)
+    try:
+        bank = load_bank(args.bank)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     records = list(bank.get("records", {}).values())
     if args.module:
         records = [r for r in records if r.get("module") == args.module]

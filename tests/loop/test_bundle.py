@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "loop"))
 
@@ -23,6 +24,7 @@ from bundle import (
     callees,
     format_insn,
     hex_words,
+    is_call,
     literal_slots,
     name_table,
     parse_disasm,
@@ -57,7 +59,7 @@ class ParseInventoryTests(unittest.TestCase):
 
 
 class ResolveBodyTests(unittest.TestCase):
-    SIZES = {"601a72e4": 60}
+    SIZES: ClassVar[dict] = {"601a72e4": 60}
 
     def test_override_wins(self):
         self.assertEqual(resolve_body(entry(), self.SIZES, 42), (42, "override"))
@@ -122,7 +124,7 @@ class LiteralSlotTests(unittest.TestCase):
 
 
 class AnnotateTests(unittest.TestCase):
-    NAMES = {"601a72f4": "loc_target", "60001058": "g_thing"}
+    NAMES: ClassVar[dict] = {"601a72f4": "loc_target", "60001058": "g_thing"}
 
     def read_word(self, addr):
         return {0x60001058: 0x60001060, 0x4: 0xDEADBEEF}.get(addr)
@@ -165,6 +167,29 @@ class CalleesTests(unittest.TestCase):
         self.assertEqual(callees(ins, {"60000690": "func_60000690"}),
                          [("60000690", "func_60000690"), ("607aedcc", "loc_607aedcc")])
 
+    def test_conditional_branches_are_not_calls(self):
+        ins = [
+            {"mnemonic": "ble", "flows": ["601a72f4"]},
+            {"mnemonic": "blt", "flows": ["601a72f8"]},
+            {"mnemonic": "bls", "flows": ["601a72fc"]},
+            {"mnemonic": "blo", "flows": ["601a7300"]},
+        ]
+        self.assertEqual(callees(ins, {}), [])
+
+    def test_conditional_branch_with_link_is_a_call(self):
+        ins = [
+            {"mnemonic": "bleq", "flows": ["60000690"]},
+            {"mnemonic": "blls", "flows": ["60000694"]},
+        ]
+        self.assertEqual(callees(ins, {}),
+                         [("60000690", "loc_60000690"), ("60000694", "loc_60000694")])
+
+    def test_is_call(self):
+        for mnemonic in ("bl", "blx", "bleq", "blxne", "blls", "bl.w", "blxgt"):
+            self.assertTrue(is_call(mnemonic), mnemonic)
+        for mnemonic in ("ble", "blt", "bls", "blo", "b", "bne", "ldr", "<null>"):
+            self.assertFalse(is_call(mnemonic), mnemonic)
+
 
 class HexWordsTests(unittest.TestCase):
     def test_grouping_and_padding(self):
@@ -189,10 +214,10 @@ class FormatInsnTests(unittest.TestCase):
 
 
 class RenderTests(unittest.TestCase):
-    META = {"name": "func_601a72e4", "module": "main", "addr": "601a72e4",
-            "block": ".text", "group": "func_601a72e4", "kind": "function",
-            "body": 60, "extent_source": "inventory", "partition": 1368,
-            "body_hex": "00482de9 0020a0e3", "callees": []}
+    META: ClassVar[dict] = {"name": "func_601a72e4", "module": "main", "addr": "601a72e4",
+                          "block": ".text", "group": "func_601a72e4", "kind": "function",
+                          "body": 60, "extent_source": "inventory", "partition": 1368,
+                          "body_hex": "00482de9 0020a0e3", "callees": []}
 
     def test_deterministic(self):
         ins = parse_disasm("601a72e4\t00482de9\tstmdb\tsp!,{r11,lr}\t\n")

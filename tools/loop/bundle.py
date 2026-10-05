@@ -50,8 +50,8 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "ledger"))
 sys.path.insert(0, str(REPO / "tools" / "loop"))
 
-from ledgerlib import read_entries  # noqa: E402
-import worklist  # noqa: E402
+import worklist
+from ledgerlib import read_entries
 
 DEFAULT_LEDGER = REPO / "config" / "main" / "ledger.tsv"
 DEFAULT_INVENTORY = REPO / "baserom" / "work" / "inventory" / "inventory.tsv"
@@ -124,7 +124,7 @@ def parse_disasm(text: str) -> list[dict]:
     """
     insns: list[dict] = []
     for line in text.splitlines():
-        if not line or line.startswith(";;") or line.startswith("#"):
+        if not line or line.startswith((";;", "#")):
             continue
         fields = line.split("\t")
         if len(fields) < 5:
@@ -176,11 +176,29 @@ def annotate(insns: list[dict], names: dict[str, str], read_word) -> list[dict]:
     return out
 
 
+# Branch-with-link mnemonics are calls; plain conditional branches are not. A ``bl`` prefix
+# would also match ``ble``/``blt``/``bls``/``blo`` (no link register), so the set is explicit.
+# The condition suffix is appended to ``bl``/``blx``; note ``blls``/``bllt``/``blle``/``bllo``
+# are calls while ``bls``/``blt``/``ble``/``blo`` are not.
+_CONDITIONS = ("eq", "ne", "cs", "hs", "cc", "lo", "mi", "pl", "vs", "vc",
+               "hi", "ls", "ge", "lt", "gt", "le", "al")
+CALL_MNEMONICS = frozenset(
+    ["bl", "blx"]
+    + [f"bl{c}" for c in _CONDITIONS]
+    + [f"blx{c}" for c in _CONDITIONS]
+)
+
+
+def is_call(mnemonic: str) -> bool:
+    """Whether a mnemonic is a branch-with-link (a call); tolerates a width/`.w` suffix."""
+    return mnemonic.split(".", 1)[0] in CALL_MNEMONICS
+
+
 def callees(insns: list[dict], names: dict[str, str]) -> list[tuple[str, str]]:
     """Distinct ``(addr, name)`` call targets, in first-seen order (``bl``/``blx`` only)."""
     seen: dict[str, str] = {}
     for ins in insns:
-        if not ins["mnemonic"].startswith("bl"):
+        if not is_call(ins["mnemonic"]):
             continue
         for addr in ins["flows"]:
             seen.setdefault(addr, target_name(addr, names))
@@ -304,7 +322,7 @@ def run_ghidra(nso: Path, req_file: Path, asm_out: Path, ref_dir: Path, project_
     log = project_dir.parent / "bundle.log"
     try:
         with log.open("w") as fh:
-            result = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT)
+            result = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, check=False)
         if result.returncode != 0 or not asm_out.exists():
             tail = log.read_text().splitlines()[-25:]
             raise BundleError(f"Ghidra run failed (see {log}):\n" + "\n".join(tail))
@@ -335,7 +353,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT,
                     help="bundle output dir (git-ignored)")
     ap.add_argument("--ref-dir", type=Path, default=None,
-                    help="block dump dir (default <out>/<module>/<addr>.ref)")
+                    help="block dump dir (default <out>/<module>/<addr>.ref); with --asm it must "
+                         "already hold the *.bin blocks the body bytes are read from")
     ap.add_argument("--body", type=int, default=None,
                     help="authoritative body length in bytes (overrides the inventory)")
     ap.add_argument("--next", action="store_true",
@@ -343,7 +362,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--skip-existing", action="store_true",
                     help="with --next, skip entries whose source already exists")
     ap.add_argument("--asm", type=Path, default=None,
-                    help="precomputed AnnotateFunctions TSV; skips the Ghidra run")
+                    help="precomputed AnnotateFunctions TSV; skips the Ghidra run, but the raw "
+                         "body bytes still come from --ref-dir")
     ap.add_argument("--print", dest="echo", action="store_true",
                     help="also print the bundle to stdout")
     ap.add_argument("--json", action="store_true", help="print a JSON record instead")

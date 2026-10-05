@@ -7,6 +7,9 @@ Pure-function tests only — no ledger, no filesystem, no binary. Run with::
 
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import sys
 import tempfile
 import unittest
@@ -14,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "loop"))
 
-from worklist import allowed, select, sort_key, source_path, source_root
+from worklist import allowed, main, select, sort_key, source_path, source_root
 
 
 def entry(module: str, addr: str, kind: str = "function", verify: str = "none",
@@ -137,6 +140,37 @@ class SourceRootTests(unittest.TestCase):
         path = Path(tempfile.mkdtemp()) / "build.json"
         path.write_text('{"source_root": "code"}')
         self.assertEqual(source_root(path), "code")
+
+    def test_malformed_config_falls_back(self):
+        path = Path(tempfile.mkdtemp()) / "build.json"
+        path.write_text("{not json")
+        self.assertEqual(source_root(path), "src")
+
+
+class MainJsonLimitTests(unittest.TestCase):
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.ledger = Path(self._dir.name) / "ledger.tsv"
+        rows = ["module\taddr\tkind\tverify"]
+        for i in range(25):
+            rows.append(f"main\t6000{i:04x}\tfunction\tnone")
+        self.ledger.write_text("\n".join(rows) + "\n")
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def _run(self, argv: list[str]) -> list:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = main(["--ledger", str(self.ledger), "--json", *argv])
+        self.assertEqual(rc, 0)
+        return json.loads(out.getvalue())
+
+    def test_json_emits_the_whole_queue_by_default(self):
+        self.assertEqual(len(self._run([])), 25)
+
+    def test_explicit_limit_still_applies(self):
+        self.assertEqual(len(self._run(["--limit", "5"])), 5)
 
 
 if __name__ == "__main__":

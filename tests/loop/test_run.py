@@ -20,6 +20,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "loop"))
 
 import attempts
+import bundle
 import model
 import nearmiss
 from run import (
@@ -35,6 +36,7 @@ from run import (
     group_is_single,
     process,
     prompt_fingerprint,
+    resolve_entry,
     safe_draft_path,
     select_next,
 )
@@ -129,6 +131,19 @@ class ArgvTests(unittest.TestCase):
         self.assertIn("601a72e4", argv)
 
 
+class ResolveEntryTests(unittest.TestCase):
+    def test_uses_the_given_module(self):
+        entries = [entry(module="other")]
+        self.assertEqual(resolve_entry(entries, "other", "601a72e4")["module"], "other")
+
+    def test_normalizes_the_address(self):
+        self.assertEqual(resolve_entry([entry()], "main", "0x601A72E4")["addr"], "601a72e4")
+
+    def test_wrong_module_raises(self):
+        with self.assertRaises(bundle.BundleError):
+            resolve_entry([entry()], "other", "601a72e4")
+
+
 class SelectNextTests(unittest.TestCase):
     def setUp(self):
         self._dir = tempfile.TemporaryDirectory()
@@ -141,20 +156,23 @@ class SelectNextTests(unittest.TestCase):
 
     def test_picks_first_by_order(self):
         entries = [entry(addr="601a72e4"), entry(addr="60000024")]
-        self.assertEqual(select_next(entries, self.lay, skip_existing=True, done=set())["addr"],
-                         "60000024")
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set())
+        assert nxt is not None
+        self.assertEqual(nxt["addr"], "60000024")
 
     def test_done_entries_are_skipped(self):
         entries = [entry(addr="60000024"), entry(addr="60000f8c")]
         done = {("main", "60000024")}
-        self.assertEqual(select_next(entries, self.lay, skip_existing=True, done=done)["addr"],
-                         "60000f8c")
+        nxt = select_next(entries, self.lay, skip_existing=True, done=done)
+        assert nxt is not None
+        self.assertEqual(nxt["addr"], "60000f8c")
 
     def test_skip_existing_drops_entries_with_a_source(self):
         (self.tmp / "src" / "main" / "func_60000024.cpp").write_text("x")
         entries = [entry(addr="60000024"), entry(addr="60000f8c")]
-        self.assertEqual(select_next(entries, self.lay, skip_existing=True, done=set())["addr"],
-                         "60000f8c")
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set())
+        assert nxt is not None
+        self.assertEqual(nxt["addr"], "60000f8c")
 
     def test_exhausted_returns_none(self):
         self.assertIsNone(select_next([], self.lay, skip_existing=True, done=set()))
@@ -239,14 +257,18 @@ class ProcessTests(unittest.TestCase):
         self.assertEqual(outcome, "mismatch")
         self.assertFalse(self.draft.exists())
         self.assertEqual(self.log()[0]["outcome"], "mismatch")
-        self.assertEqual(self.bank_best()["closeness"], [2, 3])  # (len delta, divergences)
+        banked = self.bank_best()
+        assert banked is not None
+        self.assertEqual(banked["closeness"], [2, 3])  # (len delta, divergences)
 
     def test_bank_keeps_the_closest_attempt(self):
         with mock.patch("run.run_subprocess", new=fake_gate(1, "mismatch", 2, 55)):
             process(entry(), [entry()], self.lay, self.args, _FakeModel())
         with mock.patch("run.run_subprocess", new=fake_gate(1, "mismatch", 7, 59)):
             process(entry(), [entry()], self.lay, self.args, _FakeModel())
-        self.assertEqual(self.bank_best()["closeness"], [1, 7])  # len delta 1 beats 5
+        banked = self.bank_best()
+        assert banked is not None
+        self.assertEqual(banked["closeness"], [1, 7])  # len delta 1 beats 5
         self.assertEqual([r["parent"] for r in self.log()], [None, 1])
 
     def test_merged_tu_keeps_draft_on_mismatch(self):
@@ -281,7 +303,7 @@ class AttemptEntryTests(unittest.TestCase):
         self.entry = entry()
 
     def _run(self, one):
-        return attempt_entry(self.entry, [], None, self.args, None, one=one)
+        return attempt_entry(self.entry, [], layout(Path("/r/src")), self.args, None, one=one)
 
     def test_stops_on_first_match(self):
         calls = []
@@ -317,6 +339,16 @@ class AttemptEntryTests(unittest.TestCase):
         def one(*_):
             calls.append(1)
             raise model.ModelError("boom")
+
+        self.assertEqual(self._run(one), ("error", 3))
+        self.assertEqual(len(calls), 3)
+
+    def test_attempt_error_is_retried(self):
+        calls = []
+
+        def one(*_):
+            calls.append(1)
+            raise attempts.AttemptError("corrupt log")
 
         self.assertEqual(self._run(one), ("error", 3))
         self.assertEqual(len(calls), 3)

@@ -17,6 +17,7 @@ from attempts import (
     append,
     candidate_relpath,
     latest_for,
+    main,
     next_id,
     parent_for,
     read_attempts,
@@ -106,6 +107,29 @@ class AppendTests(unittest.TestCase):
     def test_unsafe_ledger_component_is_refused(self):
         with self.assertRaises(AttemptError):
             append(self.store, {"module": "main", "addr": "../evil"}, candidate_text="x")
+
+
+class CorruptLogTests(unittest.TestCase):
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.store = Path(self._dir.name)
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def test_read_reports_a_corrupt_line(self):
+        (self.store / "log.jsonl").write_text('{"id": 1}\nnot json\n')
+        with self.assertRaises(AttemptError) as ctx:
+            read_attempts(self.store / "log.jsonl")
+        self.assertIn("corrupt attempt log", str(ctx.exception))
+
+    def test_cli_exits_nonzero_on_a_corrupt_log(self):
+        (self.store / "log.jsonl").write_text("nonsense\n")
+        self.assertEqual(main(["--store", str(self.store)]), 2)
+
+    def test_append_requires_module_and_addr(self):
+        with self.assertRaises(AttemptError):
+            append(self.store, {})
 
 
 if __name__ == "__main__":

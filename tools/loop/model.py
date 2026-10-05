@@ -300,10 +300,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: missing {args.config} (or pass --base-url/--endpoint)", file=sys.stderr)
         return 2
 
-    model = from_config(args.config, override_base_url=args.base_url,
-                        override_model=args.model, override_endpoint=args.endpoint,
-                        override_proxy=args.proxy, override_timeout=args.timeout,
-                        override_temperature=args.temperature, override_seed=args.seed)
+    try:
+        model = from_config(args.config, override_base_url=args.base_url,
+                            override_model=args.model, override_endpoint=args.endpoint,
+                            override_proxy=args.proxy, override_timeout=args.timeout,
+                            override_temperature=args.temperature, override_seed=args.seed)
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"error: bad model config: {e}", file=sys.stderr)
+        return 2
     print(f"endpoint: {model.endpoint}  model: {model.model}")
     try:
         result = model.complete(prompt)

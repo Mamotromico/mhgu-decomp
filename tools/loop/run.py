@@ -42,7 +42,6 @@ import argparse
 import contextlib
 import hashlib
 import json
-import shutil
 import subprocess
 import sys
 import threading
@@ -53,12 +52,12 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "ledger"))
 sys.path.insert(0, str(REPO / "tools" / "loop"))
 
-import attempts  # noqa: E402
-import bundle  # noqa: E402
-import model as model_client  # noqa: E402
-import nearmiss  # noqa: E402
-import worklist  # noqa: E402
-from ledgerlib import entry_key, read_entries  # noqa: E402
+import attempts
+import bundle
+import model as model_client
+import nearmiss
+import worklist
+from ledgerlib import entry_key, read_entries
 
 BYTEGATE = REPO / "tools" / "ledger" / "bytegate.py"
 BUNDLE = REPO / "tools" / "loop" / "bundle.py"
@@ -217,10 +216,15 @@ def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
     return None
 
 
+def resolve_entry(entries: list[dict], module: str, addr: str) -> dict:
+    """Find the ``--entry`` target; ``addr`` is normalized, ``module`` defaults to main."""
+    return bundle.find_entry(entries, module, addr.lower().removeprefix("0x").zfill(8))
+
+
 # --- impure steps ---------------------------------------------------------------------
 
 def run_subprocess(argv: list[str]) -> tuple[int, str]:
-    result = subprocess.run(argv, cwd=REPO, capture_output=True, text=True)
+    result = subprocess.run(argv, cwd=REPO, capture_output=True, text=True, check=False)
     return result.returncode, result.stdout + result.stderr
 
 
@@ -254,7 +258,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="sampling temperature override (omit to use the server/preset default)")
     ap.add_argument("--seed", type=int, default=None, help="sampling seed override (optional)")
     ap.add_argument("--body", type=int, default=None)
-    ap.add_argument("--entry", default=None, help="target one ledger address")
+    ap.add_argument("--module", default="main", help="module for --entry (default: main)")
+    ap.add_argument("--entry", default=None, help="target one ledger address (in --module)")
     ap.add_argument("--limit", type=int, default=1, help="entries to process (default 1)")
     ap.add_argument("--attempts", type=int, default=1,
                     help="attempts per entry, stopping early on a match (default 1)")
@@ -280,9 +285,8 @@ def main(argv: list[str] | None = None) -> int:
     targets: list[dict] = []
     done: set[tuple[str, str]] = set()
     if args.entry:
-        addr = args.entry.lower().removeprefix("0x").zfill(8)
         try:
-            targets = [bundle.find_entry(entries, "main", addr)]
+            targets = [resolve_entry(entries, args.module, args.entry)]
         except bundle.BundleError as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
@@ -456,7 +460,8 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
     for _ in range(max(1, args.attempts)):
         try:
             outcome = one(entry, entries, layout, args, model)
-        except (bundle.BundleError, model_client.ModelError, ValueError) as e:
+        except (attempts.AttemptError, bundle.BundleError, model_client.ModelError,
+                ValueError) as e:
             print(f"error: {entry['name']}: {e}", file=sys.stderr)
             outcome = "error"
         used += 1

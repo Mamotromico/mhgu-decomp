@@ -35,7 +35,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "ledger"))
 
-from ledgerlib import read_entries  # noqa: E402
+from ledgerlib import read_entries
 
 DEFAULT_LEDGER = REPO / "config" / "main" / "ledger.tsv"
 DEFAULT_BUILD_CONFIG = REPO / "config" / "build.json"
@@ -114,11 +114,15 @@ def source_root(build_config: Path, default: str = "src") -> str:
     """The source-root name from the shared build layout (``config/build.json``).
 
     Read inline, matching the byte gate's precedent, so both agree on the one shared file
-    rather than on a loader.
+    rather than on a loader. A missing or malformed file falls back to ``default``.
     """
     if not build_config.exists():
         return default
-    return json.loads(build_config.read_text()).get("source_root", default)
+    try:
+        return json.loads(build_config.read_text()).get("source_root", default)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"warning: {build_config}: {e}; using source root {default!r}", file=sys.stderr)
+        return default
 
 
 # --- CLI ------------------------------------------------------------------------------
@@ -143,8 +147,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="repo root the source root is relative to")
     ap.add_argument("--skip-existing", action="store_true",
                     help="drop entries whose translation unit src/<module>/<group>.cpp exists")
-    ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
-                    help="max rows to print; 0 = all (default: 20)")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="max rows to print; 0 = all (default: 20, or all with --json)")
     ap.add_argument("--next", action="store_true",
                     help="print only the next entry as 'module<TAB>addr<TAB>name'")
     ap.add_argument("--json", action="store_true", help="emit the selected entries as JSON")
@@ -153,8 +157,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.ledger.exists():
         print(f"error: missing ledger {args.ledger}", file=sys.stderr)
         return 2
-    if args.limit < 0:
+    if args.limit is not None and args.limit < 0:
         ap.error("--limit must be >= 0")
+    # --json is machine-readable and defaults to the whole selection; the text view defaults
+    # to a readable 20 rows. An explicit --limit always wins.
+    limit = args.limit if args.limit is not None else (0 if args.json else DEFAULT_LIMIT)
 
     entries = read_entries(args.ledger)
     drop = None
@@ -172,11 +179,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.json:
-        shown = queue if args.limit == 0 else queue[:args.limit]
+        shown = queue if limit == 0 else queue[:limit]
         print(json.dumps(shown, indent=2, ensure_ascii=False))
         return 0
 
-    shown = queue if args.limit == 0 else queue[:args.limit]
+    shown = queue if limit == 0 else queue[:limit]
     print(f"worklist: {len(queue)} entr{'y' if len(queue) == 1 else 'ies'} "
           f"(kind={args.kind}, verify={args.verify}"
           + (f", module={args.module}" if args.module else "")

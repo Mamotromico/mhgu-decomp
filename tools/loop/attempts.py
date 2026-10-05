@@ -72,14 +72,22 @@ def parent_for(records: list[dict], module: str, addr: str) -> int | None:
 
 
 def read_attempts(log_path: Path) -> list[dict]:
-    """All attempts, oldest first. A missing log is an empty log."""
+    """All attempts, oldest first. A missing log is an empty log.
+
+    Raises ``AttemptError`` on a corrupt line rather than a raw ``JSONDecodeError``, so callers
+    (and the CLI) can report it cleanly.
+    """
     log_path = Path(log_path)
     if not log_path.exists():
         return []
     records = []
-    for line in log_path.read_text().splitlines():
-        if line.strip():
+    for lineno, line in enumerate(log_path.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
             records.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            raise AttemptError(f"{log_path}:{lineno}: corrupt attempt log: {e}") from e
     return records
 
 
@@ -100,7 +108,9 @@ def append(store_dir: Path, record: dict, candidate_text: str | None = None, *,
     log_path = store_dir / "log.jsonl"
     records = read_attempts(log_path)
 
-    module, addr = record["module"], record["addr"]
+    module, addr = record.get("module"), record.get("addr")
+    if not module or addr is None:
+        raise AttemptError(f"attempt record missing module/addr: {record!r}")
     attempt_id = next_id(records)
 
     stored = dict(record)
@@ -153,7 +163,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--entry", default=None, help="restrict to one ledger address")
     args = ap.parse_args(argv)
 
-    records = read_attempts(args.store / "log.jsonl")
+    try:
+        records = read_attempts(args.store / "log.jsonl")
+    except AttemptError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     if args.module:
         records = [r for r in records if r.get("module") == args.module]
     if args.entry:

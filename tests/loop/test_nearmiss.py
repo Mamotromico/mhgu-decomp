@@ -20,6 +20,7 @@ from nearmiss import (
     eval_pin,
     key,
     load_bank,
+    main,
     record,
     save_bank,
     upsert,
@@ -62,6 +63,10 @@ class EvalPinTests(unittest.TestCase):
     def test_depends_on_metric_definition(self):
         self.assertIn("closeness", METRIC)
 
+    def test_missing_toolchain_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            eval_pin(self.tmp / "missing.json")
+
 
 class KeyTests(unittest.TestCase):
     def test_key(self):
@@ -75,14 +80,18 @@ class UpsertTests(unittest.TestCase):
         bank, result = upsert(empty_bank(), "main", "a", [3, 1], self.PIN)
         self.assertTrue(result["updated"])
         self.assertEqual(result["reason"], "new")
-        self.assertEqual(best(bank, "main", "a", self.PIN)["closeness"], [3, 1])
+        rec = best(bank, "main", "a", self.PIN)
+        assert rec is not None
+        self.assertEqual(rec["closeness"], [3, 1])
 
     def test_improvement_replaces(self):
         bank, _ = upsert(empty_bank(), "main", "a", [5, 2], self.PIN)
         bank, result = upsert(bank, "main", "a", [3, 0], self.PIN)
         self.assertTrue(result["updated"])
         self.assertEqual(result["reason"], "improved")
-        self.assertEqual(best(bank, "main", "a", self.PIN)["closeness"], [3, 0])
+        rec = best(bank, "main", "a", self.PIN)
+        assert rec is not None
+        self.assertEqual(rec["closeness"], [3, 0])
 
     def test_equal_or_worse_is_kept(self):
         bank, _ = upsert(empty_bank(), "main", "a", [3, 0], self.PIN)
@@ -91,7 +100,9 @@ class UpsertTests(unittest.TestCase):
         bank, result = upsert(bank, "main", "a", [4, 0], self.PIN)   # worse
         self.assertFalse(result["updated"])
         self.assertEqual(result["reason"], "not-improved")
-        self.assertEqual(best(bank, "main", "a", self.PIN)["closeness"], [3, 0])
+        rec = best(bank, "main", "a", self.PIN)
+        assert rec is not None
+        self.assertEqual(rec["closeness"], [3, 0])
 
     def test_different_pin_is_not_comparable_and_warns(self):
         bank, _ = upsert(empty_bank(), "main", "a", [1, 0], "pin-a")
@@ -105,6 +116,7 @@ class UpsertTests(unittest.TestCase):
         bank, _ = upsert(empty_bank(), "main", "a", [3, 0], self.PIN, name="func_a",
                          attempt_id=7)
         rec = best(bank, "main", "a", self.PIN)
+        assert rec is not None
         self.assertEqual((rec["name"], rec["attempt_id"]), ("func_a", 7))
 
 
@@ -118,6 +130,15 @@ class BankIoTests(unittest.TestCase):
 
     def test_missing_bank_is_empty(self):
         self.assertEqual(load_bank(self.path), {"metric": METRIC, "records": {}})
+
+    def test_corrupt_bank_raises_value_error(self):
+        self.path.write_text("{not json")
+        with self.assertRaises(ValueError):
+            load_bank(self.path)
+
+    def test_cli_exits_nonzero_on_a_corrupt_bank(self):
+        self.path.write_text("bad")
+        self.assertEqual(main(["--bank", str(self.path)]), 2)
 
     def test_save_load_round_trip(self):
         bank, _ = upsert(empty_bank(), "main", "a", [2, 1], "p")
@@ -133,10 +154,14 @@ class BankIoTests(unittest.TestCase):
 
     def test_record_persists_only_improvements(self):
         record(self.path, "main", "a", [3, 0], "p")
-        self.assertEqual(best(load_bank(self.path), "main", "a", "p")["closeness"], [3, 0])
+        rec = best(load_bank(self.path), "main", "a", "p")
+        assert rec is not None
+        self.assertEqual(rec["closeness"], [3, 0])
         result = record(self.path, "main", "a", [4, 0], "p")
         self.assertFalse(result["updated"])
-        self.assertEqual(best(load_bank(self.path), "main", "a", "p")["closeness"], [3, 0])
+        rec = best(load_bank(self.path), "main", "a", "p")
+        assert rec is not None
+        self.assertEqual(rec["closeness"], [3, 0])
 
     def test_record_warns_on_pin_change(self):
         record(self.path, "main", "a", [1, 0], "p1")
