@@ -25001,7 +25001,7 @@ main	6069e480	function	func_6069e480	.text	func_6069e480	92	generated		0	none	ge
 main	6069e4dc	function	func_6069e4dc	.text	func_6069e4dc	132	generated		0	none	generated	rombytes
 main	6069e560	function	func_6069e560	.text	func_6069e560	260	generated		0	none	generated	rombytes
 main	6069e664	function	func_6069e664	.text	func_6069e664	140	generated		0	none	generated	rombytes
-main	6069e6f0	function	func_6069e6f0	.text	func_6069e6f0	100	generated		0	match	generated	rombytes
+main	6069e6f0	function	func_6069e6f0	.text	func_6069e6f0	100	generated		0	none	generated	rombytes
 main	6069e754	data	D_6069e754	.text	D_6069e754	20	generated		0	none	generated	rombytes
 main	6069e768	data	D_6069e768	.text	D_6069e768	16	generated		0	none	generated	rombytes
 main	6069e778	data	D_6069e778	.text	D_6069e778	16	generated		0	none	generated	rombytes
@@ -25013,7 +25013,7 @@ main	6069e93c	function	func_6069e93c	.text	func_6069e93c	100	generated		0	none	g
 main	6069e9a0	function	func_6069e9a0	.text	func_6069e9a0	92	generated		0	none	generated	rombytes
 main	6069e9fc	function	func_6069e9fc	.text	func_6069e9fc	132	generated		0	none	generated	rombytes
 main	6069ea80	function	func_6069ea80	.text	func_6069ea80	152	generated		0	none	generated	rombytes
-main	6069eb18	function	func_6069eb18	.text	func_6069eb18	76	generated		0	match	generated	rombytes
+main	6069eb18	function	func_6069eb18	.text	func_6069eb18	76	generated		0	none	generated	rombytes
 main	6069eb64	data	D_6069eb64	.text	D_6069eb64	20	generated		0	none	generated	rombytes
 main	6069eb78	data	D_6069eb78	.text	D_6069eb78	16	generated		0	none	generated	rombytes
 main	6069eb88	data	D_6069eb88	.text	D_6069eb88	16	generated		0	none	generated	rombytes
@@ -38324,7 +38324,7 @@ main	60c6ff88	data	D_60c6ff88	.text	D_60c6ff88	24	generated		0	none	generated	ro
 main	60c6ffa0	function	func_60c6ffa0	.text	func_60c6ffa0	60	generated		0	none	generated	rombytes
 main	60c6ffdc	function	func_60c6ffdc	.text	func_60c6ffdc	44	generated		0	none	generated	rombytes
 main	60c70008	function	func_60c70008	.text	func_60c70008	8	generated		0	none	generated	rombytes
-main	60c70010	function	func_60c70010	.text	func_60c70010	28	generated		0	match	generated	rombytes
+main	60c70010	function	func_60c70010	.text	func_60c70010	28	generated		0	none	generated	rombytes
 main	60c7002c	function	func_60c7002c	.text	func_60c7002c	56	generated		0	none	generated	rombytes
 main	60c70064	function	func_60c70064	.text	func_60c70064	60	generated		0	none	generated	rombytes
 main	60c700a0	function	func_60c700a0	.text	func_60c700a0	4	generated		0	none	generated	rombytes
