@@ -36,12 +36,39 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${HERE}/../.." && pwd)"
 
+usage() {
+  cat <<'EOF'
+Usage: inventory.sh [--reanalyze] [path/to/main.nso]
+
+Run a full Ghidra auto-analysis (cached under baserom/ghidra/) and export the
+post-analysis symbol universe as deterministic TSVs under baserom/work/inventory/.
+
+  --reanalyze  re-run auto-analysis over the cached program before exporting
+               (required once if the project was imported without analysis)
+  <nso>        NSO image (default baserom/main.nso)
+
+Env:
+  GHIDRA_HOME  Ghidra install (default /opt/ghidra)
+  INV_WORK     export output dir (default baserom/work/inventory)
+  PROGRAM      cached program name (default: the NSO's basename)
+EOF
+}
+
+die() { echo "error: $*" >&2; exit 1; }
+
 REANALYZE=0
-if [ "${1:-}" = "--reanalyze" ]; then
-  REANALYZE=1
-  shift
-fi
-NSO="${1:-${ROOT}/baserom/main.nso}"
+POS=()
+for arg in "$@"; do
+  case "${arg}" in
+    -h|--help) usage; exit 0 ;;
+    --reanalyze) REANALYZE=1 ;;
+    -*) echo "error: unknown option: ${arg}" >&2; usage >&2; exit 2 ;;
+    *) POS+=("${arg}") ;;
+  esac
+done
+[ "${#POS[@]}" -le 1 ] || die "too many arguments (see --help)"
+
+NSO="${POS[0]:-${ROOT}/baserom/main.nso}"
 
 GHIDRA_HOME="${GHIDRA_HOME:-/opt/ghidra}"
 WORK="${INV_WORK:-${ROOT}/baserom/work/inventory}"
@@ -51,8 +78,6 @@ PROGRAM="${PROGRAM:-$(basename "${NSO}")}"
 
 # Full analysis over a ~14 MB image overruns Ghidra's 2G headless default.
 export GHIDRA_HEADLESS_MAXMEM="${GHIDRA_HEADLESS_MAXMEM:-8G}"
-
-die() { echo "error: $*" >&2; exit 1; }
 
 [ -f "${NSO}" ] || die "NSO not found: ${NSO} (pass a path, or place it at baserom/main.nso)"
 [ -x "${GHIDRA_HOME}/support/analyzeHeadless" ] || die "Ghidra not found at ${GHIDRA_HOME}"
@@ -75,7 +100,7 @@ if [ -d "${PROJ_LOC}/${PROJ_NAME}.rep" ]; then
       -scriptPath "${HERE}" \
       -postScript InventoryExport.java "${WORK}" \
       > "${WORK}/inventory.log" 2>&1 \
-      || { tail -n 40 "${WORK}/inventory.log"; die "Ghidra run failed (see ${WORK}/inventory.log)"; }
+      || { tail -n 40 "${WORK}/inventory.log" >&2; die "Ghidra run failed (see ${WORK}/inventory.log)"; }
   else
     # Warm export only reads the cached program, so open it read-only: no save is
     # attempted (the export never mutates the program), which removes the post-run
@@ -85,9 +110,12 @@ if [ -d "${PROJ_LOC}/${PROJ_NAME}.rep" ]; then
       -scriptPath "${HERE}" \
       -postScript InventoryExport.java "${WORK}" \
       > "${WORK}/inventory.log" 2>&1 \
-      || { tail -n 40 "${WORK}/inventory.log"; die "Ghidra run failed (see ${WORK}/inventory.log)"; }
+      || { tail -n 40 "${WORK}/inventory.log" >&2; die "Ghidra run failed (see ${WORK}/inventory.log)"; }
   fi
 else
+  if [ "${REANALYZE}" -eq 1 ]; then
+    echo "note: --reanalyze has no effect on a cold run (no cached project; analysis is implied)" >&2
+  fi
   echo "Soaratorium inventory (cold: import + full auto-analysis — this is slow)"
   echo "  NSO:     ${NSO}"
   echo "  project: ${PROJ_LOC}/${PROJ_NAME}"
@@ -98,7 +126,16 @@ else
     -scriptPath "${HERE}" \
     -postScript InventoryExport.java "${WORK}" \
     > "${WORK}/inventory.log" 2>&1 \
-    || { tail -n 40 "${WORK}/inventory.log"; die "Ghidra run failed (see ${WORK}/inventory.log)"; }
+    || { tail -n 40 "${WORK}/inventory.log" >&2; die "Ghidra run failed (see ${WORK}/inventory.log)"; }
+fi
+
+# A header-only (or missing) inventory means the export found no functions — the
+# classic "warm run over an un-analysed program" failure. Refuse to present it as success.
+if [ ! -s "${WORK}/inventory.tsv" ] || [ "$(wc -l < "${WORK}/inventory.tsv")" -lt 2 ]; then
+  echo "error: no functions in ${WORK}/inventory.tsv" >&2
+  echo "       the cached program may be un-analysed — re-run with --reanalyze" >&2
+  tail -n 20 "${WORK}/inventory.log" >&2
+  exit 1
 fi
 
 echo

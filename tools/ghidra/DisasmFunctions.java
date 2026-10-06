@@ -31,7 +31,13 @@ public class DisasmFunctions extends GhidraScript {
             return;
         }
 
-        int maxInsns = Integer.parseInt(args[2]);
+        int maxInsns;
+        try {
+            maxInsns = Integer.parseInt(args[2]);
+        } catch (NumberFormatException e) {
+            printerr("maxInsns must be an integer: " + args[2]);
+            return;
+        }
         try (BufferedReader in = new BufferedReader(new FileReader(args[0]));
              PrintWriter out = new PrintWriter(args[1])) {
 
@@ -41,8 +47,14 @@ public class DisasmFunctions extends GhidraScript {
                 if (line.isEmpty() || line.startsWith("#")) {
                     continue;
                 }
-                Address start = toAddr(Long.parseUnsignedLong(
-                        line.replaceFirst("^0[xX]", ""), 16));
+                Address start;
+                try {
+                    start = toAddr(Long.parseUnsignedLong(
+                            line.replaceFirst("^0[xX]", ""), 16));
+                } catch (NumberFormatException e) {
+                    out.println(";; malformed address: " + line);
+                    continue;
+                }
                 if (start == null || !currentProgram.getMemory().contains(start)) {
                     out.println(";; " + line + "  (no memory)");
                     continue;

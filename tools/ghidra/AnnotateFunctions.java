@@ -60,10 +60,27 @@ public class AnnotateFunctions extends GhidraScript {
                     out.println(";; malformed request: " + line);
                     continue;
                 }
-                long start = Long.parseUnsignedLong(parts[0].replaceFirst("^0[xX]", ""), 16);
-                long length = parseLength(parts[1]);
+                long start;
+                long length;
+                try {
+                    start = Long.parseUnsignedLong(parts[0].replaceFirst("^0[xX]", ""), 16);
+                    length = parseLength(parts[1]);
+                } catch (NumberFormatException e) {
+                    out.println(";; malformed request: " + line);
+                    continue;
+                }
                 Address cur = toAddr(start);
-                Address end = cur.add(length);
+                Address end;
+                try {
+                    if (cur == null) {
+                        out.println(";; bad address: " + line);
+                        continue;
+                    }
+                    end = cur.add(length);
+                } catch (Exception e) {
+                    out.println(";; request out of range: " + line);
+                    continue;
+                }
 
                 while (cur.compareTo(end) < 0) {
                     if (!mem.contains(cur)) {
