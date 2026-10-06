@@ -11,11 +11,12 @@ images differ:
 
 Usage::
 
-    python3 tools/nso/compare_sections.py <a.bin> <b.bin> [block_size=N]
+    python3 tools/nso/compare_sections.py <a.bin> <b.bin> [--block-size N] [--runs N]
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -41,10 +42,11 @@ def common_suffix(a: bytes, b: bytes) -> int:
 def differing_bytes(a: bytes, b: bytes) -> int:
     """Count differing byte positions over the overlapping prefix of the two inputs."""
     n = min(len(a), len(b))
+    if n == 0:
+        return 0
     xor = int.from_bytes(a[:n], "big") ^ int.from_bytes(b[:n], "big")
-    total = xor.to_bytes((xor.bit_length() + 7) // 8 or 1, "big")
-    # `total` may be shorter than n (leading zero bytes); those bytes are equal.
-    return n - total.count(0)
+    # Left-pad the XOR to exactly n bytes; non-zero bytes are the differing positions.
+    return n - xor.to_bytes(n, "big").count(0)
 
 
 def run_blocks(a: bytes, b: bytes, block: int) -> list[tuple[int, int]]:
@@ -65,19 +67,26 @@ def run_blocks(a: bytes, b: bytes, block: int) -> list[tuple[int, int]]:
     return runs
 
 
-def main(argv: list[str]) -> int:
-    args = [a for a in argv[1:] if not a.startswith("block_size=")]
-    block = DEFAULT_BLOCK
-    for a in argv[1:]:
-        if a.startswith("block_size="):
-            block = int(a.split("=", 1)[1], 0)
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("a", type=Path, help="first section (base)")
+    ap.add_argument("b", type=Path, help="second section (update)")
+    ap.add_argument("--block-size", type=lambda s: int(s, 0), default=DEFAULT_BLOCK,
+                    help=f"block size for the map, in bytes (default: {DEFAULT_BLOCK:#x})")
+    ap.add_argument("--runs", type=int, default=30,
+                    help="max differing block runs to list (default: 30)")
+    args = ap.parse_args(argv)
+    if args.block_size <= 0:
+        ap.error("--block-size must be positive")
 
-    if len(args) != 2:
-        print(__doc__)
-        return 2
-
-    pa, pb = Path(args[0]), Path(args[1])
-    a, b = pa.read_bytes(), pb.read_bytes()
+    try:
+        pa, pb = args.a, args.b
+        a, b = pa.read_bytes(), pb.read_bytes()
+    except OSError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    block = args.block_size
     n = min(len(a), len(b))
 
     print(f"A: {pa}  ({len(a)} bytes / 0x{len(a):x})")
@@ -94,19 +103,18 @@ def main(argv: list[str]) -> int:
     print(f"common suffix: 0x{suf:x} ({suf} bytes)")
 
     changed = differing_bytes(a, b)
-    print(f"differing bytes over overlap ({n} bytes): {changed} "
-          f"({100.0 * changed / n:.2f}%)")
+    pct = 100.0 * changed / n if n else 0.0
+    print(f"differing bytes over overlap ({n} bytes): {changed} ({pct:.2f}%)")
 
     runs = run_blocks(a, b, block)
-    print(f"differing {block:#x}-byte blocks: {len(runs)} "
-          f"of {(n + block - 1) // block}")
-    print("first 30 differing block runs:")
-    for start, end in runs[:30]:
+    print(f"differing {block:#x}-byte blocks: {len(runs)} of {(n + block - 1) // block}")
+    print(f"first {args.runs} differing block runs:")
+    for start, end in runs[:args.runs]:
         print(f"  0x{start:08x} .. 0x{end:08x}  ({end - start} bytes)")
-    if len(runs) > 30:
-        print(f"  ... and {len(runs) - 30} more")
+    if len(runs) > args.runs:
+        print(f"  ... and {len(runs) - args.runs} more")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    raise SystemExit(main())

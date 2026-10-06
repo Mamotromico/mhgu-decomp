@@ -21,6 +21,7 @@ Usage::
 
 from __future__ import annotations
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -37,6 +38,8 @@ def match_len(a: bytes, b: bytes, i: int, j: int) -> int:
     step = 64
     while lo < n and a[i + lo : i + lo + step] == b[j + lo : j + lo + step]:
         lo += step
+    # A final truncated window can overshoot n by up to step-1; clamp before the search.
+    lo = min(lo, n)
     hi = min(n, lo + step)
     while lo < hi:
         mid = (lo + hi + 1) // 2
@@ -135,20 +138,29 @@ def _make_progress(label: str):
     return report
 
 
-def main(argv: list[str]) -> int:
-    args = [a for a in argv[1:] if not a.startswith("--")]
-    opts = {a.split("=")[0]: a.split("=")[1] for a in argv[1:] if a.startswith("--") and "=" in a}
-    min_match = int(opts.get("--min-match", MIN_MATCH))
-    window = int(opts.get("--window", WINDOW))
-    if len(args) != 2:
-        print(__doc__)
-        return 2
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("a", type=Path, help="base section (A)")
+    ap.add_argument("b", type=Path, help="update section (B)")
+    ap.add_argument("--min-match", type=int, default=MIN_MATCH,
+                    help=f"anchor run length required to resync (default: {MIN_MATCH})")
+    ap.add_argument("--window", type=int, default=WINDOW,
+                    help=f"max look-ahead for an anchor (default: {WINDOW})")
+    args = ap.parse_args(argv)
+    if args.min_match <= 0 or args.window <= 0:
+        ap.error("--min-match and --window must be positive")
 
-    a = Path(args[0]).read_bytes()
-    b = Path(args[1]).read_bytes()
-    print(f"aligning {len(a)} B (A) vs {len(b)} B (B), min-match={min_match} window={window}",
-          file=sys.stderr, flush=True)
-    events = align(a, b, min_match, window, progress=_make_progress("align"))
+    try:
+        a = args.a.read_bytes()
+        b = args.b.read_bytes()
+    except OSError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    print(f"aligning {len(a)} B (A) vs {len(b)} B (B), min-match={args.min_match} "
+          f"window={args.window}", file=sys.stderr, flush=True)
+    events = align(a, b, args.min_match, args.window, progress=_make_progress("align"))
     if sys.stderr.isatty():
         sys.stderr.write("\n")
 
@@ -158,12 +170,14 @@ def main(argv: list[str]) -> int:
 
     n = min(len(a), len(b))
     changed = totals.get("insert", 0) + totals.get("delete", 0) + totals.get("substitute", 0)
-    print(f"A: {args[0]}  ({len(a)} bytes)")
-    print(f"B: {args[1]}  ({len(b)} bytes)")
-    print(f"identical content: ~{n - changed if changed < n else 0} bytes "
-          f"of {n} overlap ({100.0 * max(0, n - changed) / n:.2f}%)")
+    same = max(0, n - changed)
+    print(f"A: {args.a}  ({len(a)} bytes)")
+    print(f"B: {args.b}  ({len(b)} bytes)")
+    print(f"identical content: ~{same} bytes of {n} overlap "
+          f"({100.0 * same / n if n else 0.0:.2f}%)")
     for kind in ("insert", "delete", "substitute"):
-        print(f"  {kind:11} {totals.get(kind, 0):7d} bytes in {sum(1 for e in events if e['type'] == kind)} regions")
+        regions = sum(1 for e in events if e["type"] == kind)
+        print(f"  {kind:11} {totals.get(kind, 0):7d} bytes in {regions} regions")
 
     big = sorted(events, key=lambda e: -e["len"])[:15]
     print("largest change regions (base offset, update offset, length):")
@@ -173,4 +187,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    raise SystemExit(main())

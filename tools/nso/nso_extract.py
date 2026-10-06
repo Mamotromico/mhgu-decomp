@@ -19,6 +19,7 @@ prints the layout plus a SHA-256 for each section.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import struct
 import sys
@@ -45,6 +46,8 @@ def _u32(data: bytes, offset: int) -> int:
 def read_header(data: bytes) -> dict:
     if data[:4] != b"NSO0":
         raise NsoError(f"not an NSO0 image (magic {data[:4]!r})")
+    if len(data) < COMPRESSED_SIZE_BASE + 4 * len(SECTIONS):
+        raise NsoError(f"truncated NSO header ({len(data)} bytes)")
     sections = []
     for i, name in enumerate(SECTIONS):
         base = SECTION_DESCRIPTOR_BASE + SECTION_DESCRIPTOR_STRIDE * i
@@ -68,10 +71,19 @@ def read_header(data: bytes) -> dict:
 
 
 def lz4_block_decompress(src: bytes, expected_size: int | None = None) -> bytes:
-    """Decode a raw LZ4 block (as opposed to an LZ4 frame)."""
+    """Decode a raw LZ4 block (as opposed to an LZ4 frame).
+
+    Raises ``NsoError`` on a truncated or otherwise malformed block rather than an
+    ``IndexError``, so a corrupt image is reported cleanly.
+    """
     out = bytearray()
     i = 0
     n = len(src)
+
+    def need(count: int) -> None:
+        if i + count > n:
+            raise NsoError(f"truncated LZ4 block ({n} bytes)")
+
     while i < n:
         token = src[i]
         i += 1
@@ -79,11 +91,13 @@ def lz4_block_decompress(src: bytes, expected_size: int | None = None) -> bytes:
         literal_len = token >> 4
         if literal_len == 15:
             while True:
+                need(1)
                 extra = src[i]
                 i += 1
                 literal_len += extra
                 if extra != 0xFF:
                     break
+        need(literal_len)
         out += src[i : i + literal_len]
         i += literal_len
 
@@ -91,6 +105,7 @@ def lz4_block_decompress(src: bytes, expected_size: int | None = None) -> bytes:
         if i >= n:
             break
 
+        need(2)
         offset = src[i] | (src[i + 1] << 8)
         i += 2
         if offset == 0:
@@ -99,6 +114,7 @@ def lz4_block_decompress(src: bytes, expected_size: int | None = None) -> bytes:
         match_len = token & 0x0F
         if match_len == 15:
             while True:
+                need(1)
                 extra = src[i]
                 i += 1
                 match_len += extra
@@ -127,28 +143,39 @@ def extract(path: Path) -> dict:
     result = {**header, "path": str(path), "compressed": compressed, "data": {}}
 
     for section in header["sections"]:
+        name = section["name"]
         start = section["file_offset"]
         size = section["size"]
+        need = section["compressed_size"] if compressed else size
+        if start + need > len(data):
+            raise NsoError(
+                f"section {name} ({need} bytes at 0x{start:x}) extends past the end of the "
+                f"{len(data)}-byte image")
         if compressed:
             blob = data[start : start + section["compressed_size"]]
             payload = lz4_block_decompress(blob, size)
         else:
             payload = data[start : start + size]
-        result["data"][section["name"]] = payload
+        result["data"][name] = payload
     return result
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 3:
-        print(__doc__)
-        return 2
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("src", type=Path, help="the NSO0 image (e.g. baserom/main.nso)")
+    ap.add_argument("outdir", type=Path,
+                    help="directory to write text.bin / rodata.bin / data.bin")
+    args = ap.parse_args(argv)
 
-    src = Path(argv[1])
-    outdir = Path(argv[2])
-    outdir.mkdir(parents=True, exist_ok=True)
+    try:
+        result = extract(args.src)
+    except (NsoError, OSError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
-    result = extract(src)
-    print(f"{src}  (version={result['version']} flags=0x{result['flags']:x} "
+    args.outdir.mkdir(parents=True, exist_ok=True)
+    print(f"{args.src}  (version={result['version']} flags=0x{result['flags']:x} "
           f"compressed={result['compressed']})")
     print(f"  module_id {result['module_id']}")
     print(f"  bss_size  0x{result['bss_size']:x}")
@@ -156,7 +183,7 @@ def main(argv: list[str]) -> int:
         name = section["name"]
         payload = result["data"][name]
         digest = hashlib.sha256(payload).hexdigest()
-        dest = outdir / f"{name}.bin"
+        dest = args.outdir / f"{name}.bin"
         dest.write_bytes(payload)
         print(f"  {name:6} mem=0x{section['memory_offset']:08x} "
               f"size=0x{section['size']:x} sha256={digest}")
@@ -164,4 +191,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    raise SystemExit(main())
