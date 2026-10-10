@@ -198,7 +198,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             sizes = (bundle.parse_inventory(args.inventory.read_text())
                      if args.inventory.exists() else {})
-            key = complexity.make_key(text, sizes)
+            blocks = complexity.load_blocks(args.inventory.with_name("inventory.blocks.tsv"))
+            key = complexity.make_key(text, sizes, blocks)
     queue = select(entries, kind=args.kind, verify=args.verify, module=args.module, drop=drop,
                    key=key)
 

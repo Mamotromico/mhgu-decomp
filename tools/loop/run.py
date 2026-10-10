@@ -236,7 +236,8 @@ def complexity_key(layout: Layout):
         return None
     sizes = (bundle.parse_inventory(layout.inventory.read_text())
              if layout.inventory.exists() else {})
-    return complexity.make_key(text, sizes)
+    blocks = complexity.load_blocks(layout.inventory.with_name("inventory.blocks.tsv"))
+    return complexity.make_key(text, sizes, blocks)
 
 
 def resolve_entry(entries: list[dict], module: str, addr: str) -> dict:

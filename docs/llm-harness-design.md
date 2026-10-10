@@ -51,17 +51,24 @@ drift.
 **Ordering is a difficulty prior, not link order.** The ledger's own order is `(module, addr)`
 (link order), which puts a runtime initializer (`_init`) first — a poor place to start. The
 driver therefore defaults to an **easy-first** order supplied by `tools/ledger/complexity.py`
-(a library, callable by the loop *and* by future manual-decomp tooling): a function's key is
-`(has_call, size)`, so call-free functions rank before ones with calls and, within a class,
-smaller ranks before larger. *Call-free* is the cheap proxy for the gate's "relocation-free
-leaf" — the only targets it can verify cleanly today (see `bytegate.py` → *Scope*) — and it is a
-valid proxy here precisely because this image's `.text` carries no relocations of its own (they
-all land in `.data`/`.got`). The score is derived (from the reference `.text` and the inventory
-body sizes — both git-ignored); the committed ledger is never mutated. Any injected ordering
-keeps the `(module, addr)` tiebreak, so it stays deterministic and a resume is unaffected.
-`--order addr` restores link order. The same library backs the selector CLI
-(`worklist.py --order easiest`), so a human can list the easiest pending targets from the
-shell — the manual-decomp tooling will call `complexity` directly.
+(a library, callable by the loop *and* by future manual-decomp tooling). A function's **tier** —
+`clean` (no call, no outbound branch, no image-referencing pool word) < `adr` (builds a
+PC-relative address — a jump-table suspect) < `reloc` (calls/tail-calls, or a pool word that
+resolves to an image reference) < `unreadable` — places the cleanest, self-contained leaves first,
+with body size as the tiebreak. These byte-decidable signals approximate the gate's
+"relocation-free leaf" — the only targets it can verify cleanly today (see `bytegate.py` →
+*Scope*). Two details matter here: this image's `.text` carries no relocations of its own (they
+all land in `.data`/`.got`), and its `ldr rd, [pc, …]` pool words are *always* PC-relative GOT
+offsets (`ldr rd, [pc, rX]`), never constants — so with the loaded-block map
+(`inventory.blocks.tsv`) a pool load resolves to an image reference and is tier `reloc`, while
+without the map it falls back to a conservative pool-*use* tier. The signals' failure mode is to
+*demote* a clean function — a harmless mis-order, since the gate, not the ranking, decides
+matches. The score is derived (from the reference `.text`, the inventory body sizes, and the
+block map — all git-ignored); the committed ledger is never mutated. Any injected ordering keeps
+the `(module, addr)` tiebreak, so it stays deterministic and a resume is unaffected. `--order
+addr` restores link order. The same library backs the selector CLI (`worklist.py --order
+easiest`), so a human can list the easiest pending targets from the shell — the manual-decomp
+tooling will call `complexity` directly.
 
 ---
 
