@@ -10,10 +10,12 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import struct
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "loop"))
 
@@ -118,6 +120,16 @@ class SelectTests(unittest.TestCase):
         got = select(entries, drop=lambda e: e["addr"] == "60000024")
         self.assertEqual([e["addr"] for e in got], ["60000028"])
 
+    def test_key_overrides_the_address_order(self):
+        entries = [entry("main", "60000024"), entry("main", "60000028")]
+        got = select(entries, key=lambda e: 0 if e["addr"] == "60000028" else 1)
+        self.assertEqual([e["addr"] for e in got], ["60000028", "60000024"])
+
+    def test_key_ties_break_on_address_for_determinism(self):
+        entries = [entry("main", "60000028"), entry("main", "60000024")]
+        got = select(entries, key=lambda e: 0)
+        self.assertEqual([e["addr"] for e in got], ["60000024", "60000028"])
+
 
 class SourcePathTests(unittest.TestCase):
     def test_path_is_module_group_cpp(self):
@@ -171,6 +183,45 @@ class MainJsonLimitTests(unittest.TestCase):
 
     def test_explicit_limit_still_applies(self):
         self.assertEqual(len(self._run(["--limit", "5"])), 5)
+
+
+class MainOrderTests(unittest.TestCase):
+    """``--order easiest`` ranks call-free functions first, via the injected complexity key."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        d = Path(self._dir.name)
+        self.ledger = d / "ledger.tsv"
+        self.ledger.write_text("module\taddr\tkind\tverify\tsize\n"
+                               "main\t60000000\tfunction\tnone\t4\n"
+                               "main\t60000004\tfunction\tnone\t4\n")
+        self.inv = d / "inventory.tsv"
+        self.inv.write_text("60000000\tfunction\t4\tF\t.text\n"
+                            "60000004\tfunction\t4\tF\t.text\n")
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def test_easiest_ranks_call_free_first(self):
+        # 0x60000000: mov r0,r0 (call-free); 0x60000004: bl (has a call).
+        text = struct.pack("<I", 0xE1A00000) + struct.pack("<I", 0xEB000000)
+        out = io.StringIO()
+        with mock.patch("worklist.complexity.load_text", return_value=text):
+            with contextlib.redirect_stdout(out):
+                rc = main(["--ledger", str(self.ledger), "--inventory", str(self.inv),
+                           "--order", "easiest", "--json"])
+        self.assertEqual(rc, 0)
+        self.assertEqual([e["addr"] for e in json.loads(out.getvalue())],
+                         ["60000000", "60000004"])
+
+    def test_order_easiest_degrades_to_addr_without_the_image(self):
+        out = io.StringIO()
+        with mock.patch("worklist.complexity.load_text", return_value=None):
+            with contextlib.redirect_stdout(out):
+                rc = main(["--ledger", str(self.ledger), "--order", "easiest", "--json"])
+        self.assertEqual(rc, 0)
+        self.assertEqual([e["addr"] for e in json.loads(out.getvalue())],
+                         ["60000000", "60000004"])
 
 
 if __name__ == "__main__":

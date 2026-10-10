@@ -28,12 +28,13 @@ strictly-improving near-miss bank (``nearmiss.py``, under the eval pin) keeps th
 
 Usage::
 
-    python3 tools/loop/run.py                         # one entry (the next pending)
+    python3 tools/loop/run.py                         # one entry (next pending, easiest first)
     python3 tools/loop/run.py --limit 5               # five entries
+    python3 tools/loop/run.py --order addr            # select in the ledger's own order
     python3 tools/loop/run.py --entry 601a72e4        # a specific entry
     python3 tools/loop/run.py --entry 601a72e4 --attempts 5   # resample until it matches
-    python3 tools/loop/run.py --dry-run               # select + bundle + prompt, no model
-    python3 tools/loop/run.py --rebuild               # regenerate the bundle (Ghidra)
+    python3 tools/loop/run.py --dry-run                # select + bundle + prompt, no model
+    python3 tools/loop/run.py --rebuild                # regenerate the bundle (Ghidra)
 """
 
 from __future__ import annotations
@@ -54,6 +55,7 @@ sys.path.insert(0, str(REPO / "tools" / "loop"))
 
 import attempts
 import bundle
+import complexity
 import model as model_client
 import nearmiss
 import worklist
@@ -205,15 +207,36 @@ def gate_argv(layout: Layout, entry: dict, body: int,
 
 
 def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
-                done: set[tuple[str, str]]) -> dict | None:
-    """The next pending function not already handled this run."""
-    queue = worklist.select(entries, kind="function", verify="none")
+                done: set[tuple[str, str]],
+                key=None) -> dict | None:
+    """The next pending function not already handled this run.
+
+    ``key`` is the optional difficulty ordering (``complexity.make_key``); ``None`` keeps the
+    ledger's own ``(module, addr)`` order. Both stay deterministic, so a resume is unaffected.
+    """
+    queue = worklist.select(entries, kind="function", verify="none", key=key)
     if skip_existing:
         queue = [e for e in queue if not worklist.source_path(e, layout.src_root).exists()]
     for entry in queue:
         if entry_key(entry) not in done:
             return entry
     return None
+
+
+def complexity_key(layout: Layout):
+    """The easy-first selector key, or ``None`` to fall back to address order.
+
+    The reference ``.text`` comes from the NSO in pure Python (no Ghidra); if it is
+    unavailable the ordering degrades to the ledger's own order rather than failing the run.
+    """
+    text = complexity.load_text(layout.nso)
+    if text is None:
+        print("warning: reference .text unavailable for --order easiest; using address order",
+              file=sys.stderr)
+        return None
+    sizes = (bundle.parse_inventory(layout.inventory.read_text())
+             if layout.inventory.exists() else {})
+    return complexity.make_key(text, sizes)
 
 
 def resolve_entry(entries: list[dict], module: str, addr: str) -> dict:
@@ -261,6 +284,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--module", default="main", help="module for --entry (default: main)")
     ap.add_argument("--entry", default=None, help="target one ledger address (in --module)")
     ap.add_argument("--limit", type=int, default=1, help="entries to process (default 1)")
+    ap.add_argument("--order", choices=("easiest", "addr"), default="easiest",
+                    help="auto-select order when no --entry: 'easiest' (difficulty, default) "
+                         "or 'addr' (the ledger's own order)")
     ap.add_argument("--attempts", type=int, default=1,
                     help="attempts per entry, stopping early on a match (default 1)")
     ap.add_argument("--force", action="store_true",
@@ -291,8 +317,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 2
     else:
+        key = complexity_key(layout) if args.order == "easiest" else None
         for _ in range(max(1, args.limit)):
-            nxt = select_next(entries, layout, skip_existing=args.skip_existing, done=done)
+            nxt = select_next(entries, layout, skip_existing=args.skip_existing, done=done,
+                              key=key)
             if nxt is None:
                 break
             done.add(entry_key(nxt))

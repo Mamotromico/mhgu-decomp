@@ -9,7 +9,9 @@ over it, filtered to entries still needing reconstruction (default: ``kind=funct
 Ordering is deterministic — ``(module, addr)``, which is the ledger's own order — so two runs
 over the same ledger yield the same queue, and a resume is just "start where you stopped".
 ``addr`` is invariant-validated as zero-padded 8-hex lowercase, so its lexical order is also
-its numeric order; no parsing is needed to sort.
+its numeric order; no parsing is needed to sort. A caller may inject a different ordering via
+``key`` (the CLI's ``--order easiest`` supplies ``complexity.make_key``); the ``(module, addr)``
+pair is always the tiebreak, so any ordering stays deterministic.
 
 This module is the selector only: it reads the ledger, filters, orders, and reports. It never
 writes — not the ledger, not ``src/`` — so it stays safe to run at any time.
@@ -19,6 +21,7 @@ Usage::
     python3 tools/loop/worklist.py                     # count + first 20 pending functions
     python3 tools/loop/worklist.py --limit 0           # the whole queue
     python3 tools/loop/worklist.py --next              # just the next entry (module addr name)
+    python3 tools/loop/worklist.py --order easiest --limit 20   # easiest pending first
     python3 tools/loop/worklist.py --verify any --json # inspect the whole ledger as JSON
     python3 tools/loop/worklist.py --module main --limit 5
     python3 tools/loop/worklist.py --skip-existing     # drop groups already drawn in src/
@@ -35,13 +38,18 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "ledger"))
 
+import bundle
+import complexity
 from ledgerlib import read_entries
 
 DEFAULT_LEDGER = REPO / "config" / "main" / "ledger.tsv"
 DEFAULT_BUILD_CONFIG = REPO / "config" / "build.json"
+DEFAULT_NSO = REPO / "baserom" / "main.nso"
+DEFAULT_INVENTORY = REPO / "baserom" / "work" / "inventory" / "inventory.tsv"
 DEFAULT_KIND = "function"
 DEFAULT_VERIFY = "none"
 DEFAULT_LIMIT = 20
+DEFAULT_ORDER = "addr"
 
 # The values a filter accepts to mean "do not constrain on this axis".
 ANY = ("any", "*", "")
@@ -87,14 +95,19 @@ def source_path(entry: dict, src_root: Path) -> Path:
 def select(entries: list[dict], *, kind: str | Iterable[str] | None = DEFAULT_KIND,
            verify: str | Iterable[str] | None = DEFAULT_VERIFY,
            module: str | Iterable[str] | None = None,
-           drop: Callable[[dict], bool] | None = None) -> list[dict]:
+           drop: Callable[[dict], bool] | None = None,
+           key: Callable[[dict], object] | None = None) -> list[dict]:
     """Filter the ledger into an ordered worklist.
 
     ``kind``, ``verify`` and ``module`` are each a value, a comma-separated string, an
     iterable, or ``None``/``"any"`` for no constraint (see ``allowed``). ``drop`` is an
     optional predicate: entries it returns true for are removed (the CLI uses it for
-    ``--skip-existing``, keeping this function free of any filesystem access). The result is
-    sorted by ``sort_key`` and is a new list, so the caller's ``entries`` is left untouched.
+    ``--skip-existing``, keeping this function free of any filesystem access). ``key`` is an
+    optional injected ordering (e.g. ``complexity.make_key`` from ``tools/ledger``); it is a
+    pure callable over an entry, so the filesystem stays out of this function. With ``key=None``
+    the order is the ledger's own ``(module, addr)``; otherwise the order is ``(key(entry),
+    (module, addr))`` — the address tiebreak keeps any ordering deterministic, so a resume
+    still works. The result is a new list, so the caller's ``entries`` is left untouched.
     """
     kinds = allowed(kind)
     verifies = allowed(verify)
@@ -106,7 +119,8 @@ def select(entries: list[dict], *, kind: str | Iterable[str] | None = DEFAULT_KI
         and (modules is None or e["module"] in modules)
         and (drop is None or not drop(e))
     ]
-    chosen.sort(key=sort_key)
+    chosen.sort(key=(sort_key if key is None
+                     else lambda e: (key(e), sort_key(e))))
     return chosen
 
 
@@ -141,6 +155,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verify", default=DEFAULT_VERIFY,
                     help="none|behaviour|match|any (default: none)")
     ap.add_argument("--module", default=None, help="restrict to one or more modules")
+    ap.add_argument("--order", choices=("addr", "easiest"), default=DEFAULT_ORDER,
+                    help="ordering: 'addr' (the ledger's own, default) or 'easiest' "
+                         "(difficulty, powered by tools/ledger/complexity.py)")
+    ap.add_argument("--nso", type=Path, default=DEFAULT_NSO,
+                    help="NSO image providing the reference .text for --order easiest")
+    ap.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY,
+                    help="inventory.tsv providing body sizes for --order easiest")
     ap.add_argument("--build-config", type=Path, default=DEFAULT_BUILD_CONFIG,
                     help="build layout, for --skip-existing's source root")
     ap.add_argument("--repo", type=Path, default=REPO,
@@ -168,7 +189,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.skip_existing:
         src_root = args.repo / source_root(args.build_config)
         drop = lambda e: source_path(e, src_root).exists()
-    queue = select(entries, kind=args.kind, verify=args.verify, module=args.module, drop=drop)
+    key = None
+    if args.order == "easiest":
+        text = complexity.load_text(args.nso)
+        if text is None:
+            print(f"warning: reference .text unavailable ({args.nso}); using address order",
+                  file=sys.stderr)
+        else:
+            sizes = (bundle.parse_inventory(args.inventory.read_text())
+                     if args.inventory.exists() else {})
+            key = complexity.make_key(text, sizes)
+    queue = select(entries, kind=args.kind, verify=args.verify, module=args.module, drop=drop,
+                   key=key)
 
     if args.next:
         if not queue:
@@ -187,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"worklist: {len(queue)} entr{'y' if len(queue) == 1 else 'ies'} "
           f"(kind={args.kind}, verify={args.verify}"
           + (f", module={args.module}" if args.module else "")
+          + (f", order={DEFAULT_ORDER if key is None else args.order}")
           + (", skip-existing" if args.skip_existing else "") + ")")
     for e in shown:
         print(format_row(e))

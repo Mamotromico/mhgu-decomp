@@ -44,9 +44,24 @@ flowchart TD
 
 There is no separate worklist file: the **committed ledger** is the worklist, filtered to
 entries with `verify=none` (later: `behaviour` entries eligible for a byte-match retry).
-Deterministic ordering (by `(module, addr)`), `data` and `external` kinds skipped for the
-reconstruction loop. Because selection is derived from the ledger, the queue updates itself as
-`verify` changes — no second artifact to drift.
+`data` and `external` kinds are skipped for the reconstruction loop. Because selection is
+derived from the ledger, the queue updates itself as `verify` changes — no second artifact to
+drift.
+
+**Ordering is a difficulty prior, not link order.** The ledger's own order is `(module, addr)`
+(link order), which puts a runtime initializer (`_init`) first — a poor place to start. The
+driver therefore defaults to an **easy-first** order supplied by `tools/ledger/complexity.py`
+(a library, callable by the loop *and* by future manual-decomp tooling): a function's key is
+`(has_call, size)`, so call-free functions rank before ones with calls and, within a class,
+smaller ranks before larger. *Call-free* is the cheap proxy for the gate's "relocation-free
+leaf" — the only targets it can verify cleanly today (see `bytegate.py` → *Scope*) — and it is a
+valid proxy here precisely because this image's `.text` carries no relocations of its own (they
+all land in `.data`/`.got`). The score is derived (from the reference `.text` and the inventory
+body sizes — both git-ignored); the committed ledger is never mutated. Any injected ordering
+keeps the `(module, addr)` tiebreak, so it stays deterministic and a resume is unaffected.
+`--order addr` restores link order. The same library backs the selector CLI
+(`worklist.py --order easiest`), so a human can list the easiest pending targets from the
+shell — the manual-decomp tooling will call `complexity` directly.
 
 ---
 
@@ -245,6 +260,7 @@ protocol so a second backend is additive, not a rewrite.
 | 8 | Link-time resolution of unmatched internal symbols | **Decided** — scaffold compile-only; Model C weak stubs; Model B byte substitution |
 | 9 | Model endpoint shape (HTTP vs. CLI) | **Partially decided** — OpenAI-compatible HTTP client built (`tools/loop/model.py`); CLI variant open |
 | 10 | Disassembly-derived function extent | **Resolved for the bundle** — the full-analysis inventory's function `size` (validated against the `poc/` probes); `--body` overrides; the ledger partition is never used. Entries absent from the inventory still require `--body` (shared with the gate, which keeps its own `--body` stopgap) |
+| 11 | Auto-selection order (no `--entry`) | **Built** — easy-first difficulty key (`tools/ledger/complexity.py`, a library shared with manual tooling), default on the auto-select path; `--order addr` restores the ledger's link order |
 
 ---
 
@@ -252,12 +268,14 @@ protocol so a second backend is additive, not a rewrite.
 
 ```text
 tools/loop/
-  worklist.py     # ledger query -> ordered verify=none entries   [built]
+  worklist.py     # ledger query -> ordered verify=none entries   [built; key-injectable]
   bundle.py       # per-entry context bundle -> baserom/work/context/  [built]
   model.py        # endpoint client (HTTP)          [built]
   run.py          # the driver: select -> bundle -> model -> write -> gate -> bank  [built]
   nearmiss.py     # near-miss bank + eval pin         [built]
   attempts.py     # append-only, parent-linked attempt log  [built]
+tools/ledger/
+  complexity.py   # easy-first difficulty key (library; loop + manual tooling)  [built]
 tests/loop/       # unit tests mirroring tools/loop/    [model, worklist, bundle, run, attempts, nearmiss covered]
 include/          # committed declarations + types     [seed built: include/generated/]
 src/<module>/<group>.cpp   # candidates (committed); one function per file by default
