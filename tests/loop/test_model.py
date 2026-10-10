@@ -114,6 +114,15 @@ class ParseResponseTests(unittest.TestCase):
         with self.assertRaises(ModelError):
             parse_response({"nope": True}, 0.0)
 
+    def test_finish_reason_and_reasoning_surfaced(self):
+        c = parse_response({"choices": [{"message": {"content": "", "reasoning_content": "hmm"},
+                                         "finish_reason": "length"}]}, 0.0)
+        self.assertEqual((c.text, c.finish_reason, c.reasoning), ("", "length", "hmm"))
+
+    def test_null_content_is_empty_string(self):
+        c = parse_response({"choices": [{"message": {"content": None}}]}, 0.0)
+        self.assertEqual(c.text, "")
+
 
 class StripFencesTests(unittest.TestCase):
     def test_fenced_with_language(self):

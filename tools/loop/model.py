@@ -60,6 +60,8 @@ class Completion:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     latency_s: float = 0.0
+    finish_reason: str = ""
+    reasoning: str = ""
 
 
 class Model(Protocol):
@@ -118,11 +120,20 @@ def build_payload(model: str, prompt: str, system: str | None, temperature: floa
 
 
 def parse_response(data: dict, latency_s: float) -> Completion:
-    """Extract the assistant text and usage from a chat-completions response."""
+    """Extract the assistant text, usage, finish reason, and any separate reasoning.
+
+    ``content`` is coerced from ``null`` to ``""`` (some reasoning servers return no
+    content when the answer stayed in ``reasoning_content``), and the finish reason plus
+    that reasoning text are surfaced so a truncated/empty answer is diagnosable rather
+    than looking like a silent model failure.
+    """
     try:
-        choices = data["choices"]
-        text = choices[0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as e:
+        choice = data["choices"][0]
+        message = choice["message"]
+        text = message.get("content") or ""
+        finish_reason = choice.get("finish_reason") or ""
+        reasoning = message.get("reasoning_content") or ""
+    except (KeyError, IndexError, TypeError, AttributeError) as e:
         raise ModelError(f"unexpected response shape: {e}") from e
     usage = data.get("usage") or {}
     return Completion(
@@ -131,6 +142,8 @@ def parse_response(data: dict, latency_s: float) -> Completion:
         prompt_tokens=usage.get("prompt_tokens"),
         completion_tokens=usage.get("completion_tokens"),
         latency_s=latency_s,
+        finish_reason=finish_reason,
+        reasoning=reasoning,
     )
 
 
