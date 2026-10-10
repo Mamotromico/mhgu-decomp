@@ -64,6 +64,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         git \
         unzip \
+        # C-library headers for the pinned cross-compiler's bare-metal target.
+        # libc++ ships with clang but sits on top of a C library: its <cstring>,
+        # <cstdlib>, ... need <string.h>/<stdlib.h> underneath. picolibc (a newlib
+        # fork; ships both newlib.h and picolibc.h) supplies them for
+        # arm-none-eabi at /usr/lib/picolibc/arm-none-eabi/include. Headers only — they do not
+        # affect code generation, so no SHA pin is required. See config/toolchain.json.
+        picolibc-arm-none-eabi \
         # Java 21 JDK — REQUIRED by Ghidra. The PUBLIC release zip does NOT ship
         # a JDK, and a plain JRE is rejected (Ghidra compiles scripts at
         # runtime). application.properties: application.java.min=21, no max.

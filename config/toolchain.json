@@ -1,5 +1,5 @@
 {
-  "_comment": "The de facto compiler pin. See docs/compiler-identification.md and AGENTS.md. The two -mllvm knobs are hidden backend diagnostics used as a reproduction device, not real vendor build settings; -mcpu is deliberately absent (VFP-only, NEON off). One source of truth, consumed by tools/ledger/bytegate.py and the future build.",
+  "_comment": "The de facto compiler pin. See docs/compiler-identification.md and AGENTS.md. The two -mllvm knobs are hidden backend diagnostics used as a reproduction device, not real vendor build settings; -mcpu is deliberately absent (VFP-only, NEON off). The -isystem entries add the standard-library headers the target needs: libc++ (shipped with this clang at <CLANG_HOME>/include/c++/v1) layered on picolibc's C headers (/usr/lib/picolibc/arm-none-eabi/include, installed by the devcontainer's picolibc-arm-none-eabi package). -D_LIBCPP_HAS_NO_THREADS is required because the bare-metal target has no thread API. Headers and that define do not change generated code (they only make standard C++ compile), so they cannot affect byte-matching. One source of truth, consumed by tools/ledger/bytegate.py and tools/build/gen_compile_db.py.",
   "clang": "clang",
   "cflags": [
     "-target", "armv8a-none-eabi",
@@ -11,6 +11,9 @@
     "-fno-rtti",
     "-ffreestanding",
     "-std=c++1z",
+    "-isystem", "/opt/clang-5.0.1/include/c++/v1",
+    "-isystem", "/usr/lib/picolibc/arm-none-eabi/include",
+    "-D_LIBCPP_HAS_NO_THREADS",
     "-mllvm", "-pre-RA-sched=source",
     "-mllvm", "-hoist-cheap-insts=true"
   ],
