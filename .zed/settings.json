@@ -6,7 +6,6 @@
     "**/CVS",
     "**/.DS_Store",
     "**/Thumbs.db",
-    "**/baserom/**"
   ],
   "lsp": {
     "basedpyright": {

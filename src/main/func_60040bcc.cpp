@@ -1,0 +1,1 @@
+extern "C" void func_60040bcc(void) {}
