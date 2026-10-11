@@ -43,6 +43,7 @@ import argparse
 import contextlib
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -58,6 +59,7 @@ import bundle
 import complexity
 import model as model_client
 import nearmiss
+import templates
 import worklist
 from ledgerlib import entry_key, read_entries
 
@@ -70,6 +72,46 @@ SYSTEM = (
     "declarations it needs). Never use inline assembly (__asm__) or top-level asm statements — "
     "the compiler must generate the instructions from ordinary C/C++. No prose, no Markdown "
     "fences.")
+
+# A rendered bundle disassembly line: `    <addr>  <bytes>  <mnemonic> <operands> [; notes]`.
+_BUNDLE_INSN = re.compile(r"^\s+([0-9a-f]{8})\s+([0-9a-f]+)\s+(\S+)\s*(.*)$")
+
+# The by-value struct-copy guidance is only worth its weight when a block move is actually
+# present, so it is included conditionally (see ``has_nonstack_block_move``).
+_STRUCT_COPY_SECTION = (
+    "A run of words moved by `ldmia`/`stmia` is ONE by-value struct copy, not per-word "
+    "moves. Consecutive load/store-multiple blocks that walk contiguous addresses move a "
+    "single object: add the words up (registers x blocks) to get its size, and give it a "
+    "*named* type (two separately-written anonymous struct types are distinct and will not "
+    "assign). Model the destination offset as a struct field and copy with one assignment.\n\n"
+    "Worked example (a different function — it shows the idiom, not this answer):\n"
+    "    ldmia r1!, {r2,r3,r12,lr}    ; 4 words from src, src += 16\n"
+    "    add   r0, r0, #0x10\n"
+    "    stmia r0!, {r2,r3,r12,lr}    ; 4 words to dst+0x10, dst += 16\n"
+    "    ldmia r1, {r2,r3,r12,lr}     ; 4 words from src+16\n"
+    "    stmia r0, {r2,r3,r12,lr}     ; 4 words to dst+0x20\n"
+    "  is one 32-byte struct at offset 0x10 (4 + 4 = 8 words), copied by value:\n"
+    "    struct Blob   { unsigned int w[8]; };\n"
+    "    struct Holder { char pad[0x10]; Blob b; };\n"
+    '    extern "C" void f(Holder *h, const Blob *src) { h->b = *src; }\n\n')
+
+
+def has_nonstack_block_move(bundle_text: str) -> bool:
+    """Whether the bundle disassembly has an ``ldm``/``stm`` whose base is not the stack.
+
+    The by-value struct-copy section only pays off when such a block move is present; the
+    ``push``/``pop`` save every non-leaf function has is sp-based (or printed as ``push``/``pop``)
+    and must not trigger it. This keeps the prompt's strongest worked example aligned with the
+    idiom's ~1% incidence (see ``docs/llm-harness-design.md`` → *Template growth is measured*).
+    """
+    for line in bundle_text.splitlines():
+        m = _BUNDLE_INSN.match(line)
+        if not m:
+            continue
+        mnemonic, operands = m.group(3), m.group(4)
+        if mnemonic.startswith(("ldm", "stm")) and "sp" not in operands:
+            return True
+    return False
 
 
 @dataclass
@@ -140,7 +182,10 @@ def build_prompt(entry: dict, bundle_text: str) -> str:
     as inline ``__asm__`` (which cannot match the surrounding codegen and, as written, did not
     even compile). Plain C/C++ is required; an ``asm`` label is only for a symbol that is not a
     valid identifier. A later pilot modelled a run of words as two *anonymous* structs, which is
-    ill-formed (they are distinct types); the instructions now require a named type.
+    ill-formed (they are distinct types); the instructions now require a named type. The
+    struct-copy guidance is now **conditional** (``has_nonstack_block_move``): it is included
+    only when the bundle actually carries a non-stack ``ldm``/``stm``, so a rare idiom no longer
+    dominates the prompt (see ``docs/llm-harness-design.md`` → *Template growth is measured*).
     """
     name = entry["name"]
     if name.isidentifier():
@@ -149,6 +194,7 @@ def build_prompt(entry: dict, bundle_text: str) -> str:
         symbol = (f"`{name}` is not a valid C++ identifier; give the function a C++-legal name "
                   f'and bind it to the exact symbol with a trailing asm("{name}") on its '
                   f"declaration.")
+    copy_section = _STRUCT_COPY_SECTION if has_nonstack_block_move(bundle_text) else ""
     return (
         f"Write ordinary C or C++ whose compiled machine code reproduces the function below "
         f"exactly under the pinned toolchain. Reason about the function's *behaviour*, not its "
@@ -156,11 +202,7 @@ def build_prompt(entry: dict, bundle_text: str) -> str:
         f"differ. Do NOT use inline assembly (__asm__) or a top-level asm() statement. The ARM "
         f"AAPCS ABI applies: r0-r3 carry the arguments and r0 the result; the prologue and "
         f"epilogue are generated for you.\n\n"
-        f"A run of words moved by `ldmia`/`stmia` is ONE by-value struct copy, not per-word "
-        f"moves. Consecutive load/store-multiple blocks that walk contiguous addresses move a "
-        f"single object: add the words up (registers x blocks) to get its size, and give it a "
-        f"*named* type (two separately-written anonymous struct types are distinct and will not "
-        f"assign). Model the destination offset as a struct field and copy with one assignment.\n\n"
+        f"{copy_section}"
         f"Take each struct's layout from the instructions that touch it. A field's offset is the "
         f"displacement in its load/store — `ldrb r3, [r0, #0x20]` puts that field at +0x20. An "
         f"array element's size is the pointer-increment constant — `add r0, r0, #0x30` means "
@@ -171,16 +213,6 @@ def build_prompt(entry: dict, bundle_text: str) -> str:
         f"a 4-byte value at `[r0, #0x40]`, the second field's offset is 0x58 (not 0x44), so pad "
         f"0x58 - 0x44 = 0x14 bytes: the displacement is the offset, and the padding is whatever "
         f"makes the field land exactly there.\n\n"
-        f"Worked example (a different function — it shows the idiom, not this answer):\n"
-        f"    ldmia r1!, {{r2,r3,r12,lr}}    ; 4 words from src, src += 16\n"
-        f"    add   r0, r0, #0x10\n"
-        f"    stmia r0!, {{r2,r3,r12,lr}}    ; 4 words to dst+0x10, dst += 16\n"
-        f"    ldmia r1, {{r2,r3,r12,lr}}     ; 4 words from src+16\n"
-        f"    stmia r0, {{r2,r3,r12,lr}}     ; 4 words to dst+0x20\n"
-        f"  is one 32-byte struct at offset 0x10 (4 + 4 = 8 words), copied by value:\n"
-        f"    struct Blob   {{ unsigned int w[8]; }};\n"
-        f"    struct Holder {{ char pad[0x10]; Blob b; }};\n"
-        f'    extern "C" void f(Holder *h, const Blob *src) {{ h->b = *src; }}\n'
         f"{symbol}\n"
         f"Reply with the translation unit only — no prose, no Markdown fences.\n\n"
         f"{bundle_text}\n"
@@ -223,13 +255,8 @@ def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
     return None
 
 
-def complexity_key(layout: Layout):
-    """The easy-first selector key, or ``None`` to fall back to address order.
-
-    The reference ``.text`` comes from the NSO in pure Python (no Ghidra); if it is
-    unavailable the ordering degrades to the ledger's own order rather than failing the run.
-    """
-    text = complexity.load_text(layout.nso)
+def complexity_key(layout: Layout, text: bytes | None):
+    """The easy-first selector key from a reference ``.text``, or ``None`` for address order."""
     if text is None:
         print("warning: reference .text unavailable for --order easiest; using address order",
               file=sys.stderr)
@@ -307,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: missing ledger {layout.ledger}", file=sys.stderr)
         return 2
     entries = read_entries(layout.ledger)
+    # One reference ``.text`` read serves both the easy-first ordering and the template pass.
+    reference = complexity.load_text(layout.nso)
 
     # One explicit target, or the next N pending entries.
     targets: list[dict] = []
@@ -318,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 2
     else:
-        key = complexity_key(layout) if args.order == "easiest" else None
+        key = complexity_key(layout, reference) if args.order == "easiest" else None
         for _ in range(max(1, args.limit)):
             nxt = select_next(entries, layout, skip_existing=args.skip_existing, done=done,
                               key=key)
@@ -346,7 +375,8 @@ def main(argv: list[str] | None = None) -> int:
     attempts_run = 0
     try:
         for entry in targets:
-            outcome, used = attempt_entry(entry, entries, layout, args, model)
+            outcome, used = attempt_entry(entry, entries, layout, args, model,
+                                          raw_text=reference)
             attempts_run += used
             matched += outcome == "match"
     except KeyboardInterrupt:
@@ -387,74 +417,117 @@ def heartbeat(label: str, interval_s: float = 15.0):
         thread.join()
 
 
-def process(entry: dict, entries: list[dict], layout: Layout, args, model) -> str:
-    """One loop iteration. Returns 'match' | 'mismatch' | 'error'."""
-    module, addr, name = entry["module"], entry["addr"], entry["name"]
-
-    body, extent_source = resolve_body(layout, entry, args.body)
-
-    # 1. context bundle (reuse unless --rebuild).
+def build_bundle_text(layout: Layout, entry: dict, args, body: int) -> str:
+    """The context bundle for ``entry`` (reused unless ``--rebuild``; one Ghidra import)."""
     md = context_path(layout, entry)
     if args.rebuild or not md.exists():
         rc, out = run_subprocess(bundle_argv(layout, entry, body))
         if rc != 0:
             raise bundle.BundleError(f"bundle failed:\n{out.strip()[-800:]}")
-    bundle_text = md.read_text()
+    return md.read_text()
 
-    # 2. prompt.
-    prompt = build_prompt(entry, bundle_text)
 
-    if args.dry_run:
-        print(f"--- prompt for {name} ({body} B, {extent_source}) ---")
-        print(prompt)
-        return "dry-run"
-
-    # 3. model.
+def ask_model(entry: dict, layout: Layout, args, model, body: int):
+    """Bundle, prompt, and call the model. Returns ``(candidate, completion, prompt)``."""
+    prompt = build_prompt(entry, build_bundle_text(layout, entry, args, body))
     print(f"    asking {getattr(model, 'model', 'model')} …", file=sys.stderr, flush=True)
-    with heartbeat(name):
+    with heartbeat(entry["name"]):
         completion = model.complete(prompt, system=SYSTEM)
     print(f"    reply in {completion.latency_s:.0f}s ({completion.completion_tokens} tok)",
           file=sys.stderr, flush=True)
-    candidate = model_client.strip_fences(completion.text)
-    if not candidate.strip():
-        print(f"{name}: empty candidate from the model")
-        return "error"
+    return model_client.strip_fences(completion.text), completion, prompt
 
-    # 4. write the candidate to its ledger-derived source path (containment guard).
-    draft = ensure_under(safe_draft_path(entry, layout.src_root), layout.src_root)
-    if draft.exists() and not args.force:
-        raise ValueError(f"{draft} exists (use --force to overwrite)")
+
+def write_and_gate(entry: dict, layout: Layout, body: int, draft: Path, candidate: str):
+    """Write the candidate to its source path and run the byte gate.
+
+    Returns ``(outcome, report, rc, gate_out)``. The report's presence is the source of truth:
+    the gate writes it only after a successful compare, so no report means the candidate did
+    not compile (rc 3) or the gate errored.
+    """
     draft.parent.mkdir(parents=True, exist_ok=True)
     draft.write_text(candidate)
-
-    # 5. verify — the gate decides and (only on a match) banks verify=match.
-    report_path = layout.work / "bytegate" / f"{module}_{addr}.report.json"
+    report_path = layout.work / "bytegate" / f"{entry['module']}_{entry['addr']}.report.json"
     report_path.unlink(missing_ok=True)
     rc, gate_out = run_subprocess(gate_argv(layout, entry, body, report_path))
     report = json.loads(report_path.read_text()) if report_path.exists() else None
-    # The report's presence is the source of truth: the gate writes it only after a successful
-    # compare. No report means the candidate did not compile (rc 3) or the gate errored.
-    if report is not None:
-        outcome = "match" if report["ok"] else "mismatch"
-    else:
-        outcome = "error"
+    outcome = ("match" if report["ok"] else "mismatch") if report is not None else "error"
+    return outcome, report, rc, gate_out
 
-    # 6. record the attempt (append-only, parent-linked) — every attempt is kept.
+
+def process(entry: dict, entries: list[dict], layout: Layout, args, model,
+            raw_text: bytes | None = None) -> str:
+    """One loop iteration. Returns 'match' | 'mismatch' | 'error' | 'dry-run'.
+
+    A deterministic **template** (``tools/ledger/templates.py``) is tried first: it needs
+    neither the context bundle nor the model, so a structural leaf skips both. The gate still
+    decides; on a template miss the model is asked as a fallback, so this never regresses.
+    """
+    module, addr, name = entry["module"], entry["addr"], entry["name"]
+    body, extent_source = resolve_body(layout, entry, args.body)
+
+    draft = ensure_under(safe_draft_path(entry, layout.src_root), layout.src_root)
+    if draft.exists() and not args.force:
+        raise ValueError(f"{draft} exists (use --force to overwrite)")
+
+    # 1. template (no bundle, no model) — propose; the gate disposes.
+    raw_body = complexity.body_of(raw_text, addr, body) if raw_text is not None else None
+    hit = templates.propose_rule(raw_body, name) if raw_body is not None else None
+    candidate = hit[2] if hit else None
+    source = "template" if candidate is not None else "model"
+
+    if args.dry_run:
+        if hit is not None:
+            print(f"--- template for {name} (rule #{hit[0]}: {hit[1]}, "
+                  f"{body} B, {extent_source}) ---")
+            print(candidate)
+        else:
+            print(f"--- prompt for {name} ({body} B, {extent_source}) ---")
+            print(build_prompt(entry, build_bundle_text(layout, entry, args, body)))
+        return "dry-run"
+
+    # 2. model — only when no template fired.
+    completion = prompt = None
+    if candidate is None:
+        candidate, completion, prompt = ask_model(entry, layout, args, model, body)
+        if not candidate.strip():
+            print(f"{name}: empty candidate from the model")
+            return "error"
+
+    # 3. write and verify (the gate is the only writer of verify=match).
+    outcome, report, rc, gate_out = write_and_gate(entry, layout, body, draft, candidate)
+
+    # 4. a template that missed falls through to the model, so the path never regresses.
+    if outcome != "match" and source == "template":
+        candidate2, completion2, prompt2 = ask_model(entry, layout, args, model, body)
+        if candidate2.strip():
+            candidate, source = candidate2, "model"
+            hit = None                     # the rule missed; this is a model attempt now
+            completion, prompt = completion2, prompt2
+            outcome, report, rc, gate_out = write_and_gate(entry, layout, body, draft, candidate)
+
+    # 5. record the attempt (append-only, parent-linked) — every attempt is kept.
     record = {
         "module": module, "addr": addr, "name": name, "body": body,
-        "extent_source": extent_source, "outcome": outcome, "gate_rc": rc,
-        "model": completion.model, "prompt_tokens": completion.prompt_tokens,
-        "completion_tokens": completion.completion_tokens, "latency_s": completion.latency_s,
-        "prompt_sha256": prompt_fingerprint(prompt), "gate_output": gate_out.strip()[-4000:],
+        "extent_source": extent_source, "outcome": outcome, "gate_rc": rc, "source": source,
+        "model": completion.model if completion else "template",
+        "prompt_tokens": completion.prompt_tokens if completion else None,
+        "completion_tokens": completion.completion_tokens if completion else None,
+        "latency_s": completion.latency_s if completion else 0.0,
+        "prompt_sha256": prompt_fingerprint(prompt or ""),
+        "gate_output": gate_out.strip()[-4000:],
     }
+    if hit is not None:
+        record["template_rule"] = {"n": hit[0], "name": hit[1]}
     if report is not None:
         record["gate_status"] = report["status"]
         record["diff_count"] = report["diff_count"]
     stored = attempts.append(attempt_store(layout), record, candidate_text=candidate)
 
-    # 7. bank a near miss (strictly-improving), and keep src/ matched-only.
+    # 6. bank a near miss (strictly-improving), and keep src/ matched-only.
     if outcome == "match":
-        print(f">>> MATCH  {name}  -> {draft}  (attempt {stored['id']})")
+        stamp = f"template rule #{hit[0]}: {hit[1]}" if hit else source
+        print(f">>> MATCH  {name}  ({stamp})  -> {draft}  (attempt {stored['id']})")
     else:
         if report is not None:
             dist = nearmiss.closeness(report["diff_count"], report["cand_len"], body)
@@ -477,7 +550,7 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model) -> st
 
 
 def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
-                  one=process) -> tuple[str, int]:
+                  one=process, raw_text: bytes | None = None) -> tuple[str, int]:
     """Run one entry up to ``args.attempts`` times, stopping on a match.
 
     Returns ``(outcome, attempts_used)``. Every attempt is recorded (parent-linked) by
@@ -488,7 +561,7 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
     used = 0
     for _ in range(max(1, args.attempts)):
         try:
-            outcome = one(entry, entries, layout, args, model)
+            outcome = one(entry, entries, layout, args, model, raw_text)
         except (attempts.AttemptError, bundle.BundleError, model_client.ModelError,
                 ValueError) as e:
             print(f"error: {entry['name']}: {e}", file=sys.stderr)

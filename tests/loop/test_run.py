@@ -9,7 +9,10 @@ write, gate, log, bank, move — without clang, Ghidra, or a model. Run with::
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import struct
 import sys
 import tempfile
 import unittest
@@ -34,6 +37,7 @@ from run import (
     ensure_under,
     gate_argv,
     group_is_single,
+    has_nonstack_block_move,
     process,
     prompt_fingerprint,
     resolve_entry,
@@ -111,6 +115,34 @@ class BuildPromptTests(unittest.TestCase):
     def test_non_identifier_name_uses_an_asm_label(self):
         prompt = build_prompt(entry(name="weird.name"), "B")
         self.assertIn('asm("weird.name")', prompt)
+
+    def test_struct_copy_section_is_omitted_without_a_block_move(self):
+        # Most functions have only a push/pop save; the copy guidance must not appear.
+        bundle = "## disassembly\n\n    60035efc  e1a02000  mov     r2, r0\n"
+        prompt = build_prompt(entry(), bundle)
+        self.assertNotIn("by-value struct copy", prompt)
+        self.assertNotIn("Worked example", prompt)
+        self.assertIn("field's offset", prompt)   # the general layout guidance stays
+
+    def test_struct_copy_section_is_included_with_a_nonstack_block_move(self):
+        bundle = ("## disassembly\n\n"
+                  "    60010000  e8910003  ldmia   r1, {r0,r1}\n")
+        prompt = build_prompt(entry(), bundle)
+        self.assertIn("by-value struct copy", prompt)
+        self.assertIn("Worked example", prompt)
+
+    def test_a_push_is_not_a_nonstack_block_move(self):
+        bundle = ("## disassembly\n\n"
+                  "    60010000  e92d4830  stmdb   sp!, {r4,r5,r11,lr}\n"
+                  "    60010004  e8bd8830  ldmia   sp!, {r4,r5,pc}\n")
+        self.assertFalse(has_nonstack_block_move(bundle))
+
+    def test_nonstack_block_move_detected(self):
+        bundle = "    60010000  e8910003  ldmia   r1, {r0,r1}\n"
+        self.assertTrue(has_nonstack_block_move(bundle))
+
+    def test_empty_bundle_has_no_block_move(self):
+        self.assertFalse(has_nonstack_block_move(""))
 
 
 class ArgvTests(unittest.TestCase):
@@ -243,6 +275,23 @@ class ProcessTests(unittest.TestCase):
         bank = nearmiss.load_bank(bank_path(self.lay))
         return bank["records"].get("main:601a72e4")
 
+    def _template_text(self, addr: str = "601a72e4") -> bytes:
+        """A reference `.text` whose body at ``addr`` is `bx lr` (template rule #1)."""
+        off = int(addr, 16) - 0x60000000
+        raw = bytearray(off + 4)
+        raw[off:off + 4] = struct.pack("<I", 0xE12FFF1E)
+        return bytes(raw)
+
+    def test_template_match_reports_the_rule(self):
+        self.args.body = 4
+        with (mock.patch("run.run_subprocess", new=fake_gate(0, "match", 0, 4)),
+              contextlib.redirect_stdout(io.StringIO()) as out):
+            outcome = process(entry(), [entry()], self.lay, self.args, None,
+                              raw_text=self._template_text())
+        self.assertEqual(outcome, "match")
+        self.assertIn("template rule #1: void-return", out.getvalue())
+        self.assertEqual(self.log()[0]["template_rule"], {"n": 1, "name": "void-return"})
+
     def test_match_keeps_src_records_attempt_and_does_not_bank(self):
         with mock.patch("run.run_subprocess", new=fake_gate(0, "match", 0, 60)):
             outcome = process(entry(), [entry()], self.lay, self.args, _FakeModel())
@@ -257,6 +306,7 @@ class ProcessTests(unittest.TestCase):
         self.assertEqual(outcome, "mismatch")
         self.assertFalse(self.draft.exists())
         self.assertEqual(self.log()[0]["outcome"], "mismatch")
+        self.assertNotIn("template_rule", self.log()[0])   # a model attempt, no rule
         banked = self.bank_best()
         assert banked is not None
         self.assertEqual(banked["closeness"], [2, 3])  # (len delta, divergences)

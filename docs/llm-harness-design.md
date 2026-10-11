@@ -202,12 +202,47 @@ rebuilt in-repo:
 The loop, per entry:
 
 1. **Select** the next `verify=none` entry from the ledger.
-2. **Build** the context bundle.
-3. **Call** the local model endpoint.
-4. **Write** the candidate to `src/<module>/<group>.cpp`.
-5. **Verify** with `bytegate.py` (independent).
-6. On **match:** `set_field(verify=match)` (line-surgical; leaves `enroll`/`review` alone).
+2. **Propose** a candidate: a deterministic **template** (`tools/ledger/templates.py`) if the
+   function's bytes match a known shape, else the **context bundle** + local model.
+3. **Write** the candidate to `src/<module>/<group>.cpp`.
+4. **Verify** with `bytegate.py` (independent).
+5. On **match:** `set_field(verify=match)` (line-surgical; leaves `enroll`/`review` alone).
    On **near miss:** record it, don't discard it.
+
+**Templates before the model — propose; the gate disposes.** Some functions have exactly one
+plausible C spelling (an empty body is `void f() {}`; a constant return is `int f() { return K; }`),
+so an LLM adds only latency and variance. `tools/ledger/templates.py` is a small rulebook — a
+library, pure `bytes -> source`, callable by the loop *and* manual tooling — that recognizes such
+shapes and emits the canonical source, clearing the trivial leaf band instantly and for free (the
+sm64ds *automatic templates* precedent, scoped to exact instruction patterns). It **never claims a
+match**: the gate still compiles and compares, so a wrong template is a near miss, never a false
+match; on a template miss the loop falls through to the model, so the path cannot regress. Template
+detection needs neither the bundle nor the model, so a structural leaf skips both (one Ghidra
+import and one model call saved). Each attempt records its `source` (`template` vs `model`) and,
+for a template hit, the `template_rule` (`{n, name}` — the 1-based rule the driver prints as
+`(template rule #N: name)`).
+
+**Template growth is measured, not guessed.** Which rule to add next is a *data* question, so
+`tools/ledger/shapes.py` decodes a body's words to a normalized **shape signature** (registers and
+condition kept, immediates collapsed to `#`) and `tools/ledger/shape_report.py` histograms the
+pending corpus, most-frequent un-templated shapes first. Both live under `tools/ledger/` (libraries
+shared with manual tooling; the report only reads). The decoder is **assembler-checked**: its golden
+vectors were emitted by the pinned clang, and a corpus spot-check against Ghidra found and fixed a
+condition-table bug (`ls` decoded as `vc`) — exactly why the check exists. The first pass (42,997
+pending functions; 4,320 tier-0 leaves; 670 already template-covered) shows the un-templated
+tier-0 opportunity concentrated in a few families — parameterized pointer/index arithmetic
+(`add r0,r0,#; bx lr`; `mov r1,#; str r1,[r0,#]; bx lr`), single-field byte/word/halfword
+accessors, and a large **bounds-checked array accessor** family (`mov r2,r0; mov r0,#0;
+ldr r3,[r2,#n]; cmp r3,r1; bxls lr; …`). Acting on the top of that list, the parameterized
+families were added as rules (`add-const`, `store-const-word`/`-byte`, `half-getter`,
+`sbyte-getter`, `far-word-getter`/`-byte`) and gate-verified: the batch went from 670 to **816**
+tier-0 byte-exact matches, 816/816 verified, 0 failures.
+
+By contrast the sm64ds **struct-copy** idiom the bundle prompt's worked example teaches is ~1% of
+functions, so that example was disproportionate. It is now **conditional**
+(`run.has_nonstack_block_move`): the copy section appears only when the bundle carries an
+`ldm`/`stm` on a non-`sp` base — a `push`/`pop` save does not trigger it — while the general
+layout/padding guidance stays unconditional.
 
 **Built — `tools/loop/run.py` (the driver).** It wires the above together and is the one place
 that could overstep, so **containment is by construction**: the model only ever returns text,
@@ -268,6 +303,9 @@ protocol so a second backend is additive, not a rewrite.
 | 9 | Model endpoint shape (HTTP vs. CLI) | **Partially decided** — OpenAI-compatible HTTP client built (`tools/loop/model.py`); CLI variant open |
 | 10 | Disassembly-derived function extent | **Resolved for the bundle** — the full-analysis inventory's function `size` (validated against the `poc/` probes); `--body` overrides; the ledger partition is never used. Entries absent from the inventory still require `--body` (shared with the gate, which keeps its own `--body` stopgap) |
 | 11 | Auto-selection order (no `--entry`) | **Built** — easy-first difficulty key (`tools/ledger/complexity.py`, a library shared with manual tooling), default on the auto-select path; `--order addr` restores the ledger's link order |
+| 12 | Trivial-leaf handling | **Built** — deterministic templates (`tools/ledger/templates.py`) tried before the model; propose-not-decide (the gate still verifies), model fallback on a miss; coverage grows by adding rules |
+| 13 | Which shape to template next | **Built** — measured, not guessed: `tools/ledger/shapes.py` (assembler-checked A32 shape decoder) + `tools/ledger/shape_report.py` (pending-corpus histogram); rules are chosen from the most-frequent un-templated shapes and gate-verified before banking. First expansion: the parameterized add/store-const/half/sbyte/far getter families (670 → 816 tier-0 matches) |
+| 14 | Bundle prompt struct-copy section | **Built** — conditional on a non-stack `ldm`/`stm` in the bundle (`run.has_nonstack_block_move`); the ~1% idiom no longer dominates the prompt, and the general layout guidance stays unconditional |
 
 ---
 
@@ -283,6 +321,10 @@ tools/loop/
   attempts.py     # append-only, parent-linked attempt log  [built]
 tools/ledger/
   complexity.py   # easy-first difficulty key (library; loop + manual tooling)  [built]
+  templates.py    # deterministic trivial-leaf templates (library; loop + manual tooling)  [built]
+  shapes.py       # A32 shape decoder + signature/histogram (library; loop + manual tooling)  [built]
+  shape_report.py # pending-corpus shape histogram report (analysis CLI)  [built]
+tests/ledger/     # unit tests mirroring tools/ledger/  [complexity, templates, shapes, shape_report, bytegate, validate covered]
 tests/loop/       # unit tests mirroring tools/loop/    [model, worklist, bundle, run, attempts, nearmiss covered]
 include/          # committed declarations + types     [seed built: include/generated/]
 src/<module>/<group>.cpp   # candidates (committed); one function per file by default
