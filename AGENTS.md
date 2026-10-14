@@ -351,7 +351,10 @@ Curated prior art (study for conventions; do not copy blindly):
       *Symbol & data naming*.
 - [ ] Verify ARM32 support in `reccmp` / `asm-differ` / `splat`; decide whether to port
       `nx-decomp-tools` or build on `asm-differ`.
-- [ ] Choose the progress-tracking format (scoreboard / decomp.me / frogress).
+- [x] Choose the progress-tracking format → **decomp.dev** (the objdiff `Report` v2 JSON),
+      exported from the ledger by `tools/ledger/report.py`; published as a CI artifact named
+      `<version>_report`. The site's decompiled figure maps to `verify=match`, its linked figure
+      to `enroll=complete` — both via the shared predicate.
 - [ ] Decide how much of the sm64ds automation stack (templates, near-miss bank,
       claims protocol) to adopt for the manual-first workflow.
 - [x] Decide the generated-vs-reviewed split (separate folders + review tooling?) →

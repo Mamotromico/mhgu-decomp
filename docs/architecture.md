@@ -364,9 +364,9 @@ sm64ds `tools/enroll.py` (`rombytes`/`complete`); nx-decomp-tools `delinks` for 
 relocation-checked end state.
 
 Implemented by `tools/ledger/` — `bytegate.py` (the gate: compile one function, diff it against
-the original), `validate.py` (the ledger's invariants, the CI gate), and `ledgerlib.py` (the
-schema and the one shared matched predicate). The compiler pin lives in
-`config/toolchain.json`.
+the original), `validate.py` (the ledger's invariants, the CI gate), `report.py` (the
+decomp.dev/objdiff progress export), and `ledgerlib.py` (the schema and the one shared matched
+predicate). The compiler pin lives in `config/toolchain.json`.
 
 The reconstruction tree is seeded under `src/<module>/<group>.cpp` (committed) with a
 committed `include/` tree for declarations. Its build inputs are **generated from the ledger**
@@ -395,6 +395,15 @@ end-state gate. The predicate's parts — the externals exclusion, the alias/zer
 the `behaviour` exclusion — are defined once in *Status layer & the shared "matched" predicate*.
 
 Precedent: decomp.dev's decompiled-vs-linked split; sm64ds "matched" vs "byte-verified".
+
+**Export — the decomp.dev / objdiff report.** `tools/ledger/report.py` renders the ledger as an
+objdiff `Report` (JSON, `version: 2`) — the exact format decomp.dev's bot ingests from a GitHub
+Actions artifact named `<version>_report` (its `report.json`). The mapping *is* the predicate
+above, so nothing is hand-authored: the site's **decompiled** figure is `matched_* ← decompiled`,
+and **fully linked** is `complete_* ← enroll = complete` (the build-input axis; the derived
+whole-image `reloc` check refines it at build time). Categories are modules (`main`); per-unit
+detail is opt-in (`--units`), because the ledger's one-function-per-file default makes `group`
+one-per-function and the full unit list hundreds of MB.
 
 ## Constraints
 
