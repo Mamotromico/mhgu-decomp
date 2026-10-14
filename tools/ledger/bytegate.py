@@ -243,6 +243,30 @@ def print_diff(cand: bytes, ref: bytes, show: bool) -> None:
         print(f"    {col}{mark}+0x{4*w:04x}  got {a.hex(' '):11}  want {b.hex(' '):11}{RESET}")
 
 
+DIFF_WORD_LIMIT = 16
+
+
+def diff_words(cand: bytes, ref: bytes, limit: int = DIFF_WORD_LIMIT) -> list[dict]:
+    """The differing 4-byte words over the compared span, aligned to A32 words.
+
+    Each entry is ``{"offset": <byte offset>, "got": <candidate hex>, "want": <reference hex>}``.
+    A32 is fixed-width, so a divergence is normally one whole instruction: this turns the gate's
+    opaque byte count (``3 differing byte(s); first at +0x0``) into the exact instruction pair an
+    author — or a retry loop — can act on. Bounded to ``limit`` words so a wildly different body
+    cannot bloat the report; a candidate whose length differs still yields words up to the shorter
+    span.
+    """
+    span = min(len(cand), len(ref))
+    out: list[dict] = []
+    for off in range(0, span, 4):
+        a, b = cand[off:off + 4], ref[off:off + 4]
+        if a != b:
+            out.append({"offset": off, "got": a.hex(), "want": b.hex()})
+            if len(out) >= limit:
+                break
+    return out
+
+
 # --- the comparison rule --------------------------------------------------------------
 
 def compare_body(cand: bytes, block: bytes, off: int, partition: int,
@@ -285,7 +309,9 @@ def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: 
     """The machine-readable result of one gate run (the near-miss bank's closeness input).
 
     Pure, so it is unit-tested and stable: ``diff_count`` is the divergence count over the
-    compared span, and ``body`` is the authoritative extent when one was asserted.
+    compared span, and ``body`` is the authoritative extent when one was asserted. ``diff_words``
+    carries the differing instructions themselves (see :func:`diff_words`) so a caller can act on
+    a mismatch without re-deriving the comparison.
     """
     span = min(len(cand), len(ref))
     diff_count = sum(1 for i in range(span) if cand[i] != ref[i])
@@ -296,6 +322,7 @@ def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: 
         "body": body, "partition": partition,
         "cand_len": len(cand), "ref_len": len(ref),
         "diff_count": diff_count, "first_diff": first_diff,
+        "diff_words": diff_words(cand, ref),
         "has_reloc": has_reloc,
     }
 

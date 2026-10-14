@@ -12,7 +12,7 @@ about the vendor's true toolchain (a NintendoSDK build, and not obtainable).
 | Language | **C++17** | `nn::` API imports in Itanium mangling; all Switch reference projects are C++ |
 | Runtime | NintendoSDK 4.4.x (`nn::`), libc++ | NCA header `SdkAddon Ver. 4.4.1`; import names |
 | Target SoC | Tegra X1 (T210, "Erista"), `4×Cortex-A57 + 4×Cortex-A53`; **A57 cluster only** | Wikipedia *Tegra* (Switch `ODNX02-A2`) |
-| Float | VFP-only, NEON disabled — no auto-vectorisation in `.text` | A2/A3 |
+| Float | VFP-only, NEON disabled — no auto-vectorisation in `.text`; **hardfp** ABI (`-mfloat-abi=hard`) | A2/A3, A4 |
 
 ## Compiler — de facto pin: clang 5.0.1 + two backend knobs
 
@@ -21,7 +21,7 @@ functions byte-for-byte, so the project adopts it as the **de facto pin** until 
 
 ```text
 clang 5.0.1
-  -target armv8a-none-eabi -mfpu=vfpv4-d16
+  -target armv8a-none-eabi -mfpu=vfpv4-d16 -mfloat-abi=hard
   -O2 -fomit-frame-pointer -fPIC -fno-exceptions -fno-rtti
   -ffreestanding -std=c++1z
   -mllvm -pre-RA-sched=source
@@ -31,6 +31,27 @@ clang 5.0.1
 (No `-mcpu` — it was imported from the AArch64 reference projects and is wrong here;
 `-mtune` is inert in clang 5.0.1's ARM32 backend. `-O2` and `-O3` are indistinguishable on
 the corpus.)
+
+### A4 — float ABI is hardfp (`-mfloat-abi=hard`)
+
+clang's default float ABI for `-target armv8a-none-eabi` is **softfp**: a `float` argument or
+return value crosses the boundary in the integer registers `r0–r3`. The original uses the
+**hardfp** ABI — floats cross in the VFP registers `s0…`. The two are mutually exclusive, so a
+reconstruction that is semantically correct still fails to byte-match:
+
+| original (hardfp) | our default (softfp) |
+| --- | --- |
+| `vstr.32 s0, [r0,#0x5c]` | `str r1, [r0,#0x5c]` |
+| `vmov.f32 s0, #4.0` | `mov r0, #0` ; `movt r0, …` ; `vmov r0, s0` |
+
+`-mfloat-abi=hard` reproduces the original exactly. Evidence: this was the **entire failure mass
+of the first real loop run** — of 11 functions that never matched (106 attempts between them),
+10 carry float parameters or returns, and all 11 byte-match once the flag is added, with the
+candidate source unchanged (only the ABI differed). Re-gating the whole matched corpus (774
+functions) under the flag produced **no regressions** — integer-only codegen is unaffected.
+
+The fix must be a *pin* change, not a per-function workaround: a softfp build can never emit the
+original's `vstr`/`vmov` ABI sequences, so no source rewrite can close such a diff.
 
 > The two `-mllvm` flags are **hidden backend knobs, not real build settings**. They are a
 > *reproduction device*: they make our build emit what the original emitted. They say

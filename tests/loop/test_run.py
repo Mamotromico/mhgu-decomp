@@ -27,6 +27,7 @@ import bundle
 import model
 import nearmiss
 from run import (
+    Feedback,
     Layout,
     attempt_entry,
     attempt_store,
@@ -35,9 +36,12 @@ from run import (
     bundle_argv,
     context_path,
     ensure_under,
+    feedback_from_record,
+    feedback_section,
     gate_argv,
     group_is_single,
     has_nonstack_block_move,
+    parse_reference_instructions,
     process,
     prompt_fingerprint,
     resolve_entry,
@@ -230,7 +234,7 @@ class _FakeModel:
                          completion_tokens=2, latency_s=0.0)
 
 
-def fake_gate(rc: int, status: str, diff_count: int, cand_len: int):
+def fake_gate(rc: int, status: str, diff_count: int, cand_len: int, diff_words=None):
     """A ``run_subprocess`` stand-in that writes the gate's ``--report`` file."""
     def _run(argv):
         report = None
@@ -241,7 +245,8 @@ def fake_gate(rc: int, status: str, diff_count: int, cand_len: int):
                 "module": "main", "addr": "601a72e4", "name": "func_601a72e4",
                 "ok": rc == 0, "status": status, "body": 60, "partition": 1368,
                 "cand_len": cand_len, "ref_len": 60, "diff_count": diff_count,
-                "first_diff": 0 if diff_count else None, "has_reloc": False}))
+                "first_diff": 0 if diff_count else None, "diff_words": diff_words or [],
+                "has_reloc": False}))
         return rc, f">>> {status.upper()}"
     return _run
 
@@ -344,6 +349,21 @@ class ProcessTests(unittest.TestCase):
         self.assertEqual(self.log()[0]["outcome"], "error")
         self.assertIsNone(self.bank_best())
 
+    def test_diff_words_are_recorded_and_feedback_is_flagged(self):
+        words = [{"offset": 0, "got": "5c1080e5", "want": "170a80ed"}]
+        fb = Feedback("mismatch", status="mismatch", diff_count=3, diff_words=words)
+        with mock.patch("run.run_subprocess", new=fake_gate(1, "mismatch", 3, 58,
+                                                            diff_words=words)):
+            process(entry(), [entry()], self.lay, self.args, _FakeModel(), feedback=fb)
+        record = self.log()[0]
+        self.assertEqual(record["diff_words"], words)
+        self.assertTrue(record["feedback_used"])
+
+    def test_first_attempt_records_no_feedback_flag(self):
+        with mock.patch("run.run_subprocess", new=fake_gate(1, "mismatch", 3, 58)):
+            process(entry(), [entry()], self.lay, self.args, _FakeModel())
+        self.assertNotIn("feedback_used", self.log()[0])
+
 
 class AttemptEntryTests(unittest.TestCase):
     """The per-entry retry loop, with the single-attempt step stubbed."""
@@ -419,6 +439,165 @@ class AttemptEntryTests(unittest.TestCase):
 
         with self.assertRaises(KeyboardInterrupt):
             self._run(one)
+
+
+class ReferenceInstructionsTests(unittest.TestCase):
+    BUNDLE = ("## disassembly\n\n"
+              "    601a72e4  5c1080e5  str r1, [r0, #92]\n"
+              "    601a72e8  1eff2fe1  bx lr\n"
+              "## calls\n\n    (none)\n")
+
+    def test_offsets_are_body_relative(self):
+        ref = parse_reference_instructions(self.BUNDLE, "601a72e4")
+        self.assertEqual(ref[0], "str r1, [r0, #92]")
+        self.assertEqual(ref[4], "bx lr")
+
+    def test_only_the_disassembly_section_is_read(self):
+        ref = parse_reference_instructions(self.BUNDLE, "601a72e4")
+        self.assertNotIn(8, ref)
+
+
+class FeedbackSectionTests(unittest.TestCase):
+    BUNDLE = ("## disassembly\n\n"
+              "    601a72e4  5c1080e5  str r1, [r0, #92]\n"
+              "    601a72e8  1eff2fe1  bx lr\n")
+
+    def test_no_feedback_is_empty(self):
+        self.assertEqual(feedback_section(entry(), self.BUNDLE, None), "")
+
+    def test_mismatch_names_the_instruction_and_quotes_the_candidate(self):
+        fb = Feedback("mismatch", status="mismatch", diff_count=3,
+                      diff_words=[{"offset": 0, "got": "5c1080e5", "want": "170a80ed"}],
+                      candidate='extern "C" void f(void *p) { *(int *)p = 0; }')
+        out = feedback_section(entry(), self.BUNDLE, fb)
+        self.assertIn("Previous attempt did not match", out)
+        self.assertIn("got 5c1080e5", out)
+        self.assertIn("want 170a80ed", out)
+        self.assertIn("original: str r1, [r0, #92]", out)   # the reference mnemonic
+        self.assertIn("your previous translation unit", out)
+
+    def test_compile_error_is_quoted(self):
+        fb = Feedback("error", compile_error="x.cpp:1:1: error: expected ';'")
+        out = feedback_section(entry(), self.BUNDLE, fb)
+        self.assertIn("did not compile", out)
+        self.assertIn("expected ';'", out)
+
+
+class FeedbackFromRecordTests(unittest.TestCase):
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.root = Path(self._dir.name)
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def test_none_without_an_actionable_outcome(self):
+        self.assertIsNone(feedback_from_record(None, self.root))
+        self.assertIsNone(feedback_from_record({"outcome": "match"}, self.root))
+
+    def test_mismatch_reads_the_previous_candidate(self):
+        blob = self.root / "main" / "601a72e4" / "001.cpp"
+        blob.parent.mkdir(parents=True)
+        blob.write_text("int f(void){return 0;}")
+        rec = {"outcome": "mismatch", "gate_status": "mismatch", "diff_count": 3,
+               "diff_words": [{"offset": 0, "got": "aa", "want": "bb"}],
+               "candidate": "main/601a72e4/001.cpp"}
+        fb = feedback_from_record(rec, self.root)
+        self.assertEqual(fb.outcome, "mismatch")
+        self.assertEqual(fb.diff_count, 3)
+        self.assertEqual(fb.diff_words, [{"offset": 0, "got": "aa", "want": "bb"}])
+        self.assertEqual(fb.candidate, "int f(void){return 0;}")
+
+    def test_error_carries_the_compiler_output(self):
+        rec = {"outcome": "error", "gate_output": "error: boom"}
+        fb = feedback_from_record(rec, self.root)
+        self.assertEqual(fb.outcome, "error")
+        self.assertEqual(fb.compile_error, "error: boom")
+        self.assertIsNone(fb.candidate)
+
+
+class BuildPromptFeedbackTests(unittest.TestCase):
+    def test_no_feedback_leaves_the_prompt_unchanged(self):
+        self.assertNotIn("Previous attempt", build_prompt(entry(), "BUNDLE"))
+
+    def test_feedback_is_appended(self):
+        fb = Feedback("mismatch", status="mismatch", diff_count=1,
+                      diff_words=[{"offset": 0, "got": "aabbccdd", "want": "11223344"}])
+        out = build_prompt(entry(), "## disassembly\n\n    601a72e4  aabbccdd  mov r0, r0\n", fb)
+        self.assertIn("Previous attempt did not match", out)
+        self.assertIn("want 11223344", out)
+
+
+class AttemptEntryFeedbackTests(unittest.TestCase):
+    """Feedback threads between attempts; a repeated divergence stops the retry early."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.root = Path(self._dir.name)
+        self.lay = Layout(ledger=Path("/ledger"), inventory=Path("/inv"), nso=Path("/nso"),
+                          context=self.root / "ctx", src_root=self.root / "src",
+                          build_config=Path("/bc"), toolchain=Path("/tc"),
+                          work=self.root / "work")
+        self.store = self.root / "work" / "attempts"
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def _attempt(self, one, attempts):
+        self.args = Namespace(attempts=attempts)
+        return attempt_entry(entry(), [], self.lay, self.args, None, one=one)
+
+    def test_feedback_is_threaded_between_attempts(self):
+        seen = []
+        words = [{"offset": 0, "got": "aa", "want": "bb"}]
+
+        def one(e, entries, lay, args, model, raw_text, feedback=None):
+            seen.append(feedback)
+            attempts.append(self.store, {
+                "module": "main", "addr": "601a72e4", "name": "func_601a72e4",
+                "outcome": "mismatch", "gate_status": "mismatch", "diff_count": 3,
+                "diff_words": words}, candidate_text="int f(void){return 0;}")
+            return "mismatch"
+
+        outcome, used = self._attempt(one, 3)
+        self.assertEqual(outcome, "mismatch")
+        self.assertIsNone(seen[0])                       # the first attempt is the base prompt
+        self.assertIsNotNone(seen[1])                    # the retry carries feedback
+        self.assertEqual(seen[1].diff_words, words)
+        self.assertEqual(seen[1].candidate, "int f(void){return 0;}")
+
+    def test_a_repeated_divergence_stops_the_retry(self):
+        words = [{"offset": 0, "got": "aa", "want": "bb"}]
+        calls = []
+
+        def one(e, entries, lay, args, model, raw_text, feedback=None):
+            calls.append(feedback)
+            attempts.append(self.store, {
+                "module": "main", "addr": "601a72e4", "name": "func_601a72e4",
+                "outcome": "mismatch", "gate_status": "mismatch", "diff_count": 3,
+                "diff_words": words}, candidate_text="int f(void){return 0;}")
+            return "mismatch"
+
+        outcome, used = self._attempt(one, 5)
+        self.assertEqual((outcome, used), ("mismatch", 2))   # stopped after the repeat, not 5
+        self.assertEqual(len(calls), 2)
+
+    def test_no_feedback_disables_both_feedback_and_the_stall_stop(self):
+        words = [{"offset": 0, "got": "aa", "want": "bb"}]
+        seen = []
+
+        def one(e, entries, lay, args, model, raw_text, feedback=None):
+            seen.append(feedback)
+            attempts.append(self.store, {
+                "module": "main", "addr": "601a72e4", "name": "func_601a72e4",
+                "outcome": "mismatch", "gate_status": "mismatch", "diff_count": 3,
+                "diff_words": words}, candidate_text="int f(void){return 0;}")
+            return "mismatch"
+
+        self.args = Namespace(attempts=3, feedback=False)
+        outcome, used = attempt_entry(entry(), [], self.lay, self.args, None, one=one)
+        self.assertEqual(used, 3)
+        self.assertTrue(all(f is None for f in seen))
 
 
 if __name__ == "__main__":

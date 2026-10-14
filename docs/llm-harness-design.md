@@ -286,6 +286,18 @@ sm64ds shape).
 config names). A CLI-invocation variant remains **open**: the client is behind a ``Model``
 protocol so a second backend is additive, not a rewrite.
 
+**Built — retry feedback (a retry revises, it does not resample).** A mismatch used to be
+resampled with a byte-identical prompt: measured on the first corpus run, 11 stuck functions drew
+106 attempts between them, every retry with the same `prompt_sha256`. Now the gate reports the
+precise divergence — the differing A32 words as `diff_words` (`{offset, got, want}`) — and on a
+compile failure the compiler output; `run.py` reads the previous attempt's record back and appends
+a *Previous attempt did not match* section naming the exact instructions (with the reference
+mnemonic taken from the bundle) next to the previous translation unit, so the model **edits** the
+divergence rather than regenerating. A retry also stops early once a mismatch repeats the *same*
+`diff_words` (the feedback moved nothing, so further tries are waste). `--no-feedback` restores
+plain resampling for A/B, and the first attempt is untouched, so a single-attempt run and the
+pre-feedback prompt stay byte-identical.
+
 ---
 
 ## Decisions and open questions
@@ -306,6 +318,7 @@ protocol so a second backend is additive, not a rewrite.
 | 12 | Trivial-leaf handling | **Built** — deterministic templates (`tools/ledger/templates.py`) tried before the model; propose-not-decide (the gate still verifies), model fallback on a miss; coverage grows by adding rules |
 | 13 | Which shape to template next | **Built** — measured, not guessed: `tools/ledger/shapes.py` (assembler-checked A32 shape decoder) + `tools/ledger/shape_report.py` (pending-corpus histogram); rules are chosen from the most-frequent un-templated shapes and gate-verified before banking. First expansion: the parameterized add/store-const/half/sbyte/far getter families (670 → 816 tier-0 matches) |
 | 14 | Bundle prompt struct-copy section | **Built** — conditional on a non-stack `ldm`/`stm` in the bundle (`run.has_nonstack_block_move`); the ~1% idiom no longer dominates the prompt, and the general layout guidance stays unconditional |
+| 15 | Retry feedback on a mismatch | **Built** — the gate's `diff_words` + the previous candidate are fed into the next attempt's prompt (`run.feedback_section`), with a stall stop when the divergence repeats; `--no-feedback` restores resampling |
 
 ---
 

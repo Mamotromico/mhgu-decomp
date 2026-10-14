@@ -148,7 +148,7 @@ Float:         VFP-only, NEON disabled — no auto-vectorisation in .text
 **Build flags (the de facto pin):**
 
 ```text
-clang -target armv8a-none-eabi -mfpu=vfpv4-d16 \
+clang -target armv8a-none-eabi -mfpu=vfpv4-d16 -mfloat-abi=hard \
       -O2 -fomit-frame-pointer -fPIC -fno-exceptions -fno-rtti \
       -ffreestanding -std=c++1z \
       -mllvm -pre-RA-sched=source -mllvm -hoist-cheap-insts=true
@@ -190,7 +190,11 @@ Dropping `-mcpu` alone raises 5.0.x from 3/5 to 4/5 on the original corpus.
 
 **VFP-only, NEON off.** The real `.text` never auto-vectorises and enabling NEON
 (`-mfpu=neon-*`) breaks the match — the build must pass `-mfpu=vfpv4-d16`. `-O2`/`-O3` are
-indistinguishable on the corpus. Full evidence and method:
+indistinguishable on the corpus. Float arguments/results cross the ABI in the VFP s-registers
+(**hardfp**, `-mfloat-abi=hard`), not clang's default integer-register softfp: without it a
+float store compiles to `str r1` where the original has `vstr s0`. This was the whole failure
+mass of the first loop run (10 of 11 unmatched functions are float-facing); re-gating the 774
+matched functions under the flag showed no regressions. Full evidence and method:
 [`docs/compiler-identification.md`](docs/compiler-identification.md).
 
 > **Running clang:** the devcontainer ships the pinned compiler at `/opt/clang-5.0.1`

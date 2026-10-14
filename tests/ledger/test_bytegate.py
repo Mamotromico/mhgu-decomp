@@ -124,6 +124,25 @@ class GateResultTests(unittest.TestCase):
         self.assertEqual(r["status"], "mismatch")
         self.assertEqual(r["name"], "func_601a72e4")
 
+    def test_reports_the_differing_words(self):
+        # The softfp/hardfp shape: one instruction differs in 3 bytes, the next matches.
+        cand = bytes.fromhex("5c1080e51eff2fe1")
+        ref = bytes.fromhex("170a80ed1eff2fe1")
+        r = self.result(cand, ref, ok=False, status="mismatch")
+        self.assertEqual(r["diff_words"],
+                         [{"offset": 0, "got": "5c1080e5", "want": "170a80ed"}])
+
+    def test_no_diff_words_on_a_match(self):
+        self.assertEqual(self.result(b"abcd", b"abcd")["diff_words"], [])
+
+    def test_diff_words_are_capped(self):
+        cand = bytes(4 * 32)
+        ref = bytes([0xFF]) * (4 * 32)
+        r = self.result(cand, ref, ok=False, status="mismatch")
+        self.assertEqual(len(r["diff_words"]), 16)
+        self.assertEqual(r["diff_words"][0], {"offset": 0, "got": "00000000",
+                                              "want": "ffffffff"})
+
 
 class ShouldColorTests(unittest.TestCase):
     """Colour is suppressed for --no-color, NO_COLOR, or non-TTY output."""

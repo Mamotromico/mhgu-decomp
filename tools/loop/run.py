@@ -33,6 +33,7 @@ Usage::
     python3 tools/loop/run.py --order addr            # select in the ledger's own order
     python3 tools/loop/run.py --entry 601a72e4        # a specific entry
     python3 tools/loop/run.py --entry 601a72e4 --attempts 5   # resample until it matches
+    python3 tools/loop/run.py --entry 601a72e4 --attempts 5 --no-feedback  # plain resampling
     python3 tools/loop/run.py --dry-run                # select + bundle + prompt, no model
     python3 tools/loop/run.py --rebuild                # regenerate the bundle (Ghidra)
 """
@@ -47,7 +48,7 @@ import re
 import subprocess
 import sys
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -115,6 +116,107 @@ def has_nonstack_block_move(bundle_text: str) -> bool:
 
 
 @dataclass
+class Feedback:
+    """The previous attempt's outcome, fed into the next prompt (a retry only).
+
+    Built from the attempt log (:func:`feedback_from_record`), so it reflects what the gate
+    actually said, never a re-derivation. ``candidate`` is the previous translation unit (for
+    the model to edit); ``diff_words``/``compile_error`` are the actionable divergence.
+    """
+
+    outcome: str
+    status: str | None = None
+    diff_count: int | None = None
+    diff_words: list = field(default_factory=list)
+    candidate: str | None = None
+    compile_error: str | None = None
+
+
+def parse_reference_instructions(bundle_text: str, base_addr: str) -> dict[int, str]:
+    """Map body-relative offset -> original instruction text, from the bundle's disassembly.
+
+    The bundle lists absolute addresses; ``base_addr`` is the entry address, so the offset of a
+    line is ``addr - base_addr`` — the same frame the gate's ``diff_words`` offsets use. Only the
+    ``## disassembly`` section is read (the later ``## calls`` section is ignored).
+    """
+    base = int(base_addr, 16)
+    out: dict[int, str] = {}
+    inside = False
+    for line in bundle_text.splitlines():
+        if line.startswith("## "):
+            inside = line.startswith("## disassembly")
+            continue
+        if not inside:
+            continue
+        m = _BUNDLE_INSN.match(line)
+        if m:
+            out[int(m.group(1), 16) - base] = f"{m.group(3)} {m.group(4)}".strip()
+    return out
+
+
+def feedback_section(entry: dict, bundle_text: str,
+                     feedback: "Feedback | None") -> str:
+    """Render the retry guidance appended to the prompt; empty when there is no feedback.
+
+    A mismatch names the exact instructions that differ (offset, candidate bytes, reference
+    bytes, and the reference mnemonic when the bundle carries it); a compile error quotes the
+    compiler. The previous translation unit is included so the model edits rather than regenerates.
+    """
+    if feedback is None:
+        return ""
+    if feedback.compile_error:
+        body = (
+            "## Previous attempt did not compile\n\n"
+            "The compiler rejected the last translation unit:\n\n"
+            "```\n" + feedback.compile_error.strip()[-1200:] + "\n```\n\n"
+            "Return a corrected translation unit that compiles.")
+    else:
+        ref = parse_reference_instructions(bundle_text, entry["addr"])
+        rows = []
+        for w in feedback.diff_words:
+            insn = ref.get(w["offset"])
+            rows.append(f"    +0x{w['offset']:x}  got {w['got']}  want {w['want']}"
+                        + (f"   ; original: {insn}" if insn else ""))
+        if not rows:
+            rows.append(f"    (compiled body {feedback.status}; see the disassembly above)")
+        body = (
+            "## Previous attempt did not match\n\n"
+            "The last candidate compiled, but the machine code differs from the original "
+            f"({feedback.diff_count} differing byte(s)). Fix ONLY the instructions below; keep "
+            "the rest of the translation unit unchanged. `got` is your bytes, `want` is the "
+            "original's; registers may differ by design, so prefer a source change that makes "
+            "the compiler emit the `want` instruction:\n\n"
+            + "\n".join(rows))
+    parts = [body]
+    if feedback.candidate:
+        parts.append("--- your previous translation unit ---\n"
+                     + feedback.candidate.strip() + "\n--- end ---")
+    return "\n\n".join(parts) + "\n"
+
+
+def feedback_from_record(record: dict | None, store_dir: Path) -> Feedback | None:
+    """The retry feedback for a recorded attempt, or ``None`` if it is not actionable.
+
+    Only a ``mismatch`` or ``error`` carries feedback (a ``match`` needs no retry). The previous
+    candidate blob, if present, is read back so the model can revise it.
+    """
+    if not record or record.get("outcome") not in ("mismatch", "error"):
+        return None
+    candidate = None
+    rel = record.get("candidate")
+    if rel:
+        blob = Path(store_dir) / rel
+        if blob.exists():
+            candidate = blob.read_text()
+    if record["outcome"] == "error":
+        return Feedback("error", candidate=candidate,
+                        compile_error=record.get("gate_output") or "")
+    return Feedback("mismatch", status=record.get("gate_status"),
+                    diff_count=record.get("diff_count"),
+                    diff_words=record.get("diff_words") or [], candidate=candidate)
+
+
+@dataclass
 class Layout:
     """The fixed paths one run reads from and writes to (all repo-relative)."""
 
@@ -175,7 +277,7 @@ def group_is_single(entries: list[dict], module: str, group: str) -> bool:
                and e["kind"] == "function") == 1
 
 
-def build_prompt(entry: dict, bundle_text: str) -> str:
+def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = None) -> str:
     """The user prompt: the required symbol plus the whole context bundle.
 
     The instructions are load-bearing: an early pilot had the model reproduce the disassembly
@@ -186,6 +288,11 @@ def build_prompt(entry: dict, bundle_text: str) -> str:
     struct-copy guidance is now **conditional** (``has_nonstack_block_move``): it is included
     only when the bundle actually carries a non-stack ``ldm``/``stm``, so a rare idiom no longer
     dominates the prompt (see ``docs/llm-harness-design.md`` → *Template growth is measured*).
+
+    ``feedback`` (a retry only, so ``None`` on the first attempt) appends the previous attempt's
+    divergence — the exact instructions that differ, or the compiler error — so a retry improves
+    on the previous try instead of resampling the identical prompt. With ``feedback is None`` the
+    output is byte-identical to the pre-feedback prompt.
     """
     name = entry["name"]
     if name.isidentifier():
@@ -216,6 +323,7 @@ def build_prompt(entry: dict, bundle_text: str) -> str:
         f"{symbol}\n"
         f"Reply with the translation unit only — no prose, no Markdown fences.\n\n"
         f"{bundle_text}\n"
+        f"{feedback_section(entry, bundle_text, feedback)}"
     )
 
 
@@ -317,6 +425,9 @@ def main(argv: list[str] | None = None) -> int:
                          "or 'addr' (the ledger's own order)")
     ap.add_argument("--attempts", type=int, default=1,
                     help="attempts per entry, stopping early on a match (default 1)")
+    ap.add_argument("--no-feedback", dest="feedback", action="store_false",
+                    help="on a retry, do not feed the previous attempt's divergence back into "
+                         "the prompt (resample the base prompt; also disables the stall stop)")
     ap.add_argument("--force", action="store_true",
                     help="process entries whose source already exists (overwrites)")
     ap.add_argument("--no-skip-existing", dest="skip_existing", action="store_false",
@@ -427,9 +538,10 @@ def build_bundle_text(layout: Layout, entry: dict, args, body: int) -> str:
     return md.read_text()
 
 
-def ask_model(entry: dict, layout: Layout, args, model, body: int):
+def ask_model(entry: dict, layout: Layout, args, model, body: int,
+              feedback: "Feedback | None" = None):
     """Bundle, prompt, and call the model. Returns ``(candidate, completion, prompt)``."""
-    prompt = build_prompt(entry, build_bundle_text(layout, entry, args, body))
+    prompt = build_prompt(entry, build_bundle_text(layout, entry, args, body), feedback)
     print(f"    asking {getattr(model, 'model', 'model')} …", file=sys.stderr, flush=True)
     with heartbeat(entry["name"]):
         completion = model.complete(prompt, system=SYSTEM)
@@ -456,12 +568,15 @@ def write_and_gate(entry: dict, layout: Layout, body: int, draft: Path, candidat
 
 
 def process(entry: dict, entries: list[dict], layout: Layout, args, model,
-            raw_text: bytes | None = None) -> str:
+            raw_text: bytes | None = None, feedback: "Feedback | None" = None) -> str:
     """One loop iteration. Returns 'match' | 'mismatch' | 'error' | 'dry-run'.
 
     A deterministic **template** (``tools/ledger/templates.py``) is tried first: it needs
     neither the context bundle nor the model, so a structural leaf skips both. The gate still
     decides; on a template miss the model is asked as a fallback, so this never regresses.
+
+    ``feedback`` (a retry only) is the previous attempt's divergence, passed into the prompt so a
+    retry edits rather than resamples; it is recorded (``feedback_used``) for auditability.
     """
     module, addr, name = entry["module"], entry["addr"], entry["name"]
     body, extent_source = resolve_body(layout, entry, args.body)
@@ -483,13 +598,13 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
             print(candidate)
         else:
             print(f"--- prompt for {name} ({body} B, {extent_source}) ---")
-            print(build_prompt(entry, build_bundle_text(layout, entry, args, body)))
+            print(build_prompt(entry, build_bundle_text(layout, entry, args, body), feedback))
         return "dry-run"
 
     # 2. model — only when no template fired.
     completion = prompt = None
     if candidate is None:
-        candidate, completion, prompt = ask_model(entry, layout, args, model, body)
+        candidate, completion, prompt = ask_model(entry, layout, args, model, body, feedback)
         if not candidate.strip():
             print(f"{name}: empty candidate from the model")
             return "error"
@@ -499,7 +614,7 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
 
     # 4. a template that missed falls through to the model, so the path never regresses.
     if outcome != "match" and source == "template":
-        candidate2, completion2, prompt2 = ask_model(entry, layout, args, model, body)
+        candidate2, completion2, prompt2 = ask_model(entry, layout, args, model, body, feedback)
         if candidate2.strip():
             candidate, source = candidate2, "model"
             hit = None                     # the rule missed; this is a model attempt now
@@ -517,11 +632,14 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         "prompt_sha256": prompt_fingerprint(prompt or ""),
         "gate_output": gate_out.strip()[-4000:],
     }
+    if feedback is not None:
+        record["feedback_used"] = True
     if hit is not None:
         record["template_rule"] = {"n": hit[0], "name": hit[1]}
     if report is not None:
         record["gate_status"] = report["status"]
         record["diff_count"] = report["diff_count"]
+        record["diff_words"] = report.get("diff_words", [])
     stored = attempts.append(attempt_store(layout), record, candidate_text=candidate)
 
     # 6. bank a near miss (strictly-improving), and keep src/ matched-only.
@@ -556,12 +674,21 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
     Returns ``(outcome, attempts_used)``. Every attempt is recorded (parent-linked) by
     ``process``; a transport or bundle error counts as an attempt and is retried, since a
     runaway generation or a cold-load timeout is often transient. ``--dry-run`` previews once.
+
+    Between attempts the previous attempt's divergence is threaded back in as ``feedback`` so a
+    retry revises the last candidate instead of resampling an identical prompt (disable with
+    ``--no-feedback``). Retrying also stops early once a mismatch reproduces the *same*
+    divergence as the attempt before it — the feedback moved nothing, so further tries are waste.
     """
     outcome = "error"
     used = 0
+    store = attempt_store(layout)
+    feedback = None
+    prev_words: list | None = None
+    enabled = getattr(args, "feedback", True)
     for _ in range(max(1, args.attempts)):
         try:
-            outcome = one(entry, entries, layout, args, model, raw_text)
+            outcome = one(entry, entries, layout, args, model, raw_text, feedback)
         except (attempts.AttemptError, bundle.BundleError, model_client.ModelError,
                 ValueError) as e:
             print(f"error: {entry['name']}: {e}", file=sys.stderr)
@@ -569,6 +696,19 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
         used += 1
         if outcome in ("match", "dry-run"):
             break
+        if not enabled:
+            continue
+        try:
+            record = attempts.latest_for(store / "log.jsonl", entry["module"], entry["addr"])
+        except attempts.AttemptError:
+            record = None
+        feedback = feedback_from_record(record, store)
+        words = feedback.diff_words if feedback else None
+        if outcome == "mismatch" and words and words == prev_words:
+            print(f"    stall: {entry['name']} repeated the same divergence; stopping early",
+                  file=sys.stderr)
+            break
+        prev_words = words if words else prev_words
     return outcome, used
 
 
