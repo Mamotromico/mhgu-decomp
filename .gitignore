@@ -38,3 +38,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# --- Secrets / local environment ----------------------------------------------
+# A local .env may hold the model API key named by 'api_key_env' in config/model.json.
+# It is never committed; commit a .env.example instead if a template is needed.
+.env
+.env.*
+!.env.example
