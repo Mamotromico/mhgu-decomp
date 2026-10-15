@@ -1,0 +1,1 @@
+extern "C" long long func_602257f0() { return 0; }
