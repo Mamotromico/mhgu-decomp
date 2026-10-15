@@ -600,5 +600,75 @@ class AttemptEntryFeedbackTests(unittest.TestCase):
         self.assertTrue(all(f is None for f in seen))
 
 
+class AttemptEntryCompileBudgetTests(unittest.TestCase):
+    """Non-compiling candidates draw on their own budget, not the match attempts."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.root = Path(self._dir.name)
+        self.lay = Layout(ledger=Path("/ledger"), inventory=Path("/inv"), nso=Path("/nso"),
+                          context=self.root / "ctx", src_root=self.root / "src",
+                          build_config=Path("/bc"), toolchain=Path("/tc"),
+                          work=self.root / "work")
+        self.store = self.root / "work" / "attempts"
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def _compile_failing(self, calls):
+        def one(e, entries, lay, args, model, raw_text, feedback=None):
+            calls.append(feedback)
+            attempts.append(self.store, {
+                "module": "main", "addr": "601a72e4", "name": "func_601a72e4",
+                "outcome": "error", "gate_rc": 3,
+                "gate_output": "error: compilation failed (clang exit 1)"},
+                candidate_text="int f(void){ return nope; }")
+            return "error"
+        return one
+
+    def test_stops_at_the_compile_failure_budget(self):
+        calls = []
+        args = Namespace(attempts=5, compile_attempts=2)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None,
+                                      one=self._compile_failing(calls))
+        self.assertEqual((outcome, used), ("error", 2))
+        self.assertEqual(len(calls), 2)
+
+    def test_budget_is_independent_of_the_match_attempts(self):
+        calls = []
+        args = Namespace(attempts=6, compile_attempts=3)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None,
+                                      one=self._compile_failing(calls))
+        self.assertEqual(used, 3)                       # the compile budget, not the 6 attempts
+
+    def test_a_mismatch_does_not_consume_the_compile_budget(self):
+        calls = []
+
+        def one(e, entries, lay, args, model, raw_text, feedback=None):
+            calls.append(1)
+            attempts.append(self.store, {
+                "module": "main", "addr": "601a72e4", "name": "func_601a72e4",
+                "outcome": "mismatch", "gate_status": "mismatch", "diff_count": 3,
+                "diff_words": []}, candidate_text="int f(void){return 0;}")
+            return "mismatch"
+
+        args = Namespace(attempts=4, compile_attempts=2, feedback=False)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None, one=one)
+        self.assertEqual((outcome, used), ("mismatch", 4))
+        self.assertEqual(len(calls), 4)
+
+    def test_transport_errors_do_not_consume_the_compile_budget(self):
+        calls = []
+
+        def one(*_):
+            calls.append(1)
+            raise model.ModelError("boom")             # appends no record
+
+        args = Namespace(attempts=4, compile_attempts=2)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None, one=one)
+        self.assertEqual((outcome, used), ("error", 4))
+        self.assertEqual(len(calls), 4)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

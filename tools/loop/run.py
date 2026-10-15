@@ -425,6 +425,9 @@ def main(argv: list[str] | None = None) -> int:
                          "or 'addr' (the ledger's own order)")
     ap.add_argument("--attempts", type=int, default=1,
                     help="attempts per entry, stopping early on a match (default 1)")
+    ap.add_argument("--compile-attempts", type=int, default=2,
+                    help="separate budget for non-compiling candidates: stop retrying an entry "
+                         "once this many attempts produced code clang rejected (default 2)")
     ap.add_argument("--no-feedback", dest="feedback", action="store_false",
                     help="on a retry, do not feed the previous attempt's divergence back into "
                          "the prompt (resample the base prompt; also disables the stall stop)")
@@ -679,6 +682,11 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
     retry revises the last candidate instead of resampling an identical prompt (disable with
     ``--no-feedback``). Retrying also stops early once a mismatch reproduces the *same*
     divergence as the attempt before it — the feedback moved nothing, so further tries are waste.
+
+    A candidate that does not compile is a *distinct* failure mode from a near miss, so it is
+    counted against its own, usually smaller budget (``--compile-attempts``): once this many
+    attempts were rejected by clang, the entry is abandoned instead of burning every match
+    attempt on code that never gets as far as the byte comparison.
     """
     outcome = "error"
     used = 0
@@ -686,6 +694,9 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
     feedback = None
     prev_words: list | None = None
     enabled = getattr(args, "feedback", True)
+    compile_budget = max(0, getattr(args, "compile_attempts", 2))
+    compile_failures = 0
+    last_id = None
     for _ in range(max(1, args.attempts)):
         try:
             outcome = one(entry, entries, layout, args, model, raw_text, feedback)
@@ -696,12 +707,23 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
         used += 1
         if outcome in ("match", "dry-run"):
             break
-        if not enabled:
-            continue
         try:
             record = attempts.latest_for(store / "log.jsonl", entry["module"], entry["addr"])
         except attempts.AttemptError:
             record = None
+        # Only a *fresh* record is this attempt's own (an empty candidate or a raised exception
+        # appends nothing, leaving the previous record in place, so it must not be recounted).
+        # A compile failure is ``error`` with a gate exit of 3; it draws on its own budget.
+        if record is not None and record.get("id") != last_id:
+            last_id = record.get("id")
+            if record.get("outcome") == "error" and record.get("gate_rc") == 3:
+                compile_failures += 1
+                if compile_failures >= compile_budget:
+                    print(f"    stop: {entry['name']} hit the compile-failure budget "
+                          f"({compile_failures}); the candidate never compiles", file=sys.stderr)
+                    break
+        if not enabled:
+            continue
         feedback = feedback_from_record(record, store)
         words = feedback.diff_words if feedback else None
         if outcome == "mismatch" and words and words == prev_words:

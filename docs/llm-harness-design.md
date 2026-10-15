@@ -294,7 +294,11 @@ compile failure the compiler output; `run.py` reads the previous attempt's recor
 a *Previous attempt did not match* section naming the exact instructions (with the reference
 mnemonic taken from the bundle) next to the previous translation unit, so the model **edits** the
 divergence rather than regenerating. A retry also stops early once a mismatch repeats the *same*
-`diff_words` (the feedback moved nothing, so further tries are waste). `--no-feedback` restores
+`diff_words` (the feedback moved nothing, so further tries are waste). A candidate that never
+compiles draws on a **separate, smaller budget** (`--compile-attempts`, default 2): once that
+many attempts were rejected by clang the entry is abandoned, so a model that keeps emitting
+non-compiling code (e.g. NEON intrinsics under the VFP-only pin) stops on its own threshold
+instead of burning every match attempt. `--no-feedback` restores
 plain resampling for A/B, and the first attempt is untouched, so a single-attempt run and the
 pre-feedback prompt stay byte-identical.
 
@@ -318,7 +322,7 @@ pre-feedback prompt stay byte-identical.
 | 12 | Trivial-leaf handling | **Built** — deterministic templates (`tools/ledger/templates.py`) tried before the model; propose-not-decide (the gate still verifies), model fallback on a miss; coverage grows by adding rules |
 | 13 | Which shape to template next | **Built** — measured, not guessed: `tools/ledger/shapes.py` (assembler-checked A32 shape decoder) + `tools/ledger/shape_report.py` (pending-corpus histogram); rules are chosen from the most-frequent un-templated shapes and gate-verified before banking. First expansion: the parameterized add/store-const/half/sbyte/far getter families (670 → 816 tier-0 matches) |
 | 14 | Bundle prompt struct-copy section | **Built** — conditional on a non-stack `ldm`/`stm` in the bundle (`run.has_nonstack_block_move`); the ~1% idiom no longer dominates the prompt, and the general layout guidance stays unconditional |
-| 15 | Retry feedback on a mismatch | **Built** — the gate's `diff_words` + the previous candidate are fed into the next attempt's prompt (`run.feedback_section`), with a stall stop when the divergence repeats; `--no-feedback` restores resampling |
+| 15 | Retry feedback on a mismatch | **Built** — the gate's `diff_words` + the previous candidate are fed into the next attempt's prompt (`run.feedback_section`), with a stall stop when the divergence repeats and a separate `--compile-attempts` budget for candidates that never compile; `--no-feedback` restores resampling |
 
 ---
 
