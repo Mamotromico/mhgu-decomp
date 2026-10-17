@@ -297,8 +297,8 @@ divergence rather than regenerating. A retry also stops early once a mismatch re
 `diff_words` (the feedback moved nothing, so further tries are waste). A candidate that never
 compiles draws on a **separate, smaller budget** (`--compile-attempts`, default 2): once that
 many attempts were rejected by clang the entry is abandoned, so a model that keeps emitting
-non-compiling code (e.g. NEON intrinsics under the VFP-only pin) stops on its own threshold
-instead of burning every match attempt. `--no-feedback` restores
+non-compiling code (e.g. a wrong signature or a missing declaration) stops on its own
+threshold instead of burning every match attempt. `--no-feedback` restores
 plain resampling for A/B, and the first attempt is untouched, so a single-attempt run and the
 pre-feedback prompt stay byte-identical.
 

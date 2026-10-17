@@ -43,7 +43,7 @@ JSCRIPTS="${ROOT}/tools/ghidra"
 
 CLANG="${CLANG:-clang}"
 CFLAGS=(
-  -target armv8a-none-eabi -mfpu=vfpv4-d16
+  -target armv8a-none-eabi -mfpu=neon-fp-armv8
   -O2 -fomit-frame-pointer -fPIC -fno-exceptions -fno-rtti
   -ffreestanding -std=c++1z
   -mllvm -pre-RA-sched=source

@@ -12,7 +12,7 @@ about the vendor's true toolchain (a NintendoSDK build, and not obtainable).
 | Language | **C++17** | `nn::` API imports in Itanium mangling; all Switch reference projects are C++ |
 | Runtime | NintendoSDK 4.4.x (`nn::`), libc++ | NCA header `SdkAddon Ver. 4.4.1`; import names |
 | Target SoC | Tegra X1 (T210, "Erista"), `4×Cortex-A57 + 4×Cortex-A53`; **A57 cluster only** | Wikipedia *Tegra* (Switch `ODNX02-A2`) |
-| Float | VFP-only, NEON disabled — no auto-vectorisation in `.text`; **hardfp** ABI (`-mfloat-abi=hard`) | A2/A3, A4 |
+| Float | ARMv8-A FP + NEON (Cortex-A57 feature set); **hardfp** ABI (`-mfloat-abi=hard`) | A2/A3, A4, *Correction* |
 
 ## Compiler — de facto pin: clang 5.0.1 + two backend knobs
 
@@ -21,7 +21,7 @@ functions byte-for-byte, so the project adopts it as the **de facto pin** until 
 
 ```text
 clang 5.0.1
-  -target armv8a-none-eabi -mfpu=vfpv4-d16 -mfloat-abi=hard
+  -target armv8a-none-eabi -mfpu=neon-fp-armv8 -mfloat-abi=hard
   -O2 -fomit-frame-pointer -fPIC -fno-exceptions -fno-rtti
   -ffreestanding -std=c++1z
   -mllvm -pre-RA-sched=source
@@ -31,6 +31,20 @@ clang 5.0.1
 (No `-mcpu` — it was imported from the AArch64 reference projects and is wrong here;
 `-mtune` is inert in clang 5.0.1's ARM32 backend. `-O2` and `-O3` are indistinguishable on
 the corpus.)
+
+### Correction — the FP feature set is ARMv8-A + NEON (supersedes the VFP-only reading)
+
+`-mfpu=vfpv4-d16` is **too low**. Counting the whole FP/unconditional encoding space (not
+only `0xEE`/`0xED`) shows the original uses ARMv8-A-only FP instructions that VFPv4 cannot
+emit — `vseleq/vselgt/vselge`, `vmaxnm/vminnm`, `vrintm/vrinta`, `vcvtp` (`0xFE…`, ~2,946
+words) — in ~1,041 functions, plus NEON (`0xF2`–`0xF7`, ~318 functions): ~1,259 functions
+(2.93%) are unmatchable under the old pin. The old conclusion came from (a) a `0xEE`/`0xED`
+-only scan that missed `0xFE` and NEON, and (b) the sole struct-copy probe, whose source hits
+clang's NEON block-copy lowering. The pin is therefore `-mfpu=neon-fp-armv8` (Cortex-A57
+AArch32). Recompiling the 7 probes leaves **6/7 instruction-identical**; only the struct copy
+changes (clang emits NEON `vld1/vst1` for 16-byte copies, the original uses integer
+`ldm/stm`). That residual is a backend difference, not a reason to disable NEON. The two
+`-mllvm` knobs are still required by the other probes.
 
 ### A4 — float ABI is hardfp (`-mfloat-abi=hard`)
 
@@ -69,15 +83,17 @@ libc++ and a 2018 build, but does not name the compiler.
 **A2 — structural fingerprint.** `.text` is ARM (A32), not Thumb (`.init_array` entries
 are all even). Prologues are `stmdb sp!,{…,r11,lr}` with **no frame pointer** (`r11` is
 used as a plain callee-saved scratch — a clang idiom); 1536/2325 allocate `sub sp,sp,#0x10`.
-Constants use rotated `mov` / `movw` plus tail literal pools; floating point is VFP
-(`0xEE`/`0xED`) with NEON essentially absent. These narrow the field but are shared by GCC
-and clang at `-O2`/`-O3`, so they cannot pin a version.
+Constants use rotated `mov` / `movw` plus tail literal pools; floating point is mostly VFP
+(`0xEE`/`0xED`), but the encoding space also carries ARMv8-A FP (`0xFE…`) and NEON
+(`0xF2`–`0xF7`) — see the *Correction* below; the original A2 scan counted only `0xEE`/`0xED`.
+These narrow the field but are shared by GCC and clang at `-O2`/`-O3`, so they cannot pin a
+version.
 
 **A3 — active reproduction.** Upstream clangs were fetched from `releases.llvm.org` and
 byte-diffed against reconstructed real functions. clang **3.9.1** reproduced the 28-byte
-struct copy at `0x60c70010` exactly and needed `-mfpu=vfpv4-d16` — establishing the clang
-family and the VFP-only flag set. The probe pool then grew to **7** functions spanning
-several code families:
+struct copy at `0x60c70010` exactly and `-mfpu=vfpv4-d16` matched it — establishing the clang
+family. (That flag was later found to be too low; see the *Correction* below.) The probe pool
+then grew to **7** functions spanning several code families:
 
 | function | addr | size |
 | --- | --- | --- |
@@ -121,7 +137,9 @@ likely.
 
 ### Reproduction caveats
 
-- **NEON is a trap.** The build must pass `-mfpu=vfpv4-d16`; enabling NEON breaks matches.
+- **NEON is required, not a trap.** The original uses ARMv8-A FP and NEON; the pin is
+  `-mfpu=neon-fp-armv8`. The only probe NEON changes is the 16-byte struct copy, where clang
+  lowers to `vld1/vst1` while the original uses integer `ldm/stm` (see *Correction*).
 - **Source shape matters as much as flags.** The same semantics written as
   `if (e == 0) continue; if (…) return e;` lowers to a goto state machine under 4.0.1,
   whereas `if (e != 0 && …) return e;` gives the real straight-line CFG. Reconstructions

@@ -17,11 +17,20 @@ poc/run.sh path/to/main.nso      # explicit path
 poc/run.sh --show                # also print per-probe coloured diffs
 ```
 
+>🤖
 Expected final line:
 
 ```text
-[4/4] Result: 7/7 probes byte-match the original build.
+[4/4] Result: 6/7 probes byte-match the original build.
 ```
+
+The seventh probe (`real`, the 16-byte struct copy) is a known residual under the current
+ARMv8-A FP + NEON pin: clang lowers a 16-byte block copy to NEON `vld1/vst1`, while the
+original uses integer `ldm/stm`. That is a backend difference, not a toolchain
+misconfiguration — see `docs/compiler-identification.md` → *Correction*. (Under the old
+`-mfpu=vfpv4-d16` pin this probe matched but the ~2.9% of functions that use ARMv8-A FP or
+NEON could not compile at all.)
+🤖<
 
 ## What it does
 

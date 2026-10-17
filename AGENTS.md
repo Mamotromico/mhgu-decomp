@@ -141,14 +141,14 @@ Architecture:  AArch32 (32-bit ARM) — confirmed, ARM:LE:32:v8, base 0x60000000
 Language std:  C++17 (-std=c++1z) — confirmed (see below)
 Runtime/libc:  NintendoSDK 4.4.x (nn:: C++ API), libc++ (-stdlib=libc++)
 Compiler:      clang 5.0.1 — DE FACTO pin (reproduction stand-in) + two hidden
-               backend flags; no stock configuration matches (best 5/7)
-Float:         VFP-only, NEON disabled — no auto-vectorisation in .text
+               backend flags; no stock configuration matches all probes (best 6/7)
+Float:         ARMv8-A FP + NEON (Cortex-A57 feature set) — hardfp ABI
 ```
 
 **Build flags (the de facto pin):**
 
 ```text
-clang -target armv8a-none-eabi -mfpu=vfpv4-d16 -mfloat-abi=hard \
+clang -target armv8a-none-eabi -mfpu=neon-fp-armv8 -mfloat-abi=hard \
       -O2 -fomit-frame-pointer -fPIC -fno-exceptions -fno-rtti \
       -ffreestanding -std=c++1z \
       -mllvm -pre-RA-sched=source -mllvm -hoist-cheap-insts=true
@@ -165,10 +165,11 @@ against stock Clang from `releases.llvm.org` (`OdysseyDecomp` and
 upstream Clang. Only some SDK *internals* are known to resist stock Clang
 (`sbergeron42/ssbu-decomp`).
 
-**Compiler: clang 5.0.1 — de facto pin.** Seven reconstructed functions all byte-match
-under **5.0.1 with no `-mcpu`** plus two hidden backend flags. **No stock config matches
-all seven** — the best stock configuration reaches 5/7, and the two that tie fail
-*different* functions. The residual gap is two independent backend heuristics:
+**Compiler: clang 5.0.1 — de facto pin.** Six of the seven reconstructed probes byte-match
+under **5.0.1 with no `-mcpu`**, the ARMv8-A FP/NEON feature set, and two hidden backend
+flags; the seventh (the 28-byte struct copy) is a known residual. **No stock config matches
+all seven** — the best stock configuration reaches 6/7. The residual gap is two independent
+backend heuristics:
 
 - `find_entry`'s `uxtb` **hoisting** — the `MachineLICM` cheap-instruction register-pressure
   gate → `-mllvm -hoist-cheap-insts=true`.
@@ -188,13 +189,20 @@ proven otherwise.
 SoC is the **Tegra X1 (T210, "Erista")** (`4×Cortex-A57 + 4×Cortex-A53`; A57 cluster only).
 Dropping `-mcpu` alone raises 5.0.x from 3/5 to 4/5 on the original corpus.
 
-**VFP-only, NEON off.** The real `.text` never auto-vectorises and enabling NEON
-(`-mfpu=neon-*`) breaks the match — the build must pass `-mfpu=vfpv4-d16`. `-O2`/`-O3` are
-indistinguishable on the corpus. Float arguments/results cross the ABI in the VFP s-registers
-(**hardfp**, `-mfloat-abi=hard`), not clang's default integer-register softfp: without it a
-float store compiles to `str r1` where the original has `vstr s0`. This was the whole failure
-mass of the first loop run (10 of 11 unmatched functions are float-facing); re-gating the 774
-matched functions under the flag showed no regressions. Full evidence and method:
+**ARMv8-A FP + NEON (corrected).** The pin is `-mfpu=neon-fp-armv8` (the Cortex-A57 AArch32
+feature set), **not** `-mfpu=vfpv4-d16`. The original `.text` provably contains instructions
+VFPv4 cannot emit: ARMv8-A FP (`vseleq/vselgt/vselge`, `vmaxnm/vminnm`, `vrintm/vrinta`,
+`vcvtp` — `0xFE…`, ~2,946 words) in ~1,041 functions, and NEON (`vmax/vmin/vdup/vld1`,
+`0xF2`–`0xF7`) in ~318 functions — ~1,259 functions (2.93%) that a VFP-only build can never
+match. The earlier "VFP-only, NEON off" conclusion came from counting only `0xEE`/`0xED`
+(missing `0xFE` and `0xF2`–`0xF7`) and from the one probe whose source hits clang's NEON
+block-copy lowering; it was never exercised on this code because all matched functions were
+trivial leaves (median body 8 B — selection bias). Recompiling the 7 probes with
+`neon-fp-armv8` leaves **6/7 instruction-identical**; only the struct-copy probe changes
+(clang emits NEON `vld1/vst1` for 16-byte block copies, the original uses integer `ldm/stm`
+— a backend residual, not a source-shape issue). `-O2`/`-O3` remain indistinguishable. Float
+arguments/results still cross the ABI in the VFP s-registers (**hardfp**,
+`-mfloat-abi=hard`). Full evidence and method:
 [`docs/compiler-identification.md`](docs/compiler-identification.md).
 
 > **Running clang:** the devcontainer ships the pinned compiler at `/opt/clang-5.0.1`

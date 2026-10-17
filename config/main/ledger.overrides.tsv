@@ -1,0 +1,20 @@
+module	block	start	end	cuts
+# Reviewed boundary corrections for config/main/ledger.tsv. Apply with:
+#   python3 tools/ledger/reconcile.py            # preview (writes nothing)
+#   python3 tools/ledger/reconcile.py --apply    # write
+#
+# One row re-partitions [start, end) in (module, block): it replaces every ledger entry
+# whose address is in [start, end) with an entry at each "cuts" address. start and end must
+# be existing entry addresses (the left/right edges are fixed by the neighbouring entries);
+# cuts is strictly increasing, all within [start, end), and cuts[0] == start. A cut whose
+# address already exists keeps that row (and its status); a new cut is generated as
+# func_<addr>/D_<addr>. See the module docstring in tools/ledger/reconcile.py for the full
+# contract, and tools/ledger/fragments.py to find candidate regions.
+#
+# This file is empty (no active override) until a real region is traced and reviewed.
+# Do NOT add one speculatively: a boundary change reshapes the denominator and orphans any
+# matched work at a removed address. Always verify the real prologue/return boundaries from
+# the disassembly of the TARGET image (baserom/main.nso — the update) first.
+#
+# Example of the syntax:
+# main	.text	00abcd00	00abcde0	00abcd00:function,00abcd40:function
