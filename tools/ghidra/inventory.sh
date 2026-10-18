@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Soaratorium — inventory export driver (Phase 3, first step).
+# mhgu-decomp — inventory export driver (Phase 3, first step).
 #
 # Runs a FULL Ghidra auto-analysis of the user's NSO and writes the post-analysis
 # symbol universe to git-ignored <WORK>/ as four deterministic TSVs — see
@@ -73,7 +73,7 @@ NSO="${POS[0]:-${ROOT}/baserom/main.nso}"
 GHIDRA_HOME="${GHIDRA_HOME:-/opt/ghidra}"
 WORK="${INV_WORK:-${ROOT}/baserom/work/inventory}"
 PROJ_LOC="${ROOT}/baserom/ghidra"
-PROJ_NAME="soaratorium"
+PROJ_NAME="mhgu-decomp"
 PROGRAM="${PROGRAM:-$(basename "${NSO}")}"
 
 # Full analysis over a ~14 MB image overruns Ghidra's 2G headless default.
@@ -87,9 +87,9 @@ ANALYZE="${GHIDRA_HOME}/support/analyzeHeadless"
 
 if [ -d "${PROJ_LOC}/${PROJ_NAME}.rep" ]; then
   if [ "${REANALYZE}" -eq 1 ]; then
-    echo "Soaratorium inventory (reanalyze: re-run full auto-analysis on cached program — slow)"
+    echo "mhgu-decomp inventory (reanalyze: re-run full auto-analysis on cached program — slow)"
   else
-    echo "Soaratorium inventory (warm: reuse cached analysis)"
+    echo "mhgu-decomp inventory (warm: reuse cached analysis)"
   fi
   echo "  project: ${PROJ_LOC}/${PROJ_NAME}  program: ${PROGRAM}"
   echo "  work:    ${WORK}"
@@ -116,7 +116,7 @@ else
   if [ "${REANALYZE}" -eq 1 ]; then
     echo "note: --reanalyze has no effect on a cold run (no cached project; analysis is implied)" >&2
   fi
-  echo "Soaratorium inventory (cold: import + full auto-analysis — this is slow)"
+  echo "mhgu-decomp inventory (cold: import + full auto-analysis — this is slow)"
   echo "  NSO:     ${NSO}"
   echo "  project: ${PROJ_LOC}/${PROJ_NAME}"
   echo "  work:    ${WORK}"

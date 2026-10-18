@@ -10,7 +10,7 @@
 //       -postScript DisasmFunctions.java <addrFile> <outFile> <maxInsns>
 //
 // <addrFile>: one hex address per line (blank lines / '#' comments ignored).
-// @category Soaratorium
+// @category mhgu-decomp
 
 import java.io.BufferedReader;
 import java.io.FileReader;

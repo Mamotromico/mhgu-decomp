@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Soaratorium PoC - the end-to-end byte-match showcase.
+# mhgu-decomp PoC - the end-to-end byte-match showcase.
 #
 # Reproduces the Phase 1 compiler-pin evidence from scratch: it imports the
 # user's own NSO into Ghidra (linear, no analysis), dumps the loader-built memory
@@ -56,7 +56,7 @@ die() { echo "error: $*" >&2; exit 1; }
 command -v "${CLANG}" >/dev/null || die "clang not found on PATH ('${CLANG}'); rebuild the devcontainer"
 [ -x "${GHIDRA_HOME}/support/analyzeHeadless" ] || die "Ghidra not found at ${GHIDRA_HOME}"
 
-echo "Soaratorium PoC"
+echo "mhgu-decomp PoC"
 echo "  NSO:   ${NSO}"
 echo "  clang: $(${CLANG} --version | head -n1)"
 echo "  work:  ${WORK}"
@@ -68,7 +68,7 @@ mkdir -p "${WORK}/segments" "${WORK}/objects" "${WORK}/ghidra"
 # ---- 1. Reference bytes + disassembly, straight from the binary -------------
 echo "[1/4] Importing the NSO into Ghidra and dumping reference data..."
 grep -v '^#' "${PROBES}" | grep -v '^[[:space:]]*$' | cut -f3 > "${WORK}/probes.addrs"
-"${GHIDRA_HOME}/support/analyzeHeadless" "${WORK}/ghidra" soaratorium \
+"${GHIDRA_HOME}/support/analyzeHeadless" "${WORK}/ghidra" mhgu-decomp \
   -import "${NSO}" -noanalysis \
   -scriptPath "${JSCRIPTS}" \
   -postScript DumpMemoryBlocks.java "${WORK}/segments" \

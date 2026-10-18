@@ -57,7 +57,7 @@
 // One row is emitted per symbol; aliases are NOT deduplicated — resolving an
 // alias into a single ledger entry is the ledger generator's job (is_alias
 // guard), not this draft's.
-// @category Soaratorium
+// @category mhgu-decomp
 
 import java.io.File;
 import java.io.PrintWriter;

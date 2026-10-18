@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # =============================================================================
-# Soaratorium — Phase 1 analysis environment
+# mhgu-decomp — Phase 1 analysis environment
 # =============================================================================
 # Ghidra + Switch/NSO tooling live here so the whole pipeline is reproducible
 # and no host Java install is required (the JDK lives in this image).

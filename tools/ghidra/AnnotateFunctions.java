@@ -22,7 +22,7 @@
 //   * operands — Ghidra's default operand representation (comma-separated); a
 //                pc-relative load appears with its target resolved, e.g. "ldr r0, [0x60001058]"
 //   * flows    — comma-separated branch/call target addresses (Ghidra getFlows)
-// @category Soaratorium
+// @category mhgu-decomp
 
 import java.io.BufferedReader;
 import java.io.FileReader;

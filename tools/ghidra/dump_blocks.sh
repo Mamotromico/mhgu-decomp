@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Soaratorium — dump the loader-built memory blocks of the NSO.
+# mhgu-decomp — dump the loader-built memory blocks of the NSO.
 #
 # Imports the NSO into a throwaway Ghidra project with -noanalysis (the Switch loader
 # builds the memory map at import; no analysis is needed to read blocks) and runs

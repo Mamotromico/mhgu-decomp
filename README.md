@@ -1,4 +1,4 @@
-# Soaratorium
+# mhgu-decomp
 
 A work-in-progress **decompilation of _Monster Hunter Generations Ultimate_** for the
 Nintendo Switch.
@@ -170,13 +170,13 @@ Place it under `baserom/`
 **Build the image:**
 
 ```sh
-docker build -f .devcontainer/Dockerfile -t soaratorium-devcontainer .
+docker build -f .devcontainer/Dockerfile -t mhgu-decomp-devcontainer .
 ```
 
 **Run a shell with the repo mounted:**
 
 ```sh
-docker run --rm -it -v "$PWD:/workspace" -w /workspace soaratorium-devcontainer
+docker run --rm -it -v "$PWD:/workspace" -w /workspace mhgu-decomp-devcontainer
 ```
 
 Or open the folder in a devcontainer-aware editor (VS Code / Zed) and "Reopen in
@@ -192,7 +192,7 @@ declares `clangd` for C/C++ tooling.
 
 >🤖
 > ```text
-> Soaratorium/
+> mhgu-decomp/
 > ├── README.md              # This document (for contributors)
 > ├── AGENTS.md              # Conventions & findings for coding agents
 > ├── LICENSE.md             # GPL-3.0

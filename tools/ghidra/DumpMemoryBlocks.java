@@ -8,7 +8,7 @@
 //
 // Output: <outputDir>/<blockname>_<startOffsetHex>.bin for each initialized
 // block. Uninitialized blocks (e.g. bss) are skipped.
-// @category Soaratorium
+// @category mhgu-decomp
 
 import java.io.File;
 import java.io.FileOutputStream;

@@ -176,5 +176,5 @@ Rationale: the repository reconstructs the **most recent released build**, so it
 corresponds to the latest code; there is no compiler-based reason to prefer base.
 
 - Locally: `baserom/main.nso` **is the update** (`b3935415…`).
-- The Ghidra project `baserom/ghidra/soaratorium` holds the update import; decompressed
+- The Ghidra project `baserom/ghidra/mhgu-decomp` holds the update import; decompressed
   images live in `baserom/work/nso_update/` and `baserom/work/segments_update/`.

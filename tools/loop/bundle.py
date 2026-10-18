@@ -313,7 +313,7 @@ def run_ghidra(nso: Path, req_file: Path, asm_out: Path, ref_dir: Path, project_
     asm_out.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        str(analyze), str(project_dir), "soaratorium",
+        str(analyze), str(project_dir), "mhgu-decomp",
         "-import", str(nso), "-noanalysis",
         "-scriptPath", str(REPO / "tools" / "ghidra"),
         "-postScript", "DumpMemoryBlocks.java", str(ref_dir),

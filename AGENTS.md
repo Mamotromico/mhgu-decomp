@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for coding agents (and any automated contributor) working on Soaratorium.
+Guidance for coding agents (and any automated contributor) working on mhgu-decomp.
 
 This file is a **living document** — it records conventions, pinned tooling, and
 discoveries that agents must respect. Update it as the project learns things

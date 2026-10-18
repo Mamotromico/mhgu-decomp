@@ -1,5 +1,5 @@
 {
-  "name": "Soaratorium",
+  "name": "mhgu-decomp",
 
   "build": {
     "dockerfile": "Dockerfile",
