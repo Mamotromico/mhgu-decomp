@@ -1,0 +1,1 @@
+extern "C" int func_603bd914(const signed char *p) { return p[0xaeff]; }

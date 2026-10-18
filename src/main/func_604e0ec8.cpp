@@ -1,0 +1,1 @@
+extern "C" void func_604e0ec8(unsigned char *a, unsigned char b) { a[0x1c20] = b; }
