@@ -97,6 +97,40 @@ _STRUCT_COPY_SECTION = (
     '    extern "C" void f(Holder *h, const Blob *src) { h->b = *src; }\n\n')
 
 
+_BIT_OPS_SECTION = (
+    "Bit-manipulation instructions come from a few exact C spellings. There is no builtin for "
+    "`bfc`, `ubfx`, `sbfx` or `revsh` — `__builtin_arm_bfc`, `__builtin_arm_ubfx`, "
+    "`__builtin_arm_sbfx` and `__builtin_arm_revsh` do not exist and will not compile — and "
+    "`__builtin_arm_rbit` takes ONE argument.\n"
+    "    rbit   -> __builtin_arm_rbit(x)      (ONE argument; returns the reversed u32)\n"
+    "    clz    -> __builtin_clz(x)\n"
+    "    rev    -> __builtin_bswap32(x)\n"
+    "    rev16  -> __builtin_bswap16(x) on an `unsigned short` value (on a u32 it gives rev+lsr)\n"
+    "    revsh  -> (short)__builtin_bswap16(x)\n"
+    "    uxtb/sxtb/uxth/sxth -> cast to unsigned char / signed char / unsigned short / short\n"
+    "    ubfx rX, rY, #lsb, #w -> (y >> lsb) & ((1u << w) - 1)\n"
+    "    sbfx rX, rY, #lsb, #w -> (int)(y << (32 - lsb - w)) >> (32 - w)\n"
+    "    bfi    -> (x & ~mask) | (v & mask), or a store into a bitfield of that width/offset\n"
+    "    bfc    -> a store of 0 into a bitfield of that width/offset (the compiler emits `bic` "
+    "instead when the mask fits that immediate)\n\n")
+
+_BIT_OP_MNEMONICS = ("rbit", "clz", "rev", "rev16", "revsh", "ubfx", "sbfx", "bfi", "bfc")
+
+
+def has_bit_op(bundle_text: str) -> bool:
+    """Whether the bundle disassembly contains a bit-manipulation instruction.
+
+    Only the ones with a non-obvious C spelling are listed, so the section stays out of the
+    prompt for the majority of functions (a plain `uxtb` from a cast is common and already
+    handled without help).
+    """
+    for line in bundle_text.splitlines():
+        m = _BUNDLE_INSN.match(line)
+        if m and m.group(3).startswith(_BIT_OP_MNEMONICS):
+            return True
+    return False
+
+
 def has_nonstack_block_move(bundle_text: str) -> bool:
     """Whether the bundle disassembly has an ``ldm``/``stm`` whose base is not the stack.
 
@@ -288,6 +322,9 @@ def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = No
     struct-copy guidance is now **conditional** (``has_nonstack_block_move``): it is included
     only when the bundle actually carries a non-stack ``ldm``/``stm``, so a rare idiom no longer
     dominates the prompt (see ``docs/llm-harness-design.md`` → *Template growth is measured*).
+    The bit-manipulation section is conditional on the same principle (``has_bit_op``): it lists
+    only spellings verified against the pinned compiler, after models guessed builtins that do
+    not exist (``__builtin_arm_bfc``, ``__builtin_arm_ubfx``) and a two-argument ``rbit``.
 
     ``feedback`` (a retry only, so ``None`` on the first attempt) appends the previous attempt's
     divergence — the exact instructions that differ, or the compiler error — so a retry improves
@@ -302,6 +339,7 @@ def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = No
                   f'and bind it to the exact symbol with a trailing asm("{name}") on its '
                   f"declaration.")
     copy_section = _STRUCT_COPY_SECTION if has_nonstack_block_move(bundle_text) else ""
+    bit_section = _BIT_OPS_SECTION if has_bit_op(bundle_text) else ""
     return (
         f"Write ordinary C or C++ whose compiled machine code reproduces the function below "
         f"exactly under the pinned toolchain. Reason about the function's *behaviour*, not its "
@@ -319,7 +357,9 @@ def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = No
         f"these values. For example, if a field loads at `[r0, #0x58]` and the previous field is "
         f"a 4-byte value at `[r0, #0x40]`, the second field's offset is 0x58 (not 0x44), so pad "
         f"0x58 - 0x44 = 0x14 bytes: the displacement is the offset, and the padding is whatever "
-        f"makes the field land exactly there.\n\n"
+        f"makes the field land exactly there. If a padding expression would come out negative, "
+        f"you subtracted the wrong way round: subtract the smaller displacement from the larger.\n\n"
+        f"{bit_section}"
         f"{symbol}\n"
         f"Reply with the translation unit only — no prose, no Markdown fences.\n\n"
         f"{bundle_text}\n"
@@ -346,17 +386,43 @@ def gate_argv(layout: Layout, entry: dict, body: int,
     return argv
 
 
+def attempted_counts(layout: Layout) -> dict[tuple[str, str], int]:
+    """How many attempts each entry already has in the log, across every run.
+
+    ``--attempts`` is per invocation, so without this an entry that never matches stays at the
+    front of the queue and is re-attempted on every run. A corrupt log is a warning, not a
+    failure: the filter is a convenience, not a correctness gate.
+    """
+    counts: dict[tuple[str, str], int] = {}
+    try:
+        records = attempts.read_attempts(attempt_store(layout) / "log.jsonl")
+    except attempts.AttemptError as e:
+        print(f"warning: {e}; --skip-attempted ignored", file=sys.stderr)
+        return {}
+    for record in records:
+        key = (record.get("module"), record.get("addr"))
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
                 done: set[tuple[str, str]],
-                key=None) -> dict | None:
+                key=None, attempted: dict[tuple[str, str], int] | None = None,
+                skip_attempted: int | None = None) -> dict | None:
     """The next pending function not already handled this run.
 
     ``key`` is the optional difficulty ordering (``complexity.make_key``); ``None`` keeps the
     ledger's own ``(module, addr)`` order. Both stay deterministic, so a resume is unaffected.
+
+    ``skip_attempted`` drops entries that already drew that many attempts across *previous*
+    runs (``attempted`` is the per-entry count from the log), so a run advances through the
+    ledger instead of grinding the same stuck entries at the front of the queue.
     """
     queue = worklist.select(entries, kind="function", verify="none", key=key)
     if skip_existing:
         queue = [e for e in queue if not worklist.source_path(e, layout.src_root).exists()]
+    if skip_attempted is not None and attempted:
+        queue = [e for e in queue if attempted.get(entry_key(e), 0) < skip_attempted]
     for entry in queue:
         if entry_key(entry) not in done:
             return entry
@@ -415,6 +481,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="model request timeout in seconds (a cold load can be slow)")
     ap.add_argument("--temperature", type=float, default=None,
                     help="sampling temperature override (omit to use the server/preset default)")
+    ap.add_argument("--max-tokens", type=int, default=None,
+                    help="output-token cap override; the config's value (sized for the local "
+                         "model) is otherwise reused against any --base-url")
+    ap.add_argument("--reasoning-effort", default=None,
+                    help="reasoning-effort override; 'none' disables a provider's thinking mode "
+                         "(DeepSeek enables it by default and bills it inside max_tokens)")
     ap.add_argument("--seed", type=int, default=None, help="sampling seed override (optional)")
     ap.add_argument("--body", type=int, default=None)
     ap.add_argument("--module", default="main", help="module for --entry (default: main)")
@@ -425,6 +497,11 @@ def main(argv: list[str] | None = None) -> int:
                          "or 'addr' (the ledger's own order)")
     ap.add_argument("--attempts", type=int, default=1,
                     help="attempts per entry, stopping early on a match (default 1)")
+    ap.add_argument("--skip-attempted", type=int, default=None, metavar="N",
+                    help="skip entries that already drew N or more attempts across previous "
+                         "runs (--attempts is per run, so without this a stuck entry stays at "
+                         "the front of the queue forever); e.g. 1 = only fresh entries, "
+                         "4 = stop revisiting entries that never converge")
     ap.add_argument("--compile-attempts", type=int, default=2,
                     help="separate budget for non-compiling candidates: stop retrying an entry "
                          "once this many attempts produced code clang rejected (default 2)")
@@ -454,6 +531,7 @@ def main(argv: list[str] | None = None) -> int:
     # One explicit target, or the next N pending entries.
     targets: list[dict] = []
     done: set[tuple[str, str]] = set()
+    attempted: dict[tuple[str, str], int] | None = None
     if args.entry:
         try:
             targets = [resolve_entry(entries, args.module, args.entry)]
@@ -462,13 +540,20 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     else:
         key = complexity_key(layout, reference) if args.order == "easiest" else None
+        attempted = attempted_counts(layout) if args.skip_attempted is not None else None
         for _ in range(max(1, args.limit)):
             nxt = select_next(entries, layout, skip_existing=args.skip_existing, done=done,
-                              key=key)
+                              key=key, attempted=attempted,
+                              skip_attempted=args.skip_attempted)
             if nxt is None:
                 break
             done.add(entry_key(nxt))
             targets.append(nxt)
+        if args.skip_attempted is not None and len(targets) < max(1, args.limit):
+            print(f"note: only {len(targets)} entr{'y' if len(targets) == 1 else 'ies'} "
+                  f"selected; the rest are matched, already have a source, or drew "
+                  f"{args.skip_attempted}+ attempts (lower --skip-attempted to revisit them)",
+                  file=sys.stderr)
     if not targets:
         print("error: no pending entries to process", file=sys.stderr)
         return 1
@@ -480,7 +565,9 @@ def main(argv: list[str] | None = None) -> int:
                 layout.model_config, override_base_url=args.base_url,
                 override_model=args.model_name, override_endpoint=args.endpoint,
                 override_proxy=args.proxy, override_timeout=args.timeout,
-                override_temperature=args.temperature, override_seed=args.seed)
+                override_temperature=args.temperature,
+                override_max_tokens=args.max_tokens,
+                override_reasoning_effort=args.reasoning_effort, override_seed=args.seed)
         except (ValueError, json.JSONDecodeError) as e:
             print(f"error: bad model config: {e}", file=sys.stderr)
             return 2
@@ -570,9 +657,25 @@ def write_and_gate(entry: dict, layout: Layout, body: int, draft: Path, candidat
     return outcome, report, rc, gate_out
 
 
+def truncated(completion, model) -> bool:
+    """Did the model spend its whole output budget before the answer began?
+
+    ``finish_reason == "length"`` is the canonical signal (``"max_tokens"`` from providers that
+    spell it that way); the completion-token count reaching the configured cap is the fallback
+    for a server that omits the reason. An empty ``content`` plus this is a reasoning trace that
+    never got to the answer, so resending the prompt only re-pays the same budget.
+    """
+    reason = (getattr(completion, "finish_reason", "") or "").lower()
+    if reason in ("length", "max_tokens"):
+        return True
+    cap = getattr(model, "max_tokens", None)
+    tokens = getattr(completion, "completion_tokens", None)
+    return not reason and bool(cap) and tokens is not None and tokens >= cap
+
+
 def process(entry: dict, entries: list[dict], layout: Layout, args, model,
             raw_text: bytes | None = None, feedback: "Feedback | None" = None) -> str:
-    """One loop iteration. Returns 'match' | 'mismatch' | 'error' | 'dry-run'.
+    """One loop iteration. Returns 'match' | 'mismatch' | 'error' | 'truncated' | 'dry-run'.
 
     A deterministic **template** (``tools/ledger/templates.py``) is tried first: it needs
     neither the context bundle nor the model, so a structural leaf skips both. The gate still
@@ -580,6 +683,11 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
 
     ``feedback`` (a retry only) is the previous attempt's divergence, passed into the prompt so a
     retry edits rather than resamples; it is recorded (``feedback_used``) for auditability.
+
+    An empty reply is ``error``; an empty reply that hit the output cap (see
+    :func:`truncated`) is ``truncated``, meaning the model spent the whole ``max_tokens`` budget
+    (a reasoning model can do this before emitting any answer) — retrying it is pure cost, so
+    the caller stops.
     """
     module, addr, name = entry["module"], entry["addr"], entry["name"]
     body, extent_source = resolve_body(layout, entry, args.body)
@@ -609,7 +717,13 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
     if candidate is None:
         candidate, completion, prompt = ask_model(entry, layout, args, model, body, feedback)
         if not candidate.strip():
-            print(f"{name}: empty candidate from the model")
+            print(f"{name}: empty candidate from the model "
+                  f"(finish_reason={completion.finish_reason or '?'}, "
+                  f"{completion.completion_tokens} completion tok "
+                  f"({completion.reasoning_tokens or 0} reasoning), "
+                  f"{len(completion.reasoning)} chars of reasoning)")
+            if truncated(completion, model):
+                return "truncated"
             return "error"
 
     # 3. write and verify (the gate is the only writer of verify=match).
@@ -631,6 +745,7 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         "model": completion.model if completion else "template",
         "prompt_tokens": completion.prompt_tokens if completion else None,
         "completion_tokens": completion.completion_tokens if completion else None,
+        "reasoning_tokens": completion.reasoning_tokens if completion else None,
         "latency_s": completion.latency_s if completion else 0.0,
         "prompt_sha256": prompt_fingerprint(prompt or ""),
         "gate_output": gate_out.strip()[-4000:],
@@ -706,6 +821,12 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
             outcome = "error"
         used += 1
         if outcome in ("match", "dry-run"):
+            break
+        if outcome == "truncated":
+            print(f"    stop: {entry['name']} was cut off at max_tokens before emitting an "
+                  f"answer; raise --max-tokens (or turn the model's reasoning off), not "
+                  f"the attempt count", file=sys.stderr)
+            outcome = "error"
             break
         try:
             record = attempts.latest_for(store / "log.jsonl", entry["module"], entry["addr"])

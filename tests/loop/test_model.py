@@ -101,6 +101,11 @@ class PayloadTests(unittest.TestCase):
     def test_max_tokens_included_when_set(self):
         self.assertEqual(build_payload("m", "hi", None, 0.0, 256)["max_tokens"], 256)
 
+    def test_reasoning_effort_included_only_when_set(self):
+        self.assertNotIn("reasoning_effort", build_payload("m", "hi", None, None, None))
+        p = build_payload("m", "hi", None, None, None, reasoning_effort="none")
+        self.assertEqual(p["reasoning_effort"], "none")
+
 
 class ParseResponseTests(unittest.TestCase):
     def test_text_and_usage(self):
@@ -122,6 +127,13 @@ class ParseResponseTests(unittest.TestCase):
     def test_null_content_is_empty_string(self):
         c = parse_response({"choices": [{"message": {"content": None}}]}, 0.0)
         self.assertEqual(c.text, "")
+
+    def test_reasoning_token_count_is_surfaced(self):
+        c = parse_response({"choices": [{"message": {"content": ""}, "finish_reason": "length"}],
+                            "usage": {"completion_tokens": 12000,
+                                      "completion_tokens_details": {"reasoning_tokens": 11990}}},
+                           0.0)
+        self.assertEqual((c.completion_tokens, c.reasoning_tokens), (12000, 11990))
 
 
 class StripFencesTests(unittest.TestCase):
@@ -299,6 +311,20 @@ class FromConfigTests(unittest.TestCase):
         path = self.write({"base_url": "http://h:8080", "timeout_s": 45})
         self.assertEqual(from_config(path).timeout_s, 45.0)
         self.assertEqual(from_config(path, override_timeout=3.0).timeout_s, 3.0)
+
+    def test_max_tokens_from_config_and_override(self):
+        # The configured cap is sized for the local model; pointing --base-url elsewhere
+        # must not silently inherit it, so an explicit override has to win.
+        path = self.write({"base_url": "http://h:8080", "max_tokens": 12000})
+        self.assertEqual(from_config(path).max_tokens, 12000)
+        self.assertEqual(from_config(path, override_max_tokens=32000).max_tokens, 32000)
+
+    def test_reasoning_effort_from_config_and_override(self):
+        path = self.write({"base_url": "http://h:8080", "reasoning_effort": "high"})
+        self.assertEqual(from_config(path).reasoning_effort, "high")
+        self.assertEqual(from_config(path, override_reasoning_effort="none").reasoning_effort,
+                         "none")
+        self.assertIsNone(from_config(self.write({"base_url": "http://h:8080"})).reasoning_effort)
 
 
 if __name__ == "__main__":

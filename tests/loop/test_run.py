@@ -31,6 +31,7 @@ from run import (
     Layout,
     attempt_entry,
     attempt_store,
+    attempted_counts,
     bank_path,
     build_prompt,
     bundle_argv,
@@ -40,6 +41,7 @@ from run import (
     feedback_section,
     gate_argv,
     group_is_single,
+    has_bit_op,
     has_nonstack_block_move,
     parse_reference_instructions,
     process,
@@ -47,6 +49,7 @@ from run import (
     resolve_entry,
     safe_draft_path,
     select_next,
+    truncated,
 )
 
 
@@ -57,10 +60,10 @@ def entry(addr="601a72e4", name=None, module="main", group=None,
             "kind": kind, "verify": verify}
 
 
-def layout(root: Path) -> Layout:
+def layout(root: Path, work: Path | None = None) -> Layout:
     return Layout(ledger=Path("/ledger"), inventory=Path("/inv"), nso=Path("/nso"),
                   context=Path("/ctx"), src_root=root, build_config=Path("/bc"),
-                  toolchain=Path("/tc"), work=Path("/work"))
+                  toolchain=Path("/tc"), work=work or Path("/work"))
 
 
 class SafeDraftPathTests(unittest.TestCase):
@@ -145,6 +148,25 @@ class BuildPromptTests(unittest.TestCase):
         bundle = "    60010000  e8910003  ldmia   r1, {r0,r1}\n"
         self.assertTrue(has_nonstack_block_move(bundle))
 
+    def test_bit_op_detected_from_the_mnemonic(self):
+        for insn in ("rbit    r0, r0", "ubfx    r0, r1, #4, #8", "bfc     r1, #6, #20",
+                     "bfi     r2, r1, #0, #4", "revsh   r0, r0", "clz     r0, r0"):
+            self.assertTrue(has_bit_op(f"    60010000  e7e00000  {insn}\n"), insn)
+
+    def test_a_plain_function_has_no_bit_op(self):
+        self.assertFalse(has_bit_op("    60035efc  e1a02000  mov     r2, r0\n"))
+        self.assertFalse(has_bit_op(""))
+
+    def test_bit_op_section_is_included_only_when_needed(self):
+        plain = "    60035efc  e1a02000  mov     r2, r0\n"
+        self.assertNotIn("__builtin_arm_rbit", build_prompt(entry(), plain))
+        with_bit = build_prompt(entry(), "    60035efc  e7e00000  rbit    r0, r0\n")
+        self.assertIn("__builtin_arm_rbit", with_bit)
+        self.assertIn("__builtin_arm_bfc", with_bit)   # named as NOT existing
+
+    def test_negative_padding_warning_is_always_present(self):
+        self.assertIn("subtracted the wrong way round", build_prompt(entry(), ""))
+
     def test_empty_bundle_has_no_block_move(self):
         self.assertFalse(has_nonstack_block_move(""))
 
@@ -213,6 +235,44 @@ class SelectNextTests(unittest.TestCase):
     def test_exhausted_returns_none(self):
         self.assertIsNone(select_next([], self.lay, skip_existing=True, done=set()))
 
+    def test_skip_attempted_drops_entries_that_already_drew_their_budget(self):
+        # --attempts is per run, so without this a never-matching entry stays at the front.
+        entries = [entry(addr="60000024"), entry(addr="60000f8c")]
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
+                          attempted={("main", "60000024"): 9}, skip_attempted=4)
+        self.assertEqual(nxt["addr"], "60000f8c")
+
+    def test_skip_attempted_keeps_entries_under_the_budget(self):
+        entries = [entry(addr="60000024")]
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
+                          attempted={("main", "60000024"): 2}, skip_attempted=4)
+        self.assertEqual(nxt["addr"], "60000024")
+
+    def test_unset_skip_attempted_changes_nothing(self):
+        entries = [entry(addr="60000024")]
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
+                          attempted={("main", "60000024"): 99})
+        self.assertEqual(nxt["addr"], "60000024")
+
+
+class AttemptedCountsTests(unittest.TestCase):
+    """The cross-run attempt tally that ``--skip-attempted`` filters on."""
+
+    def test_counts_attempts_per_entry_across_the_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lay = layout(Path(tmp) / "src", work=Path(tmp) / "work")
+            store = attempt_store(lay)
+            for addr in ("60000024", "60000024", "60000f8c"):
+                attempts.append(store, {"module": "main", "addr": addr,
+                                        "name": f"func_{addr}", "outcome": "mismatch"})
+            self.assertEqual(attempted_counts(lay),
+                             {("main", "60000024"): 2, ("main", "60000f8c"): 1})
+
+    def test_missing_log_is_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(attempted_counts(layout(Path(tmp) / "src",
+                                                     work=Path(tmp) / "work")), {})
+
 
 class PromptFingerprintTests(unittest.TestCase):
     def test_deterministic_and_short(self):
@@ -226,12 +286,16 @@ class PromptFingerprintTests(unittest.TestCase):
 class _FakeModel:
     """Stands in for the HTTP client: returns a fixed candidate."""
 
-    def __init__(self, text='extern "C" int func_601a72e4() { return 0; }'):
+    def __init__(self, text='extern "C" int func_601a72e4() { return 0; }',
+                 finish_reason=""):
         self.text = text
+        self.finish_reason = finish_reason
 
     def complete(self, prompt, *, system=None):
         return Namespace(text=self.text, model="fake", prompt_tokens=1,
-                         completion_tokens=2, latency_s=0.0)
+                         completion_tokens=2, latency_s=0.0,
+                         finish_reason=self.finish_reason, reasoning="",
+                         reasoning_tokens=None)
 
 
 def fake_gate(rc: int, status: str, diff_count: int, cand_len: int, diff_words=None):
@@ -249,6 +313,33 @@ def fake_gate(rc: int, status: str, diff_count: int, cand_len: int, diff_words=N
                 "has_reloc": False}))
         return rc, f">>> {status.upper()}"
     return _run
+
+
+class TruncatedTests(unittest.TestCase):
+    """Recognising a reply that hit the output cap before answering."""
+
+    def completion(self, **kw):
+        base = dict(finish_reason="", completion_tokens=100)
+        base.update(kw)
+        return Namespace(**base)
+
+    def test_length_finish_reason_is_truncation(self):
+        self.assertTrue(truncated(self.completion(finish_reason="length"), None))
+
+    def test_max_tokens_finish_reason_is_truncation(self):
+        self.assertTrue(truncated(self.completion(finish_reason="max_tokens"), None))
+
+    def test_reaching_the_cap_without_a_reason_is_truncation(self):
+        model = Namespace(max_tokens=12000)
+        self.assertTrue(truncated(self.completion(completion_tokens=12000), model))
+
+    def test_a_normal_stop_is_not_truncation(self):
+        model = Namespace(max_tokens=12000)
+        self.assertFalse(truncated(self.completion(finish_reason="stop"), model))
+        self.assertFalse(truncated(self.completion(completion_tokens=11999), model))
+
+    def test_no_cap_and_no_reason_is_not_truncation(self):
+        self.assertFalse(truncated(self.completion(completion_tokens=999999), None))
 
 
 class ProcessTests(unittest.TestCase):
@@ -339,6 +430,16 @@ class ProcessTests(unittest.TestCase):
         self.assertFalse(self.draft.exists())
         self.assertEqual(self.log(), [])
         self.assertIsNone(self.bank_best())
+
+    def test_max_tokens_truncation_is_reported_as_truncated(self):
+        # A reasoning model that spends the whole budget leaves content empty:
+        # finish_reason="length" is the signal, and retrying it only re-pays the cost.
+        with mock.patch("run.run_subprocess", new=fake_gate(0, "match", 0, 60)):
+            outcome = process(entry(), [entry()], self.lay, self.args,
+                              _FakeModel("", finish_reason="length"))
+        self.assertEqual(outcome, "truncated")
+        self.assertFalse(self.draft.exists())
+        self.assertEqual(self.log(), [])
 
     def test_compile_error_is_error_not_match_and_not_banked(self):
         # rc 3 (compilation failed) writes no report; the outcome must not read "mismatch".
@@ -431,6 +532,17 @@ class AttemptEntryTests(unittest.TestCase):
             return "dry-run"
 
         self.assertEqual(self._run(one), ("dry-run", 1))
+        self.assertEqual(len(calls), 1)
+
+    def test_truncation_stops_instead_of_retrying(self):
+        # Every retry would spend the same max_tokens budget and return nothing again.
+        calls = []
+
+        def one(*_):
+            calls.append(1)
+            return "truncated"
+
+        self.assertEqual(self._run(one), ("error", 1))
         self.assertEqual(len(calls), 1)
 
     def test_keyboard_interrupt_is_not_swallowed(self):

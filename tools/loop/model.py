@@ -62,6 +62,7 @@ class Completion:
     latency_s: float = 0.0
     finish_reason: str = ""
     reasoning: str = ""
+    reasoning_tokens: int | None = None
 
 
 class Model(Protocol):
@@ -99,11 +100,15 @@ def chat_endpoint(base_url: str) -> str:
 
 
 def build_payload(model: str, prompt: str, system: str | None, temperature: float | None,
-                  max_tokens: int | None, seed: int | None = None) -> dict:
+                  max_tokens: int | None, seed: int | None = None,
+                  reasoning_effort: str | None = None) -> dict:
     """The OpenAI-compatible request body.
 
-    ``temperature`` and ``seed`` are sent only when set, so omitting one leaves the server's
-    own default (e.g. a router preset) in force rather than overriding it with a client value.
+    ``temperature``, ``seed``, and ``reasoning_effort`` are sent only when set, so omitting one
+    leaves the server's own default (e.g. a router preset) in force rather than overriding it
+    with a client value. ``reasoning_effort`` matters because a provider may enable a reasoning
+    trace by default and bill it inside ``max_tokens``: DeepSeek accepts ``"none"`` to turn it
+    off, which is the cheapest way to stop a trace from eating the output budget.
     """
     messages = []
     if system:
@@ -116,6 +121,8 @@ def build_payload(model: str, prompt: str, system: str | None, temperature: floa
         payload["max_tokens"] = max_tokens
     if seed is not None:
         payload["seed"] = seed
+    if reasoning_effort is not None:
+        payload["reasoning_effort"] = reasoning_effort
     return payload
 
 
@@ -123,9 +130,9 @@ def parse_response(data: dict, latency_s: float) -> Completion:
     """Extract the assistant text, usage, finish reason, and any separate reasoning.
 
     ``content`` is coerced from ``null`` to ``""`` (some reasoning servers return no
-    content when the answer stayed in ``reasoning_content``), and the finish reason plus
-    that reasoning text are surfaced so a truncated/empty answer is diagnosable rather
-    than looking like a silent model failure.
+    content when the answer stayed in ``reasoning_content``), and the finish reason, that
+    reasoning text, and the count of tokens spent on it are surfaced so a truncated/empty
+    answer is diagnosable rather than looking like a silent model failure.
     """
     try:
         choice = data["choices"][0]
@@ -136,6 +143,7 @@ def parse_response(data: dict, latency_s: float) -> Completion:
     except (KeyError, IndexError, TypeError, AttributeError) as e:
         raise ModelError(f"unexpected response shape: {e}") from e
     usage = data.get("usage") or {}
+    details = usage.get("completion_tokens_details") or {}
     return Completion(
         text=text,
         model=data.get("model", ""),
@@ -144,6 +152,7 @@ def parse_response(data: dict, latency_s: float) -> Completion:
         latency_s=latency_s,
         finish_reason=finish_reason,
         reasoning=reasoning,
+        reasoning_tokens=details.get("reasoning_tokens"),
     )
 
 
@@ -182,7 +191,8 @@ class HttpModel:
     def __init__(self, base_url: str = "", model: str = "", *, endpoint: str | None = None,
                  api_key: str | None = None, proxy: str = "none", timeout_s: float = 120.0,
                  temperature: float | None = None, max_tokens: int | None = None,
-                 seed: int | None = None, system: str | None = SYSTEM_PROMPT):
+                 seed: int | None = None, reasoning_effort: str | None = None,
+                 system: str = SYSTEM_PROMPT):
         if endpoint:
             self.endpoint = endpoint
         elif base_url:
@@ -200,12 +210,14 @@ class HttpModel:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.seed = seed
+        self.reasoning_effort = reasoning_effort
         self.system = system
 
     def complete(self, prompt: str, *, system: str | None = None) -> Completion:
         payload = build_payload(self.model, prompt,
                                 self.system if system is None else system,
-                                self.temperature, self.max_tokens, self.seed)
+                                self.temperature, self.max_tokens, self.seed,
+                                self.reasoning_effort)
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -245,6 +257,8 @@ def from_config(path: Path, *, override_base_url: str | None = None,
                 override_proxy: str | None = None,
                 override_timeout: float | None = None,
                 override_temperature: float | None = None,
+                override_max_tokens: int | None = None,
+                override_reasoning_effort: str | None = None,
                 override_seed: int | None = None) -> HttpModel:
     """Build the configured client; the API key comes from the environment, never the file.
 
@@ -271,7 +285,10 @@ def from_config(path: Path, *, override_base_url: str | None = None,
         timeout_s=float(override_timeout if override_timeout is not None
                         else cfg.get("timeout_s", 120)),
         temperature=None if temperature is None else float(temperature),
-        max_tokens=cfg.get("max_tokens"),
+        max_tokens=(override_max_tokens if override_max_tokens is not None
+                    else cfg.get("max_tokens")),
+        reasoning_effort=(override_reasoning_effort if override_reasoning_effort is not None
+                          else cfg.get("reasoning_effort")),
         seed=None if seed is None else int(seed),
     )
 
@@ -292,6 +309,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="request timeout in seconds (default: the config's timeout_s)")
     ap.add_argument("--temperature", type=float, default=None,
                     help="sampling temperature (omit to use the server/preset default)")
+    ap.add_argument("--max-tokens", type=int, default=None,
+                    help="override the config's max_tokens (a reply that hits this cap is "
+                         "truncated, and a reasoning model can spend it all before answering)")
+    ap.add_argument("--reasoning-effort", default=None,
+                    help="override the config's reasoning_effort; 'none' turns a provider's "
+                         "thinking mode off (DeepSeek defaults it on and bills it in max_tokens)")
     ap.add_argument("--seed", type=int, default=None, help="sampling seed (optional)")
     ap.add_argument("--prompt", default=None)
     ap.add_argument("--prompt-file", type=Path, default=None)
@@ -317,7 +340,10 @@ def main(argv: list[str] | None = None) -> int:
         model = from_config(args.config, override_base_url=args.base_url,
                             override_model=args.model, override_endpoint=args.endpoint,
                             override_proxy=args.proxy, override_timeout=args.timeout,
-                            override_temperature=args.temperature, override_seed=args.seed)
+                            override_temperature=args.temperature,
+                            override_max_tokens=args.max_tokens,
+                            override_reasoning_effort=args.reasoning_effort,
+                            override_seed=args.seed)
     except (ValueError, json.JSONDecodeError) as e:
         print(f"error: bad model config: {e}", file=sys.stderr)
         return 2
@@ -331,7 +357,10 @@ def main(argv: list[str] | None = None) -> int:
     text = result.text if args.raw else strip_fences(result.text)
     print(f"latency: {result.latency_s:.2f}s"
           + (f"  tokens: {result.prompt_tokens}->{result.completion_tokens}"
-             if result.completion_tokens is not None else ""))
+             if result.completion_tokens is not None else "")
+          + (f"  finish_reason: {result.finish_reason}" if result.finish_reason else "")
+          + (f"  reasoning: {result.reasoning_tokens} tok"
+             if result.reasoning_tokens is not None else ""))
     print("---")
     print(text)
     return 0

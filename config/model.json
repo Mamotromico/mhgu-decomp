@@ -1,5 +1,5 @@
 {
-  "_comment": "The local model endpoint for the reconstruction loop (docs/llm-harness-design.md -> The harness). URL: set an explicit full 'endpoint' for providers that do not use the /v1 convention; otherwise 'base_url' is used and '/v1/chat/completions' is appended. 'proxy': 'none' (direct, default), 'env' (honor http_proxy/https_proxy), or an explicit http(s):// URL. No secret is stored here: an API key, if the endpoint needs one, is read from the environment variable named by 'api_key_env' (optional — a local llama.cpp server needs none). 'temperature' and 'seed' are sent only when set (non-null), so leaving them null lets the server/preset decide; set them here or per run with --temperature/--seed. See tools/loop/model.py.",
+  "_comment": "The local model endpoint for the reconstruction loop (docs/llm-harness-design.md -> The harness). URL: set an explicit full 'endpoint' for providers that do not use the /v1 convention; otherwise 'base_url' is used and '/v1/chat/completions' is appended. 'proxy': 'none' (direct, default), 'env' (honor http_proxy/https_proxy), or an explicit http(s):// URL. No secret is stored here: an API key, if the endpoint needs one, is read from the environment variable named by 'api_key_env' (optional — a local llama.cpp server needs none). 'temperature', 'seed', and 'reasoning_effort' are sent only when set (non-null), so leaving them null lets the server/preset decide; set them here or per run with --temperature/--seed/--reasoning-effort. NOTE: 'max_tokens' is sized for the local model but is reused verbatim by any --base-url run, so override it (--max-tokens) for a remote model; 'reasoning_effort': 'none' turns off a provider's thinking mode when the trace would otherwise consume the cap (DeepSeek enables thinking by default). See tools/loop/model.py.",
   "base_url": "http://172.17.0.1:8080",
   "endpoint": null,
   "model": "Qwen3.8-27B-UD-Q3_K_XL-decomp.gguf",
@@ -7,6 +7,7 @@
   "temperature": null,
   "seed": null,
   "max_tokens": 12000,
+  "reasoning_effort": null,
   "timeout_s": 900,
   "api_key_env": "SOAR_MODEL_API_KEY"
 }

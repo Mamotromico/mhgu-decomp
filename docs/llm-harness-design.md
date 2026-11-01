@@ -302,6 +302,44 @@ threshold instead of burning every match attempt. `--no-feedback` restores
 plain resampling for A/B, and the first attempt is untouched, so a single-attempt run and the
 pre-feedback prompt stay byte-identical.
 
+**Built — a truncated reply stops the entry.** An empty reply used to be a silent `error`: the
+attempt was not recorded, nothing said *why*, and the retry re-sent the same prompt. Observed
+against a remote reasoning model, every such reply was exactly `max_tokens` (12000) of
+completion with `content: ""` and `finish_reason: "length"` — the reasoning trace consumed the
+whole budget before the answer began, so each retry re-paid ~12k tokens for nothing. The
+message now reports `finish_reason`, the completion tokens, and the reasoning length, and a
+`length` truncation returns `truncated`, which `attempt_entry` treats as terminal (`error`,
+no retry) and explains with the `--max-tokens` / reasoning-off hint. The cap is also
+overridable per run (`--max-tokens`), because `config/model.json`'s value is sized for the
+local model and would otherwise be inherited verbatim by any `--base-url` override.
+
+**Built — reasoning can be turned off.** DeepSeek-style endpoints enable a thinking trace by
+default and bill it inside `max_tokens`, so the trace can consume the entire budget before the
+answer begins. The client therefore sends `reasoning_effort` only when configured
+(`config/model.json` or `--reasoning-effort`; `"none"` disables thinking), and captures
+`usage.completion_tokens_details.reasoning_tokens` into the completion and the attempt record so
+the reasoning share of a reply is visible rather than inferred.
+
+**Built — a cross-run attempt budget.** `--attempts` is per invocation, so an entry that never
+matches stays pending and returns to the front of the queue on every run; measured on the first
+corpus, 348 attempts sat at attempt position 5+ for 2.3M completion tokens, and 291 entries had
+never matched at all. `--skip-attempted N` drops entries that already drew `N` attempts in the
+log (`1` = only fresh entries, the recommended setting for a paid remote model), and the
+selection reports when it ran out of eligible entries so the flag is not mistaken for an empty
+ledger. This is a *selection* budget, not a verdict: the entry stays pending, and `--entry
+`<addr>` bypasses the filter, so a deliberate revisit is still one command away.
+
+**Built — verified idiom spellings in the prompt.** The stuck front of the queue was not failing
+for want of reasoning: candidates called builtins that do not exist (`__builtin_arm_bfc`,
+`__builtin_arm_ubfx`, `__builtin_arm_sbfx`), used a two-argument `__builtin_arm_rbit`, or wrote
+padding that computed to a negative size. Each spelling in the prompt section was therefore
+**probed against the pinned clang 5.0.1** before being written down: `rbit` is
+`__builtin_arm_rbit(x)` (one argument), `ubfx`/`sbfx` are shift-and-mask forms, `bfi` is a
+mask-merge or a bitfield store, `bfc` only comes from a bitfield store of 0 (a clear whose mask
+fits a `bic` immediate lowers to `bic` instead), `rev16` needs a 16-bit value, and `revsh` is
+`(short)__builtin_bswap16(x)`. The section is **conditional** (`has_bit_op`), like the struct-copy
+guidance, so functions that contain none of these instructions do not pay for it.
+
 ---
 
 ## Decisions and open questions
