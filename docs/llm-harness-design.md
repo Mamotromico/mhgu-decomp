@@ -329,6 +329,31 @@ selection reports when it ran out of eligible entries so the flag is not mistake
 ledger. This is a *selection* budget, not a verdict: the entry stays pending, and `--entry
 `<addr>` bypasses the filter, so a deliberate revisit is still one command away.
 
+**Built — near-miss revisit selection (`--from-bank`).** The bank's closest-first order is only
+useful if it can drive a run, and `--entry` takes one address at a time. `--from-bank` therefore
+restricts the queue to entries that have a **current-pin** near miss and orders it by `closeness`
+(closest first), *overriding* `--order`; `--bank-max-len-delta` (default `0` — same-length, the
+reviewable ones) and `--bank-max-divergences` bound how close a record must be. Records written
+under a different eval pin are dropped, because their numbers are not comparable.
+
+**Built — a tier cap (`--max-tier`), because most of the queue cannot match yet.** The gate
+compares **raw object bytes**, so a function whose object carries a relocation (it calls out,
+tail-branches out, or loads a reference from the pool — ``complexity`` tier 2) can never match
+until the relocation-aware diff exists: every one of the 2,316 matches sits at tier 0, and none
+of the 37,978 pending tier-2 entries has ever matched. `--max-tier N` drops entries above tier
+`N`, so a run spends tokens only on functions the gate can actually verify (`0` = clean leaves,
+the defensible setting today; `1` also admits jump-table suspects). Without it, `--order
+easiest` feeds the model the whole unmatchable tail once tier 0 is exhausted, which is exactly
+the observed collapse: the fresh queue's median body grew 32 B → 76 B (mean 140 B) and a day of
+2,766 attempts produced 8 matches (~1.06M tokens per match). The cap is a *selection* filter,
+not a verdict — nothing is written to the ledger.
+
+**Known bank contamination.** A tail branch in an unlinked object is encoded as the
+``b .`` placeholder (`0xEAFFFFFE`, `R_ARM_JUMP24` unapplied), so a correct source that tail-calls
+mismatches on that one word. Such entries (64 banked at len_delta 0, ≤3 divergences, all tier 2)
+are **not** near misses in the source sense and must not be "fixed" by retrying — they are
+blocked on the relocation-aware diff. `--max-tier 0` excludes them automatically.
+
 **Built — verified idiom spellings in the prompt.** The stuck front of the queue was not failing
 for want of reasoning: candidates called builtins that do not exist (`__builtin_arm_bfc`,
 `__builtin_arm_ubfx`, `__builtin_arm_sbfx`), used a two-argument `__builtin_arm_rbit`, or wrote

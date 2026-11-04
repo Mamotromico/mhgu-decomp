@@ -33,6 +33,7 @@ from run import (
     attempt_store,
     attempted_counts,
     bank_path,
+    bank_priorities,
     build_prompt,
     bundle_argv,
     context_path,
@@ -253,6 +254,78 @@ class SelectNextTests(unittest.TestCase):
         nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
                           attempted={("main", "60000024"): 99})
         self.assertEqual(nxt["addr"], "60000024")
+
+    def test_from_bank_orders_closest_first_not_by_address(self):
+        entries = [entry(addr="60000024"), entry(addr="60000f8c")]
+        bank = {("main", "60000024"): [0, 9], ("main", "60000f8c"): [0, 1]}
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(), bank=bank)
+        self.assertEqual(nxt["addr"], "60000f8c")
+
+    def test_from_bank_drops_entries_not_in_the_bank(self):
+        entries = [entry(addr="60000024"), entry(addr="60000f8c")]
+        bank = {("main", "60000024"): [0, 4]}
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(), bank=bank)
+        self.assertEqual(nxt["addr"], "60000024")
+        done = {("main", "60000024")}
+        self.assertIsNone(select_next(entries, self.lay, skip_existing=True, done=done,
+                                      bank=bank))
+
+    def test_from_bank_honours_the_length_and_divergence_bounds(self):
+        entries = [entry(addr="60000024"), entry(addr="60000f8c")]
+        bank = {("main", "60000024"): [4, 0], ("main", "60000f8c"): [0, 7]}
+        self.assertIsNone(select_next(entries, self.lay, skip_existing=True, done=set(),
+                                      bank=bank, bank_max_len_delta=0,
+                                      bank_max_divergences=3))
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(), bank=bank,
+                          bank_max_len_delta=0, bank_max_divergences=8)
+        self.assertEqual(nxt["addr"], "60000f8c")
+
+    def test_max_tier_drops_relocated_entries(self):
+        # tier 2 (calls out / pool reference) can never match the raw-byte gate.
+        entries = [entry(addr="60000024"), entry(addr="60000f8c")]
+        tiers = {("main", "60000024"): (2, 40), ("main", "60000f8c"): (0, 12)}
+
+        def tier_key(e):
+            return tiers[(e["module"], e["addr"])]
+
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
+                          tier_key=tier_key, max_tier=0)
+        self.assertEqual(nxt["addr"], "60000f8c")
+        self.assertIsNone(select_next(entries, self.lay, skip_existing=True,
+                                      done={("main", "60000f8c")},
+                                      tier_key=tier_key, max_tier=0))
+
+    def test_unset_max_tier_keeps_relocated_entries(self):
+        entries = [entry(addr="60000024")]
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
+                          tier_key=lambda e: (2, 40))
+        self.assertEqual(nxt["addr"], "60000024")
+
+
+class BankPrioritiesTests(unittest.TestCase):
+    """``--from-bank`` reads the bank, keeping only records comparable under the current pin."""
+
+    def test_keeps_current_pin_records_and_drops_others(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lay = Layout(ledger=Path(tmp) / "ledger.tsv", inventory=Path(tmp) / "inv",
+                         nso=Path(tmp) / "nso", context=Path(tmp) / "ctx",
+                         src_root=Path(tmp) / "src", build_config=Path(tmp) / "bc",
+                         toolchain=Path(tmp) / "tc", work=Path(tmp) / "work")
+            lay.toolchain.write_text("{\n  \"clang\": \"5.0.1\"\n}\n")
+            pin = nearmiss.eval_pin(lay.toolchain)
+            bank = nearmiss.empty_bank()
+            nearmiss.upsert(bank, "main", "60000024", [0, 1], pin)
+            nearmiss.upsert(bank, "main", "60000f8c", [0, 2], "old-pin")
+            nearmiss.save_bank(bank_path(lay), bank)
+            self.assertEqual(bank_priorities(lay), {("main", "60000024"): [0, 1]})
+
+    def test_missing_bank_is_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lay = Layout(ledger=Path(tmp) / "ledger.tsv", inventory=Path(tmp) / "inv",
+                         nso=Path(tmp) / "nso", context=Path(tmp) / "ctx",
+                         src_root=Path(tmp) / "src", build_config=Path(tmp) / "bc",
+                         toolchain=Path(tmp) / "tc", work=Path(tmp) / "work")
+            self.assertEqual(bank_priorities(lay), {})
 
 
 class AttemptedCountsTests(unittest.TestCase):

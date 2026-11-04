@@ -34,6 +34,7 @@ Usage::
     python3 tools/loop/run.py --entry 601a72e4        # a specific entry
     python3 tools/loop/run.py --entry 601a72e4 --attempts 5   # resample until it matches
     python3 tools/loop/run.py --entry 601a72e4 --attempts 5 --no-feedback  # plain resampling
+    python3 tools/loop/run.py --from-bank --bank-max-divergences 3 --limit 20  # review close misses
     python3 tools/loop/run.py --dry-run                # select + bundle + prompt, no model
     python3 tools/loop/run.py --rebuild                # regenerate the bundle (Ghidra)
 """
@@ -405,10 +406,38 @@ def attempted_counts(layout: Layout) -> dict[tuple[str, str], int]:
     return counts
 
 
+def bank_priorities(layout: Layout) -> dict[tuple[str, str], list[int]]:
+    """The near-miss bank as ``(module, addr) -> closeness``, current-pin records only.
+
+    A record written under a different eval pin is not comparable (``nearmiss.best``), so it is
+    dropped here rather than ordered against numbers from another metric/compiler.
+    """
+    try:
+        bank = nearmiss.load_bank(bank_path(layout))
+    except ValueError as e:
+        print(f"warning: {e}; --from-bank ignored", file=sys.stderr)
+        return {}
+    try:
+        pin = nearmiss.eval_pin(layout.toolchain)
+    except ValueError as e:
+        print(f"warning: {e}; --from-bank ignored", file=sys.stderr)
+        return {}
+    priorities: dict[tuple[str, str], list[int]] = {}
+    for record in bank.get("records", {}).values():
+        if record.get("pin") != pin or not record.get("closeness"):
+            continue
+        priorities[(record.get("module"), record.get("addr"))] = list(record["closeness"])
+    return priorities
+
+
 def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
                 done: set[tuple[str, str]],
                 key=None, attempted: dict[tuple[str, str], int] | None = None,
-                skip_attempted: int | None = None) -> dict | None:
+                skip_attempted: int | None = None,
+                bank: dict[tuple[str, str], list[int]] | None = None,
+                bank_max_len_delta: int | None = None,
+                bank_max_divergences: int | None = None,
+                tier_key=None, max_tier: int | None = None) -> dict | None:
     """The next pending function not already handled this run.
 
     ``key`` is the optional difficulty ordering (``complexity.make_key``); ``None`` keeps the
@@ -417,12 +446,30 @@ def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
     ``skip_attempted`` drops entries that already drew that many attempts across *previous*
     runs (``attempted`` is the per-entry count from the log), so a run advances through the
     ledger instead of grinding the same stuck entries at the front of the queue.
+
+    ``bank`` (``--from-bank``) restricts the queue to entries with a comparable near-miss and
+    orders it closest-first, so a run revisits the candidates that were one instruction away
+    instead of paying for fresh functions. ``bank_max_len_delta`` / ``bank_max_divergences``
+    bound how close a record must be; the closeness ordering itself overrides ``key``.
+
+    ``max_tier`` (``--max-tier``) drops entries whose ``complexity`` tier exceeds it. The gate
+    still compares **raw object bytes**, so a tier-2 function (it calls out, tail-branches out,
+    or loads a reference from the pool) carries an unresolved relocation and can never match —
+    spending model tokens on it is pure loss until the relocation-aware diff exists.
     """
     queue = worklist.select(entries, kind="function", verify="none", key=key)
+    if max_tier is not None and tier_key is not None:
+        queue = [e for e in queue if tier_key(e)[0] <= max_tier]
     if skip_existing:
         queue = [e for e in queue if not worklist.source_path(e, layout.src_root).exists()]
     if skip_attempted is not None and attempted:
         queue = [e for e in queue if attempted.get(entry_key(e), 0) < skip_attempted]
+    if bank is not None:
+        queue = [e for e in queue if entry_key(e) in bank
+                 and (bank_max_len_delta is None or bank[entry_key(e)][0] <= bank_max_len_delta)
+                 and (bank_max_divergences is None
+                      or bank[entry_key(e)][1] <= bank_max_divergences)]
+        queue.sort(key=lambda e: (bank[entry_key(e)], e["module"], e["addr"]))
     for entry in queue:
         if entry_key(entry) not in done:
             return entry
@@ -505,6 +552,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--compile-attempts", type=int, default=2,
                     help="separate budget for non-compiling candidates: stop retrying an entry "
                          "once this many attempts produced code clang rejected (default 2)")
+    ap.add_argument("--from-bank", action="store_true",
+                    help="revisit the near-miss bank instead of fresh functions: only entries "
+                         "with a current-pin near miss, ordered closest-first (overrides "
+                         "--order); use with --bank-max-len-delta/--bank-max-divergences")
+    ap.add_argument("--bank-max-len-delta", type=int, default=0, metavar="N",
+                    help="with --from-bank, keep only records whose candidate length is within "
+                         "N bytes of the body (default 0 = same length, the reviewable ones)")
+    ap.add_argument("--bank-max-divergences", type=int, default=None, metavar="N",
+                    help="with --from-bank, keep only records with at most N differing words "
+                         "(omit for no cap)")
+    ap.add_argument("--max-tier", type=int, default=None, metavar="N",
+                    help="only entries whose complexity tier is <= N (0 = clean leaves, the "
+                         "only functions the raw-byte gate can match today; tiers are from "
+                         "tools/ledger/complexity.py)")
     ap.add_argument("--no-feedback", dest="feedback", action="store_false",
                     help="on a retry, do not feed the previous attempt's divergence back into "
                          "the prompt (resample the base prompt; also disables the stall stop)")
@@ -516,6 +577,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true",
                     help="select, bundle and print the prompt; do not call the model")
     args = ap.parse_args(argv)
+
+    if args.entry and args.from_bank:
+        print("error: --from-bank selects its own targets; drop --entry", file=sys.stderr)
+        return 2
 
     layout = Layout(ledger=args.ledger, inventory=args.inventory, nso=args.nso,
                     context=args.context, src_root=args.src_root, work=args.work,
@@ -540,11 +605,25 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     else:
         key = complexity_key(layout, reference) if args.order == "easiest" else None
+        tier_key = complexity_key(layout, reference) if args.max_tier is not None else None
+        if args.max_tier is not None and tier_key is None:
+            print("error: --max-tier needs the reference .text (baserom/main.nso)",
+                  file=sys.stderr)
+            return 2
         attempted = attempted_counts(layout) if args.skip_attempted is not None else None
+        bank = bank_priorities(layout) if args.from_bank else None
+        if args.from_bank and not bank:
+            print("error: --from-bank found no comparable near misses ",
+                  f"({bank_path(layout)})", file=sys.stderr)
+            return 1
         for _ in range(max(1, args.limit)):
             nxt = select_next(entries, layout, skip_existing=args.skip_existing, done=done,
                               key=key, attempted=attempted,
-                              skip_attempted=args.skip_attempted)
+                              skip_attempted=args.skip_attempted,
+                              bank=bank,
+                              bank_max_len_delta=args.bank_max_len_delta,
+                              bank_max_divergences=args.bank_max_divergences,
+                              tier_key=tier_key, max_tier=args.max_tier)
             if nxt is None:
                 break
             done.add(entry_key(nxt))
@@ -554,6 +633,14 @@ def main(argv: list[str] | None = None) -> int:
                   f"selected; the rest are matched, already have a source, or drew "
                   f"{args.skip_attempted}+ attempts (lower --skip-attempted to revisit them)",
                   file=sys.stderr)
+        if args.from_bank and len(targets) < max(1, args.limit):
+            print(f"note: only {len(targets)} banked entr{'y' if len(targets) == 1 else 'ies'} "
+                  f"matched the selection; raise --bank-max-len-delta/"
+                  f"--bank-max-divergences to widen the pool", file=sys.stderr)
+        if (args.max_tier is not None and len(targets) < max(1, args.limit)):
+            print(f"note: only {len(targets)} entr{'y' if len(targets) == 1 else 'ies'} "
+                  f"at tier <= {args.max_tier}; the remaining pending functions need the "
+                  f"relocation-aware diff, not more model attempts", file=sys.stderr)
     if not targets:
         print("error: no pending entries to process", file=sys.stderr)
         return 1
