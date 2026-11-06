@@ -33,7 +33,7 @@ def entry(**over) -> dict:
         "module": "main", "addr": "60000000", "kind": "function",
         "name": "func_60000000", "block": ".text", "group": "func_60000000",
         "size": "4", "name_class": "generated", "bind": "", "guess": "0",
-        "verify": "none", "review": "generated", "enroll": "rombytes",
+        "verify": "none", "gate": "", "review": "generated", "enroll": "rombytes",
     }
     base.update(over)
     return base

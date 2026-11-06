@@ -14,7 +14,8 @@ Pipeline
    note whether it carries relocations.
 4. Dump the original memory blocks (``tools/ghidra/dump_blocks.sh``) and compare the compiled
    function body against the original at its offset within its block.
-5. Optionally ``--update`` the ledger's ``verify`` axis on a match.
+5. Optionally ``--update`` the ledger's ``verify`` axis on a match, together with the
+   ``gate`` provenance of that verdict (``raw`` while the comparison is byte-for-byte).
 
 Body length vs. block partition
 -------------------------------
@@ -75,7 +76,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ledgerlib import read_entries, set_field
+from ledgerlib import read_entries, set_fields
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_LEDGER = REPO / "config" / "main" / "ledger.tsv"
@@ -305,13 +306,14 @@ def compare_body(cand: bytes, block: bytes, off: int, partition: int,
 
 def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: bool,
                 status: str, body: int | None, partition: int,
-                has_reloc: bool) -> dict:
+                has_reloc: bool, gate: str = "raw") -> dict:
     """The machine-readable result of one gate run (the near-miss bank's closeness input).
 
     Pure, so it is unit-tested and stable: ``diff_count`` is the divergence count over the
     compared span, and ``body`` is the authoritative extent when one was asserted. ``diff_words``
     carries the differing instructions themselves (see :func:`diff_words`) so a caller can act on
-    a mismatch without re-deriving the comparison.
+    a mismatch without re-deriving the comparison. ``gate`` is the provenance a match would be
+    recorded with (``raw`` today; ``reloc`` once relocation sites are verified).
     """
     span = min(len(cand), len(ref))
     diff_count = sum(1 for i in range(span) if cand[i] != ref[i])
@@ -323,7 +325,7 @@ def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: 
         "cand_len": len(cand), "ref_len": len(ref),
         "diff_count": diff_count, "first_diff": first_diff,
         "diff_words": diff_words(cand, ref),
-        "has_reloc": has_reloc,
+        "has_reloc": has_reloc, "gate": gate,
     }
 
 
@@ -436,9 +438,13 @@ def main(argv: list[str] | None = None) -> int:
     off = int(addr, 16) - block_start(ref_bin)
     ok, ref, status = compare_body(cand, block, off, size, args.body)
 
+    # Provenance of the comparison. ``raw`` until the relocation-aware diff lands: a
+    # non-leaf can only match byte-for-byte today when it carries no relocation at all.
+    gate = "raw"
+
     if args.report is not None:
         result = gate_result(args.module, addr, entry["name"], cand, ref, ok, status,
-                             args.body, size, has_reloc)
+                             args.body, size, has_reloc, gate)
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
 
@@ -456,8 +462,10 @@ def main(argv: list[str] | None = None) -> int:
         print_diff(cand, ref, args.show)
 
     if ok and args.update:
-        changed = set_field(args.ledger, (args.module, addr), "verify", "match")
-        print(f"ledger: {entry['name']} verify={'match' if changed else 'match (unchanged)'}")
+        changed = set_fields(args.ledger, (args.module, addr),
+                             {"verify": "match", "gate": gate})
+        print(f"ledger: {entry['name']} verify=match gate={gate}"
+              f"{' (unchanged)' if not changed else ''}")
     elif args.update and not ok:
         print("ledger: not updated (no match)")
 

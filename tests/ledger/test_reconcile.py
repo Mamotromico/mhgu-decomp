@@ -21,8 +21,8 @@ def erow(addr: int, size: int, *, kind: str = "function", verify: str = "none") 
     name = f"{'func' if kind == 'function' else 'D'}_{addr:08x}"
     return {"module": "main", "addr": f"{addr:08x}", "kind": kind, "name": name,
             "block": ".text", "group": name, "size": str(size), "name_class": "generated",
-            "bind": "", "guess": "0", "verify": verify, "review": "generated",
-            "enroll": "rombytes"}
+            "bind": "", "guess": "0", "verify": verify, "gate": "",
+            "review": "generated", "enroll": "rombytes"}
 
 
 def ov(start: int, end: int, *cuts: tuple[int, str]) -> Override:

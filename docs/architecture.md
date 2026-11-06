@@ -60,6 +60,7 @@ single committed record of both *identity* and *status*, keyed by the same `(mod
 | axis | values | written by | meaning |
 | --- | --- | --- | --- |
 | `verify` | `none`, `behaviour`, `match` | byte gate | quality of the reconstruction; `behaviour` = equivalent but **not** byte-identical |
+| `gate` | `""`, `raw`, `reloc` | byte gate | **provenance** of a `verify=match`: byte-identical compare, or at least one address-dependent word verified through its relocation (*Gate provenance*, below) |
 | `review` | `generated`, `reviewed` | reviewer | readability tier (*Generated vs. reviewed code*); `reviewed` preserves the byte match |
 | `enroll` | `rombytes`, `complete` | reconciler | build input — original bytes vs. our compiled object |
 | `reloc` | *(derived)* | link build | relocation/link check — **computed, never authored** |
@@ -101,6 +102,33 @@ Linked     = |done|       / |counted|
 Precedent: sm64ds `bytegate.counts_as_matched` (one shared predicate), `is_zero_size_alias` and
 `enrollment_of` (the guards); sm64ds `tools/tiers.py` (distinct denominators, explicitly "not a
 funnel").
+
+### Gate provenance (the `gate` axis)
+
+A per-function claim is only as strong as the comparison behind it, and after the
+relocation-aware diff lands there are two of them. `gate` records which one produced a match:
+
+| value | meaning |
+| --- | --- |
+| `""` | no match — the only value a `verify ≠ match` entry may carry |
+| `raw` | every compared word was byte-identical to the original |
+| `reloc` | at least one address-dependent word (a branch/call immediate, or a literal-pool word) was verified through its relocation and the rest byte-compared |
+
+**Why it is stored while `reloc` is not.** The distinction is derivability: `reloc` is a pure
+function of the built image, so storing it would duplicate the build. `gate` records *how a
+verdict was reached*, which cannot be recovered from the verdict or the image — without it a
+match proven by resolving relocations would be indistinguishable from a byte-identical one, and
+the near-miss/closeness numbers from the two regimes would silently mix.
+
+**Enforced, not merely documented.** `ledgerlib.set_fields` writes `verify` and `gate` in one
+line-surgical rewrite, so no reader observes a match without its provenance; and
+`tools/ledger/validate.py` rejects a `match` with an empty `gate`, a non-match carrying one, an
+unknown value, and any `gate` on an external. The gate's JSON report (`--report`) carries the
+same value, so the loop records it in the attempt log too.
+
+**Migration.** The column was added to the frozen seed once, mechanically: `raw` for the 2,316
+entries already `verify=match` (they were all byte-identical), `""` everywhere else. No other
+field changed.
 
 ### Symbol identity & segmentation
 
@@ -241,6 +269,7 @@ Columns, with the mandatory header row:
 | `bind` | ELF binding, externals only (`LOCAL`/`GLOBAL`/`WEAK`) |
 | `guess` | `0`/`1` — a *guessed* real name (never a placeholder) |
 | `verify` | `none` \| `behaviour` \| `match` |
+| `gate` | `""` \| `raw` \| `reloc` (empty unless `verify=match`) |
 | `review` | `generated` \| `reviewed` |
 | `enroll` | `rombytes` \| `complete` (empty for externals) |
 
@@ -254,8 +283,8 @@ hole (1,057 draft overlaps) and leaves the interior literal-pool/jump-table byte
 (2.7 MB of unclaimed `.text`). Deriving extents from the next cut point is what makes the
 ledger disjoint *and* complete — every content block becomes an exact partition.
 
-Status seeds at `verify=none` / `review=generated` / `enroll=rombytes`; `reloc` is derived by
-the link build and never stored. The ledger is a **frozen seed**: the generator writes it once
+Status seeds at `verify=none` / `gate=""` / `review=generated` / `enroll=rombytes`; `reloc` is
+derived by the link build and never stored. The ledger is a **frozen seed**: the generator writes it once
 and refuses to overwrite an existing file (barring an explicit `--force`), because the authored
 status axes must survive; CI is gated instead by the invariant validator
 (`tools/ledger/validate.py`). The generator is content-only (metadata blocks dropped),

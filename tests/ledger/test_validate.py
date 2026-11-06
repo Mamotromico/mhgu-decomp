@@ -31,7 +31,7 @@ def row(**over) -> str:
         "module": "main", "addr": "00000000", "kind": "function",
         "name": "func_00000000", "block": ".text", "group": "func_00000000",
         "size": "4", "name_class": "generated", "bind": "", "guess": "0",
-        "verify": "none", "review": "generated", "enroll": "rombytes",
+        "verify": "none", "gate": "", "review": "generated", "enroll": "rombytes",
     }
     base.update(over)
     return "\t".join(base[c] for c in LEDGER_COLUMNS)
@@ -91,6 +91,49 @@ class ValidatorRobustnessTests(unittest.TestCase):
         bad = HEADER.replace("kind", "knd")
         p = self.ledger([row()], header=bad)
         self.assertEqual(validate_main(["--ledger", str(p)]), 1)
+
+
+class GateProvenanceTests(unittest.TestCase):
+    """``gate`` is evidence: it is set exactly when the entry has a match."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._dir.name)
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def ledger(self, rows: list[str]) -> Path:
+        p = self.tmp / "ledger.tsv"
+        p.write_text(HEADER + "\n" + "".join(r + "\n" for r in rows))
+        return p
+
+    def test_a_match_with_provenance_is_valid(self):
+        p = self.ledger([row(verify="match", gate="reloc"),
+                         row(addr="00000004", name="func_00000004")])
+        self.assertEqual(validate(p, None), [])
+
+    def test_a_match_without_provenance_is_reported(self):
+        p = self.ledger([row(verify="match", gate=""),
+                         row(addr="00000004", name="func_00000004")])
+        self.assertTrue(any("no gate provenance" in e for e in validate(p, None)))
+
+    def test_provenance_without_a_match_is_reported(self):
+        p = self.ledger([row(verify="none", gate="raw"),
+                         row(addr="00000004", name="func_00000004")])
+        self.assertTrue(any("needs a match" in e for e in validate(p, None)))
+
+    def test_an_unknown_gate_value_is_reported(self):
+        p = self.ledger([row(verify="match", gate="guessed"),
+                         row(addr="00000004", name="func_00000004")])
+        self.assertTrue(any("bad gate" in e for e in validate(p, None)))
+
+    def test_an_external_must_not_carry_provenance(self):
+        ext = row(kind="external", addr="", name="_ZN2nn2fs4InitEv", block="",
+                  group="", size="", name_class="discovered", bind="GLOBAL",
+                  gate="raw", enroll="")
+        p = self.ledger([row(), ext])
+        self.assertTrue(any("external must have empty gate" in e for e in validate(p, None)))
 
 
 if __name__ == "__main__":

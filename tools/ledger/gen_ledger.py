@@ -22,7 +22,7 @@ Transformations applied
   non-contiguous bodies (see ``partition_sizes``);
 * materialise ``content`` gaps as ``D_<addr>`` data entries, so the denominator is complete;
 * append externals (parsed from ``.dynsym``) as ``kind == external``;
-* stamp the initial status axes (``verify=none`` / ``review=generated`` /
+* stamp the initial status axes (``verify=none`` / ``gate=""`` / ``review=generated`` /
   ``enroll=rombytes``) and the identity attributes (``guess=0``).
 
 Single module
@@ -174,6 +174,7 @@ def build_entries(in_dir: Path, module: str) -> tuple[list[dict], dict]:
                 "bind": r["bind"],
                 "guess": "0",
                 "verify": "none",
+                "gate": "",
                 "review": "generated",
                 "enroll": "",
             }

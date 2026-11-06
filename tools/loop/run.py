@@ -845,6 +845,7 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         record["gate_status"] = report["status"]
         record["diff_count"] = report["diff_count"]
         record["diff_words"] = report.get("diff_words", [])
+        record["gate"] = report.get("gate")
     stored = attempts.append(attempt_store(layout), record, candidate_text=candidate)
 
     # 6. bank a near miss (strictly-improving), and keep src/ matched-only.

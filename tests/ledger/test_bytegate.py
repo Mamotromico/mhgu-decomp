@@ -118,6 +118,14 @@ class GateResultTests(unittest.TestCase):
         self.assertEqual(r["diff_count"], 0)
         self.assertEqual((r["cand_len"], r["ref_len"]), (4, 6))
 
+    def test_gate_provenance_is_reported(self):
+        # The ledger records it with verify=match; the loop copies it into the attempt log.
+        raw = self.result(b"abcd", b"abcd")
+        self.assertEqual(raw["gate"], "raw")
+        reloc = gate_result("main", "601a72e4", "func_601a72e4", b"abcd", b"abcd",
+                            True, "match", 60, 1368, has_reloc=True, gate="reloc")
+        self.assertEqual(reloc["gate"], "reloc")
+
     def test_carries_status_and_identity(self):
         r = self.result(b"abcd", b"abce", ok=False, status="mismatch")
         self.assertFalse(r["ok"])

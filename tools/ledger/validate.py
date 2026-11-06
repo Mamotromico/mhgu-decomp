@@ -11,9 +11,13 @@ Invariants checked
 ------------------
 * **Schema** — the header is exactly the shared ``LEDGER_COLUMNS``; every row has the
   same field count.
-* **Field domains** — ``kind``, ``name_class``, ``verify``, ``review``, ``enroll``,
-  ``guess`` are within their declared sets; addresses are 8-hex lowercase; non-externals
-  carry a block and a positive integer size; externals carry no address/block/size/group.
+* **Field domains** — ``kind``, ``name_class``, ``verify``, ``gate``, ``review``,
+  ``enroll``, ``guess`` are within their declared sets; addresses are 8-hex lowercase;
+  non-externals carry a block and a positive integer size; externals carry no
+  address/block/size/group.
+* **Gate provenance** — ``gate`` is non-empty **exactly** when ``verify=match``; an entry
+  without a match carries ``""`` (a match with no provenance, or provenance without a
+  match, is a contradiction). Externals always carry ``""``.
 * **Naming** — a ``generated`` name is exactly ``func_<addr>`` (function) / ``D_<addr>``
   (data); a ``discovered`` name is reproduced verbatim.
 * **Key uniqueness** — no duplicate ``(module, addr)`` (non-externals) or ``(module,
@@ -50,6 +54,7 @@ from pathlib import Path
 
 from ledgerlib import (
     ENROLL_VALUES,
+    GATE_VALUES,
     KINDS,
     LEDGER_COLUMNS,
     NAMING_CLASSES,
@@ -129,6 +134,14 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
 
         if e["verify"] not in VERIFY_VALUES:
             errors.append(f"{where}: bad verify {e['verify']!r}")
+        if e["gate"] not in GATE_VALUES and e["gate"] != "":
+            errors.append(f"{where}: bad gate {e['gate']!r} (want '' or one of "
+                          f"{GATE_VALUES})")
+        elif e["verify"] == "match" and e["gate"] == "":
+            errors.append(f"{where}: verify=match with no gate provenance")
+        elif e["verify"] != "match" and e["gate"] != "":
+            errors.append(f"{where}: gate={e['gate']!r} but verify={e['verify']!r} "
+                          f"(provenance needs a match)")
         if e["review"] not in REVIEW_VALUES:
             errors.append(f"{where}: bad review {e['review']!r}")
         if e["guess"] not in ("0", "1"):
@@ -138,6 +151,8 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
             seen_external = True
             if e["enroll"] != "":
                 errors.append(f"{where}: external must have empty enroll")
+            if e["gate"] != "":
+                errors.append(f"{where}: external must have empty gate")
             if e["addr"] or e["block"] or e["size"] or e["group"]:
                 errors.append(f"{where}: external must have empty addr/block/size/group")
             if e["bind"] not in BINDS:
