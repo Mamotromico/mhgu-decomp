@@ -14,9 +14,9 @@ The site's two figures are *decompiled* (``matched_code``) and *fully linked*
 (``complete_code``); both are code-byte percentages.
 
 * ``matched_code`` / ``matched_functions`` ← ``decompiled(e)`` (``verify = match``).
-* ``complete_code`` / ``complete_data`` ← ``enroll = complete``, the *build input* axis
-  ("original bytes vs. our compiled object"). It is the ledger-expressible stand-in for the
-  Linked metric: the whole-image ``reloc`` check refines it at build time and is, by design,
+* ``complete_code`` / ``complete_data`` ← ``done(e)``: decompiled **and** linked. The link
+  build decides linked (``tools/build/linkcheck.py --report``); without one, the axis falls
+  back to ``enroll = complete``, the ledger-expressible stand-in. ``reloc`` is by design
   derived rather than stored (see *Status layer & the shared "matched" predicate*).
 * code = ``kind = function``; data = ``kind = data`` (literal pools living in ``.text`` stay
   data, because the entry's *kind*, not its block, decides).
@@ -33,6 +33,7 @@ Usage::
 
     python3 tools/ledger/report.py                     # report for the committed ledger -> stdout
     python3 tools/ledger/report.py --out report.json   # write the artifact body
+    python3 tools/ledger/report.py --link-report build/link.json   # real Linked metric
     python3 tools/ledger/report.py --units             # include per-group unit detail
     python3 tools/ledger/report.py --ledger FILE --compact
 
@@ -67,9 +68,28 @@ _COUNT_KEYS = (
 )
 
 
-def is_complete(e: dict) -> bool:
-    """In the denominator and enrolled as our compiled object (the build-input axis)."""
+def is_complete(e: dict, linked: set[tuple[str, str]] | None = None) -> bool:
+    """In the denominator and linked: verified by the image check, or enrolled as ours.
+
+    With a link result (``linkcheck.py --report``), the *Linked* axis is the build's verdict:
+    a matched entry whose bytes the assembled image reproduced. Without one it falls back to
+    the ledger's ``enroll`` axis, which is the hand-expressible approximation.
+    """
+    if linked is not None:
+        return counted(e) and decompiled(e) and (e["module"], e["addr"]) in linked
     return counted(e) and e["enroll"] == "complete"
+
+
+def linked_entries(path: Path) -> set[tuple[str, str]]:
+    """Read ``linkcheck.py --report`` and return the entries whose bytes it verified."""
+    payload = json.loads(Path(path).read_text())
+    keys: set[tuple[str, str]] = set()
+    for item in payload.get("linked", []):
+        module, sep, addr = str(item).partition(":")
+        if not sep or not module or not addr:
+            raise ValueError(f"{path}: linked entry {item!r} is not 'module:addr'")
+        keys.add((module, addr))
+    return keys
 
 
 def _pct(numerator: float, denominator: float) -> float:
@@ -77,7 +97,7 @@ def _pct(numerator: float, denominator: float) -> float:
     return 100.0 if denominator == 0 else numerator / denominator * 100.0
 
 
-def _counts(entries: list[dict]) -> dict:
+def _counts(entries: list[dict], linked: set[tuple[str, str]] | None = None) -> dict:
     """Accumulate one bucket's byte/count totals (no percentages; see ``_finalize``)."""
     c = {k: 0 for k in _COUNT_KEYS}
     for e in entries:
@@ -92,7 +112,7 @@ def _counts(entries: list[dict]) -> dict:
             c["total_data"] += size
             if decompiled(e):
                 c["matched_data"] += size
-        if is_complete(e):
+        if is_complete(e, linked):
             c["complete_code" if e["kind"] == "function" else "complete_data"] += size
     return c
 
@@ -132,11 +152,13 @@ def _item(e: dict) -> dict:
     return item
 
 
-def build(entries: list[dict], include_units: bool = False) -> dict:
+def build(entries: list[dict], include_units: bool = False,
+          linked: set[tuple[str, str]] | None = None) -> dict:
     """Render ledger entries as an objdiff ``Report`` (v2) document.
 
     ``include_units`` adds per-``group`` unit detail; it is off by default because the ledger's
     one-function-per-file default makes that detail enormous (see the module docstring).
+    ``linked`` is the link build's verified set; without it the Linked axis uses ``enroll``.
     """
     counted_entries = [e for e in entries if counted(e)]
 
@@ -148,12 +170,12 @@ def build(entries: list[dict], include_units: bool = False) -> dict:
     units = []
     complete_by_module: dict[str, list[int]] = {}  # module -> [total, complete]
     for (module, group), es in sorted(groups.items()):
-        complete = all(is_complete(e) for e in es)
+        complete = all(is_complete(e, linked) for e in es)
         tally = complete_by_module.setdefault(module, [0, 0])
         tally[0] += 1
         tally[1] += 1 if complete else 0
         if include_units:
-            c = _counts(es)
+            c = _counts(es, linked)
             c["total_units"] = 1
             c["complete_units"] = 1 if complete else 0
             unit = {"name": group, "measures": _finalize(c)}
@@ -166,7 +188,7 @@ def build(entries: list[dict], include_units: bool = False) -> dict:
             unit["metadata"] = {"complete": complete, "progress_categories": [module]}
             units.append(unit)
 
-    measures = _counts(counted_entries)
+    measures = _counts(counted_entries, linked)
     measures["total_units"] = sum(t for t, _c in complete_by_module.values())
     measures["complete_units"] = sum(c for _t, c in complete_by_module.values())
 
@@ -176,7 +198,7 @@ def build(entries: list[dict], include_units: bool = False) -> dict:
         by_module.setdefault(module, []).extend(es)
     categories = []
     for module, es in sorted(by_module.items()):
-        c = _counts(es)
+        c = _counts(es, linked)
         c["total_units"], c["complete_units"] = complete_by_module[module]
         categories.append({"id": module, "name": module, "measures": _finalize(c)})
 
@@ -194,6 +216,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="committed ledger (default config/main/ledger.tsv)")
     ap.add_argument("--out", type=Path, default=None,
                     help="write the report here (default: stdout)")
+    ap.add_argument("--link-report", type=Path, default=None,
+                    help="linkcheck.py --report output; makes the Linked axis the build's "
+                         "verdict instead of the ledger's enroll axis")
     ap.add_argument("--units", action="store_true",
                     help="include per-group unit detail (large; omitted by default)")
     ap.add_argument("--compact", action="store_true",
@@ -205,6 +230,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     report = build(read_entries(args.ledger), include_units=args.units)
+    linked = None
+    if args.link_report is not None:
+        try:
+            linked = linked_entries(args.link_report)
+        except (OSError, ValueError, json.JSONDecodeError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        report = build(read_entries(args.ledger), include_units=args.units, linked=linked)
     if args.compact:
         text = json.dumps(report, separators=(",", ":"))
     else:

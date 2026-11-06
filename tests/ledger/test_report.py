@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "ledger"))
 
-from report import REPORT_VERSION, build, main as report_main
+from report import REPORT_VERSION, build, linked_entries, main as report_main
 from ledgerlib import LEDGER_COLUMNS
 
 HEADER = "\t".join(LEDGER_COLUMNS)
@@ -95,6 +95,37 @@ class ReportTests(unittest.TestCase):
         m = build(entries)["measures"]
         self.assertEqual(m["complete_code"], 8)
         self.assertAlmostEqual(m["complete_code_percent"], 8 / 12 * 100)
+
+    def test_a_link_result_replaces_the_enroll_axis(self):
+        # The build's verdict is authoritative: A was verified in the image, B was not,
+        # even though neither is enrolled as complete.
+        entries = [
+            entry(name="A", group="A", size="8", verify="match"),
+            entry(addr="60000008", name="B", group="B", size="4", verify="match"),
+        ]
+        m = build(entries, linked={("main", "60000000")})["measures"]
+        self.assertEqual(m["matched_code"], 12)
+        self.assertEqual(m["complete_code"], 8)
+        self.assertAlmostEqual(m["complete_code_percent"], 8 / 12 * 100)
+
+    def test_link_result_does_not_link_an_unmatched_entry(self):
+        entries = [entry(name="A", group="A", size="8", verify="none")]
+        m = build(entries, linked={("main", "60000000")})["measures"]
+        self.assertEqual(m["complete_code"], 0)
+
+    def test_linked_entries_parses_a_link_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "link.json"
+            path.write_text(json.dumps({"linked": ["main:60000288", "main:6000029c"]}))
+            self.assertEqual(linked_entries(path),
+                             {("main", "60000288"), ("main", "6000029c")})
+
+    def test_linked_entries_rejects_a_malformed_key(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "link.json"
+            path.write_text(json.dumps({"linked": ["60000288"]}))
+            with self.assertRaises(ValueError):
+                linked_entries(path)
 
     def test_units_are_groups_and_categories_are_modules(self):
         entries = [

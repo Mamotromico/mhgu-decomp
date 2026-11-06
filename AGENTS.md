@@ -361,8 +361,9 @@ Curated prior art (study for conventions; do not copy blindly):
       `nx-decomp-tools` or build on `asm-differ`.
 - [x] Choose the progress-tracking format → **decomp.dev** (the objdiff `Report` v2 JSON),
       exported from the ledger by `tools/ledger/report.py`; published as a CI artifact named
-      `<version>_report`. The site's decompiled figure maps to `verify=match`, its linked figure
-      to `enroll=complete` — both via the shared predicate.
+      `<version>_report`. The site's decompiled figure maps to `verify=match`; its linked figure
+      to the link build's verdict (`tools/build/linkcheck.py --report`, per-entry), falling back
+      to `enroll=complete` when no link result is supplied — both via the shared predicate.
 - [ ] Decide how much of the sm64ds automation stack (templates, near-miss bank,
       claims protocol) to adopt for the manual-first workflow.
 - [x] Decide the generated-vs-reviewed split (separate folders + review tooling?) →

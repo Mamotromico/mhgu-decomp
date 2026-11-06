@@ -412,7 +412,17 @@ unmatched symbol's `enroll` resolves to (see *Status layer & the shared "matched
 - **End state — Model B (byte substitution).** To reach our "done" (a linked image with a
   relocation/link check), unmatched *regions* are filled from the original binary **by the
   build itself** — object-level byte substitution (`rombytes` / `delinks`), never reconstructed
-  C. This is the sm64ds `enroll.py` shape.
+  C. This is the sm64ds `enroll.py` shape. **Built:** `tools/build/linkcheck.py` assembles the
+  inferred image — the original bytes everywhere, each matched function's compiled bytes at
+  its own address with its relocations resolved the same way the gate resolves them (ledger
+  address, PLT stub, GOT slot) — and compares the result to the original over every byte,
+  naming the entry that owns a mismatch.
+- **Why substitution and not `ld`.** A literal link cannot reproduce this image. It is
+  position-independent, so a compiled function's `R_ARM_GOT_PREL` makes the *linker* allocate a
+  GOT entry, at an address the linker chooses. Measured: `arm-none-eabi-ld -T script` places
+  `.got.plt` immediately after `.text` (`0x60000028`), where the original has it at
+  `0x61838000`. Neither GNU ld nor lld exposes the original's slot assignment, so byte-identical
+  output is unreachable by linking; substitution applies the *original's* layout instead.
 - **`rombytes` by default; `complete` on review.** A `src/` file's build input is the original
   bytes until its function matches, then flips to our compiled object — the promotion bridge
   already recorded under *File layout & generated build*.
@@ -449,7 +459,11 @@ Progress is reported as **two independent metrics**:
 - **Decompiled** — from the committed ledger: the entries that meet the shared "matched"
   predicate. Requires no build.
 - **Linked** — a whole-image comparison of the built output against the original (the
-  relocation/link check, plus a first-mismatching-byte locator). Requires a build.
+  relocation/link check, plus a first-mismatching-byte locator). Requires a build. Implemented
+  as `tools/build/linkcheck.py`; it reports the first differing address and the ledger entry
+  that owns it, and its `--report` payload carries the per-entry `linked` set that
+  `report.py --link-report` publishes as the Linked figure (per-entry, because substitution
+  makes each contribution independent).
 
 The ledger metric is the published, continuously-reported number; the linked metric is the
 end-state gate. The predicate's parts — the externals exclusion, the alias/zero-size guard, and
