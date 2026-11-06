@@ -17,9 +17,12 @@ the bank's order agree with the gate's ``body-length`` status. ``divergences`` i
 ``--report``, never from the bank re-deriving a comparison (the gate is authoritative).
 
 **The eval pin.** The metric and the compiler pin together determine whether two closeness
-numbers are comparable. Both are fingerprinted into ``eval_pin``:
+numbers are comparable. The gate's *comparison rule* belongs to that pin too — v3 isolates the
+arrival of relocation-resolved comparison, after which a divergence at a branch site is no
+longer counted. Both are fingerprinted into ``eval_pin``:
 
-* the metric definition (``METRIC`` below — bump it when the formula changes), and
+* the metric definition (``METRIC`` below — bump it when the formula *or* the gate's
+  comparison rule changes), and
 * ``config/toolchain.json`` (the compiler pin — the whole of ``compiler-identification.md`` is
   evidence that a different compiler makes different bytes).
 
@@ -50,7 +53,9 @@ DEFAULT_BANK = REPO / "baserom" / "work" / "nearmiss" / "bank.json"
 DEFAULT_TOOLCHAIN = REPO / "config" / "toolchain.json"
 
 # Bump when the closeness formula changes, so old numbers stop being silently comparable.
-METRIC = "closeness/v2"
+# v3: the gate resolves branch/call relocations, so a divergence at such a site is no longer
+# counted (and a body that used to look "one word off" now matches).
+METRIC = "closeness/v3"
 
 
 # --- pure helpers (unit-tested) -------------------------------------------------------

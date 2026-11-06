@@ -301,6 +301,20 @@ class SelectNextTests(unittest.TestCase):
                           tier_key=lambda e: (2, 40))
         self.assertEqual(nxt["addr"], "60000024")
 
+    def test_matchable_drops_bodies_the_gate_cannot_verify(self):
+        # Branch-only bodies are matchable now; pool/ADR bodies are not.
+        entries = [entry(addr="60000024"), entry(addr="60000f8c")]
+        ok = {("main", "60000024"): False, ("main", "60000f8c"): True}
+
+        def matchable(e):
+            return ok[(e["module"], e["addr"])]
+
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
+                          matchable=matchable)
+        self.assertEqual(nxt["addr"], "60000f8c")
+        self.assertIsNone(select_next(entries, self.lay, skip_existing=True,
+                                      done={("main", "60000f8c")}, matchable=matchable))
+
 
 class BankPrioritiesTests(unittest.TestCase):
     """``--from-bank`` reads the bank, keeping only records comparable under the current pin."""

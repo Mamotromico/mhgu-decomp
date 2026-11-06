@@ -16,13 +16,13 @@ bytes and returns values.
 
 The metric (v3)
 ---------------
-The gate can currently verify a **relocation-free leaf** cleanly; a function whose object
-carries relocations needs the not-yet-built relocation-aware diff
-(``tools/ledger/bytegate.py`` → *Scope*). Because this image's relocations all land in
-``.data``/``.got`` (its ``.text`` carries none), "relocation-free" cannot be read off the
-image's relocation tables — it is a property of what the *reconstruction* will need. Three
-cheap, byte-decidable signals approximate it; a function's tier is the worst it has (lower =
-easier)::
+The gate resolves **branch/call relocations** against the ledger and compares bytes exactly;
+literal-pool words (GOT slots) and jump tables are not resolved yet, and a body carrying one
+fails closed (``tools/ledger/bytegate.py`` -> *Scope*). Because this image's relocations all
+land in ``.data``/``.got`` (its ``.text`` carries none), "what the gate can verify" cannot be
+read off the image's relocation tables — it is a property of what the *reconstruction* will
+need. Three cheap, byte-decidable signals approximate it; a function's tier is the worst it
+has (lower = easier)::
 
     tier 0  no call, no outbound branch, no address-valued pool word  — a clean leaf
     tier 1  builds a PC-relative address (``add rd, pc, #imm``)       — a jump-table suspect
@@ -45,6 +45,10 @@ easier)::
   stays in tier 1 as a suspect, since the table itself cannot be resolved from the body.
 * ``size`` is the tiebreak within a tier (smaller first): the body length when read, else the
   inventory/partition length for an unreadable body.
+
+The tier is a **difficulty** ranking, not a verdict on what the gate accepts: a tier-2 body
+can still be matchable when its only relocations are branches, which the gate now resolves
+(that is what :func:`gateable` answers, and what ``tools/loop/run.py --matchable`` selects on).
 
 All signals are **byte-pattern heuristics**: they scan 4-byte words for A32 encodings. A word of
 literal-pool data that happens to match an encoding, or a constant that happens to equal a loaded
@@ -181,6 +185,22 @@ def any_pool_reference(body: bytes, addr: str, text: bytes, in_image) -> bool:
         if in_image(value) or in_image((pc + value) & 0xFFFFFFFF):
             return True
     return False
+
+
+def gateable(body: bytes | None) -> bool:
+    """Whether the current byte gate can verify this body.
+
+    The gate resolves **branch and call** relocations against the ledger, so a body that only
+    branches out is verifiable. It does not resolve literal-pool words (they name GOT slots,
+    which need the dynamic-relocation map) nor jump tables, so a body that reads a pool word or
+    builds a PC-relative address (``ADR``) stays unverifiable and must not be selected.
+
+    This is the reference-side proxy for the gate's object-side rule (which fails closed on any
+    non-branch relocation); a wrong guess therefore costs a failed gate run, never a false match.
+    """
+    if body is None:
+        return False
+    return not has_pool_load(body) and not has_adr(body)
 
 
 def score(body: bytes | None, size: int, *, resolve=None) -> tuple[int, int]:

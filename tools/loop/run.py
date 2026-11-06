@@ -35,6 +35,7 @@ Usage::
     python3 tools/loop/run.py --entry 601a72e4 --attempts 5   # resample until it matches
     python3 tools/loop/run.py --entry 601a72e4 --attempts 5 --no-feedback  # plain resampling
     python3 tools/loop/run.py --from-bank --bank-max-divergences 3 --limit 20  # review close misses
+    python3 tools/loop/run.py --matchable --limit 20   # only what the gate can verify today
     python3 tools/loop/run.py --dry-run                # select + bundle + prompt, no model
     python3 tools/loop/run.py --rebuild                # regenerate the bundle (Ghidra)
 """
@@ -430,6 +431,27 @@ def bank_priorities(layout: Layout) -> dict[tuple[str, str], list[int]]:
     return priorities
 
 
+def matchable_filter(layout: Layout, text: bytes | None):
+    """A predicate: can the byte gate verify this entry's body today?
+
+    The gate resolves branch/call relocations but not literal-pool words or jump tables
+    (``complexity.gateable``), so a body that reads a pool word or builds an address is
+    excluded. ``None`` when the reference ``.text`` is unavailable (no filter possible).
+    """
+    if text is None:
+        print("warning: reference .text unavailable for --matchable; filter ignored",
+              file=sys.stderr)
+        return None
+    sizes = (bundle.parse_inventory(layout.inventory.read_text())
+             if layout.inventory.exists() else {})
+
+    def ok(entry: dict) -> bool:
+        body = complexity.body_of(text, entry["addr"], sizes.get(entry["addr"], 0))
+        return complexity.gateable(body)
+
+    return ok
+
+
 def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
                 done: set[tuple[str, str]],
                 key=None, attempted: dict[tuple[str, str], int] | None = None,
@@ -437,7 +459,8 @@ def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
                 bank: dict[tuple[str, str], list[int]] | None = None,
                 bank_max_len_delta: int | None = None,
                 bank_max_divergences: int | None = None,
-                tier_key=None, max_tier: int | None = None) -> dict | None:
+                tier_key=None, max_tier: int | None = None,
+                matchable=None) -> dict | None:
     """The next pending function not already handled this run.
 
     ``key`` is the optional difficulty ordering (``complexity.make_key``); ``None`` keeps the
@@ -452,14 +475,17 @@ def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
     instead of paying for fresh functions. ``bank_max_len_delta`` / ``bank_max_divergences``
     bound how close a record must be; the closeness ordering itself overrides ``key``.
 
-    ``max_tier`` (``--max-tier``) drops entries whose ``complexity`` tier exceeds it. The gate
-    still compares **raw object bytes**, so a tier-2 function (it calls out, tail-branches out,
-    or loads a reference from the pool) carries an unresolved relocation and can never match —
-    spending model tokens on it is pure loss until the relocation-aware diff exists.
+    ``max_tier`` (``--max-tier``) drops entries whose ``complexity`` tier exceeds it. ``matchable``
+    (``--matchable``) drops entries the gate cannot verify at all today — a body whose only
+    relocations are branches is matchable, one that reads a literal pool or builds a jump-table
+    address is not (``complexity.gateable``). It is the stronger filter of the two; the tier is a
+    difficulty ranking, not a verdict.
     """
     queue = worklist.select(entries, kind="function", verify="none", key=key)
     if max_tier is not None and tier_key is not None:
         queue = [e for e in queue if tier_key(e)[0] <= max_tier]
+    if matchable is not None:
+        queue = [e for e in queue if matchable(e)]
     if skip_existing:
         queue = [e for e in queue if not worklist.source_path(e, layout.src_root).exists()]
     if skip_attempted is not None and attempted:
@@ -563,9 +589,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --from-bank, keep only records with at most N differing words "
                          "(omit for no cap)")
     ap.add_argument("--max-tier", type=int, default=None, metavar="N",
-                    help="only entries whose complexity tier is <= N (0 = clean leaves, the "
-                         "only functions the raw-byte gate can match today; tiers are from "
-                         "tools/ledger/complexity.py)")
+                    help="only entries whose complexity tier is <= N (a *difficulty* ranking; "
+                         "0 = clean leaves). For 'what the gate can verify', use --matchable")
+    ap.add_argument("--matchable", action="store_true",
+                    help="only entries the gate can verify today: branch/call relocations are "
+                         "resolved, literal-pool words and jump tables are not "
+                         "(complexity.gateable)")
     ap.add_argument("--no-feedback", dest="feedback", action="store_false",
                     help="on a retry, do not feed the previous attempt's divergence back into "
                          "the prompt (resample the base prompt; also disables the stall stop)")
@@ -616,6 +645,7 @@ def main(argv: list[str] | None = None) -> int:
             print("error: --from-bank found no comparable near misses ",
                   f"({bank_path(layout)})", file=sys.stderr)
             return 1
+        matchable = matchable_filter(layout, reference) if args.matchable else None
         for _ in range(max(1, args.limit)):
             nxt = select_next(entries, layout, skip_existing=args.skip_existing, done=done,
                               key=key, attempted=attempted,
@@ -623,7 +653,8 @@ def main(argv: list[str] | None = None) -> int:
                               bank=bank,
                               bank_max_len_delta=args.bank_max_len_delta,
                               bank_max_divergences=args.bank_max_divergences,
-                              tier_key=tier_key, max_tier=args.max_tier)
+                              tier_key=tier_key, max_tier=args.max_tier,
+                              matchable=matchable)
             if nxt is None:
                 break
             done.add(entry_key(nxt))
@@ -639,8 +670,12 @@ def main(argv: list[str] | None = None) -> int:
                   f"--bank-max-divergences to widen the pool", file=sys.stderr)
         if (args.max_tier is not None and len(targets) < max(1, args.limit)):
             print(f"note: only {len(targets)} entr{'y' if len(targets) == 1 else 'ies'} "
-                  f"at tier <= {args.max_tier}; the remaining pending functions need the "
-                  f"relocation-aware diff, not more model attempts", file=sys.stderr)
+                  f"at tier <= {args.max_tier}; the tier is a difficulty ranking — try "
+                  f"--matchable for 'what the gate can verify'", file=sys.stderr)
+        if args.matchable and len(targets) < max(1, args.limit):
+            print(f"note: only {len(targets)} matchable entr{'y' if len(targets) == 1 else 'ies'} "
+                  f"selected; the rest read a literal pool or build a jump-table address, "
+                  f"which needs the pool/GOT work (plan step 4)", file=sys.stderr)
     if not targets:
         print("error: no pending entries to process", file=sys.stderr)
         return 1

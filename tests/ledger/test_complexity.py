@@ -19,6 +19,7 @@ from complexity import (
     any_pool_reference,
     body_of,
     branches_out,
+    gateable,
     has_adr,
     has_call,
     has_literal_pool,
@@ -70,6 +71,27 @@ class HasCallTests(unittest.TestCase):
 
     def test_empty_body_is_call_free(self):
         self.assertFalse(has_call(b""))
+
+
+class GateableTests(unittest.TestCase):
+    """What the relocation-aware gate can verify: branches yes, pool/ADR no."""
+
+    def test_a_leaf_is_gateable(self):
+        self.assertTrue(gateable(word(0xE12FFF1E)))
+
+    def test_a_branch_only_body_is_gateable(self):
+        # The gate resolves branch/call relocations, so branching out is no longer a barrier.
+        body = word(0xE92D4800) + word(0xEB000010) + word(0xEAFFFFFE) + word(0xE8BD8800)
+        self.assertTrue(gateable(body))
+
+    def test_a_pool_reader_is_not_gateable(self):
+        self.assertFalse(gateable(word(0xE59F0004) + word(0xE12FFF1E) + word(0x6172F000)))
+
+    def test_an_adr_body_is_not_gateable(self):
+        self.assertFalse(gateable(word(0xE28F0004) + word(0xE12FFF1E)))
+
+    def test_an_unreadable_body_is_not_gateable(self):
+        self.assertFalse(gateable(None))
 
 
 class ScoreTests(unittest.TestCase):

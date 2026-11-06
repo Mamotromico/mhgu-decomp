@@ -13,14 +13,25 @@ Pure-function tests only — no clang, no Ghidra, no ledger, no binary. Run with
 
 from __future__ import annotations
 
+import struct
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 # The ledger tools are plain scripts (no package), so put their directory on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "ledger"))
 
-from bytegate import compare_body, gate_result, should_color
+import gotmap
+from bytegate import (
+    branch_addresses,
+    compare_body,
+    function_relocations,
+    gate_result,
+    ledger_addresses,
+    resolve_branches,
+    should_color,
+)
 
 
 class CompareBodyTests(unittest.TestCase):
@@ -176,6 +187,157 @@ class ShouldColorTests(unittest.TestCase):
 
     def test_stream_without_isatty_is_plain(self):
         self.assertFalse(should_color(False, object(), {}))
+
+
+class ResolveBranchesTests(unittest.TestCase):
+    """The relocation-aware compare: patch the site, then byte-compare.
+
+    The worked example is a real one: ``60000298`` is a 4 B thunk whose body is the single
+    branch ``b __nnDetailNintendoSdkRuntimeObjectFile``. Unlinked it is ``0xEAFFFFFE``; the
+    original (linked) word is ``0xEAFFFFFF``.
+    """
+
+    BASE = 0x60000298
+    TARGET = 0x6000029c
+
+    def reloc(self, offset: int = 0, type_: int = 29, symbol: str = "callee") -> dict:
+        return {"offset": offset, "type": type_, "symbol": symbol, "addend": 0}
+
+    def test_a_tail_branch_patches_to_the_linked_word(self):
+        patched, unresolved = resolve_branches(
+            struct.pack("<I", 0xEAFFFFFE), [self.reloc()], self.BASE,
+            {"callee": self.TARGET})
+        self.assertEqual(unresolved, [])
+        self.assertEqual(patched, struct.pack("<I", 0xEAFFFFFF))
+
+    def test_a_call_preserves_its_opcode(self):
+        patched, _ = resolve_branches(struct.pack("<I", 0xEBFFFFFE), [self.reloc(type_=28)],
+                                      self.BASE, {"callee": self.TARGET})
+        self.assertEqual(struct.unpack("<I", patched)[0], 0xEBFFFFFF)
+
+    def test_a_conditional_branch_keeps_its_condition(self):
+        patched, _ = resolve_branches(struct.pack("<I", 0x0AFFFFFE), [self.reloc()],
+                                      self.BASE, {"callee": self.TARGET})
+        self.assertEqual(struct.unpack("<I", patched)[0], 0x0AFFFFFF)
+
+    def test_a_backward_target_patches_negative(self):
+        patched, _ = resolve_branches(struct.pack("<I", 0xEAFFFFFE), [self.reloc()],
+                                      self.BASE, {"callee": self.BASE - 0x10})
+        # delta = (BASE-0x10) - (BASE+8) = -0x18 -> imm24 = -6
+        self.assertEqual(struct.unpack("<I", patched)[0], 0xEA000000 | ((-6) & 0xFFFFFF))
+
+    def test_an_unverified_relocation_type_fails_closed(self):
+        patched, unresolved = resolve_branches(struct.pack("<I", 0xEAFFFFFE),
+                                               [self.reloc(type_=96)], self.BASE,
+                                               {"callee": self.TARGET})
+        self.assertEqual(patched, struct.pack("<I", 0xEAFFFFFE))
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn("not a verified branch/call", unresolved[0][1])
+
+    def test_a_symbol_without_a_ledger_address_fails_closed(self):
+        _patched, unresolved = resolve_branches(struct.pack("<I", 0xEAFFFFFE),
+                                                [self.reloc()], self.BASE, {})
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn("no ledger address", unresolved[0][1])
+
+    def test_a_non_branch_word_at_a_branch_site_fails_closed(self):
+        _patched, unresolved = resolve_branches(struct.pack("<I", 0xE1A00000),
+                                                [self.reloc()], self.BASE,
+                                                {"callee": self.TARGET})
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn("not an A32 branch", unresolved[0][1])
+
+    def test_an_out_of_range_target_fails_closed(self):
+        _patched, unresolved = resolve_branches(struct.pack("<I", 0xEAFFFFFE),
+                                                [self.reloc()], self.BASE,
+                                                {"callee": 0x70000000})
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn("out of branch range", unresolved[0][1])
+
+
+class FunctionRelocationsTests(unittest.TestCase):
+    """Relocation parsing is scoped to the function's own section."""
+
+    SEC = {"index": 5}
+
+    def rel_section(self, index: int, info: int, size: int = 16) -> dict:
+        return {"index": index, "type": 9, "info": info, "offset": 0, "size": size,
+                "link": 1, "entsize": 8}
+
+    def test_only_relocations_against_this_section_are_returned(self):
+        data = (struct.pack("<II", 4, (0 << 8) | 29)
+                + struct.pack("<II", 0, (1 << 8) | 96))
+        sections = [self.rel_section(2, 5), self.rel_section(3, 6, size=8)]
+        symtabs = {1: [{"name": "callee"}, {"name": "g_data"}]}
+        relocs = function_relocations(data, sections, symtabs, self.SEC)
+        self.assertEqual(relocs, [
+            {"offset": 0, "type": 96, "symbol": "g_data", "addend": 0},
+            {"offset": 4, "type": 29, "symbol": "callee", "addend": 0},
+        ])
+
+    def test_exidx_relocations_never_reach_the_body(self):
+        # Info 6 is the .ARM.exidx section, not the function's section 5.
+        sections = [self.rel_section(3, 6)]
+        self.assertEqual(function_relocations(b"\0" * 16, sections, {}, self.SEC), [])
+
+    def test_an_unknown_symbol_index_yields_an_empty_name(self):
+        data = struct.pack("<II", 0, (9 << 8) | 29)
+        relocs = function_relocations(data, [self.rel_section(2, 5, size=8)], {1: []},
+                                      self.SEC)
+        self.assertEqual(relocs[0]["symbol"], "")
+
+
+class LedgerAddressesTests(unittest.TestCase):
+    def test_externals_have_no_address(self):
+        entries = [{"name": "func_60000000", "addr": "60000000"},
+                   {"name": "_ZN2nn2fs4InitEv", "addr": ""}]
+        self.assertEqual(ledger_addresses(entries), {"func_60000000": 0x60000000})
+
+
+class BranchAddressesTests(unittest.TestCase):
+    """Import calls resolve through their PLT stub; ledger names always win."""
+
+    ENTRIES = [{"name": "func_60000000", "addr": "60000000"},
+               {"name": "sqrtf", "addr": ""}]
+
+    def test_an_import_resolves_through_the_stub_map(self):
+        with mock.patch.object(gotmap, "symbol_stubs",
+                               return_value={"sqrtf": 0x613EFD58}):
+            addresses, via = branch_addresses([{"symbol": "sqrtf"}], self.ENTRIES,
+                                              Path("/nso"), None)
+        self.assertEqual(addresses["sqrtf"], 0x613EFD58)
+        self.assertEqual(addresses["func_60000000"], 0x60000000)
+        self.assertEqual(via, 1)
+
+    def test_a_ledger_name_beats_the_stub_map(self):
+        with mock.patch.object(gotmap, "symbol_stubs",
+                               return_value={"func_60000000": 0x1}):
+            addresses, via = branch_addresses([{"symbol": "func_60000000"}],
+                                              self.ENTRIES, Path("/nso"), None)
+        self.assertEqual(addresses["func_60000000"], 0x60000000)
+        self.assertEqual(via, 0)
+
+    def test_a_symbol_in_neither_map_stays_unresolved(self):
+        with mock.patch.object(gotmap, "symbol_stubs", return_value={}):
+            addresses, via = branch_addresses([{"symbol": "unknown"}], self.ENTRIES,
+                                              Path("/nso"), None)
+        self.assertNotIn("unknown", addresses)
+        self.assertEqual(via, 0)
+
+    def test_an_unavailable_map_does_not_break_resolution(self):
+        with mock.patch.object(gotmap, "symbol_stubs",
+                               side_effect=gotmap.GotError("no image")):
+            addresses, via = branch_addresses([{"symbol": "sqrtf"}], self.ENTRIES,
+                                              Path("/nope"), None)
+        self.assertNotIn("sqrtf", addresses)
+        self.assertEqual(via, 0)
+
+    def test_the_map_is_not_loaded_when_every_symbol_is_known(self):
+        with mock.patch.object(gotmap, "symbol_stubs",
+                               side_effect=AssertionError("must not be called")):
+            _addresses, via = branch_addresses([{"symbol": "func_60000000"}],
+                                               self.ENTRIES, Path("/nso"), None)
+        self.assertEqual(via, 0)
 
 
 if __name__ == "__main__":

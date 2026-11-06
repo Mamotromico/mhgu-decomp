@@ -336,23 +336,30 @@ restricts the queue to entries that have a **current-pin** near miss and orders 
 reviewable ones) and `--bank-max-divergences` bound how close a record must be. Records written
 under a different eval pin are dropped, because their numbers are not comparable.
 
-**Built — a tier cap (`--max-tier`), because most of the queue cannot match yet.** The gate
-compares **raw object bytes**, so a function whose object carries a relocation (it calls out,
-tail-branches out, or loads a reference from the pool — ``complexity`` tier 2) can never match
-until the relocation-aware diff exists: every one of the 2,316 matches sits at tier 0, and none
-of the 37,978 pending tier-2 entries has ever matched. `--max-tier N` drops entries above tier
-`N`, so a run spends tokens only on functions the gate can actually verify (`0` = clean leaves,
-the defensible setting today; `1` also admits jump-table suspects). Without it, `--order
-easiest` feeds the model the whole unmatchable tail once tier 0 is exhausted, which is exactly
-the observed collapse: the fresh queue's median body grew 32 B → 76 B (mean 140 B) and a day of
-2,766 attempts produced 8 matches (~1.06M tokens per match). The cap is a *selection* filter,
-not a verdict — nothing is written to the ledger.
+**Built — a tier cap (`--max-tier`) and a gate-capability filter (`--matchable`).** The tier
+cap was written while the gate still compared **raw object bytes**: a function whose object
+carried a relocation (it called out, tail-branched out, or loaded a reference from the pool —
+``complexity`` tier 2) could never match, and every one of the 2,316 matches then sat at tier 0.
+Without a filter, `--order easiest` fed the model the whole unmatchable tail once tier 0 was
+exhausted — exactly the observed collapse: the fresh queue's median body grew 32 B → 76 B (mean
+140 B) and a day of 2,766 attempts produced 8 matches (~1.06M tokens per match).
 
-**Known bank contamination.** A tail branch in an unlinked object is encoded as the
-``b .`` placeholder (`0xEAFFFFFE`, `R_ARM_JUMP24` unapplied), so a correct source that tail-calls
-mismatches on that one word. Such entries (64 banked at len_delta 0, ≤3 divergences, all tier 2)
-are **not** near misses in the source sense and must not be "fixed" by retrying — they are
-blocked on the relocation-aware diff. `--max-tier 0` excludes them automatically.
+That rationale changed with the relocation-aware gate, which resolves branch/call relocations
+but still not literal-pool words or jump tables. So the filter that now matches the gate's real
+capability is **``--matchable``** (``complexity.gateable``: no pool load, no ``ADR``): **13,392**
+pending functions, versus 2,013 at tier 0. The tier stays as a *difficulty* ranking and is
+orthogonal — ``--max-tier`` alone would still exclude the branch-only functions the gate can now
+verify. Both are selection filters, not verdicts; nothing is written to the ledger.
+
+**Known bank contamination — resolved and banked.** A tail branch in an unlinked object is
+encoded as the ``b .`` placeholder (`0xEAFFFFFE`, `R_ARM_JUMP24` unapplied), so a correct source
+that tail-calls used to mismatch on that one word. Of the 64 such banked entries (len_delta 0,
+≤3 divergences, all tier 2), **60 were landed** on the next gate pass with no model call — source
+copied to ``src/`` and the ledger recorded `verify=match gate=reloc` (2,316 → 2,376 matches) —
+and 4 are refused as ``unverified-reloc`` because their relocation names an address with no
+ledger symbol (``loc_…`` labels and a mistyped ``func_`` name). The whole bank was then
+re-gated once under ``closeness/v3`` (2,641 records), which is how the old numbers stop mixing
+with the new comparison rule.
 
 **Built — verified idiom spellings in the prompt.** The stuck front of the queue was not failing
 for want of reasoning: candidates called builtins that do not exist (`__builtin_arm_bfc`,
@@ -401,6 +408,7 @@ tools/loop/
   attempts.py     # append-only, parent-linked attempt log  [built]
 tools/ledger/
   complexity.py   # easy-first difficulty key (library; loop + manual tooling)  [built]
+  gotmap.py       # image GOT: slot <-> import symbol, and import -> PLT stub  [built]
   templates.py    # deterministic trivial-leaf templates (library; loop + manual tooling)  [built]
   shapes.py       # A32 shape decoder + signature/histogram (library; loop + manual tooling)  [built]
   shape_report.py # pending-corpus shape histogram report (analysis CLI)  [built]

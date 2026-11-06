@@ -130,6 +130,25 @@ same value, so the loop records it in the attempt log too.
 entries already `verify=match` (they were all byte-identical), `""` everywhere else. No other
 field changed.
 
+**The literal-pool half needs the GOT map.** A branch relocation names its callee directly, so
+the gate can resolve it from the ledger alone. A literal-pool word is different: `R_ARM_GOT_PREL`
+names a **GOT slot**, and the linked word is `GOT(symbol) + addend − P` — so verifying one needs a
+slot → symbol map. `tools/ledger/gotmap.py` builds it from the image's own dynamic metadata
+(`MOD0` → `.dynamic` → `DT_REL`/`DT_JMPREL`/`DT_SYMTAB`) and reproduces the GOT extent from
+`DT_PLTGOT` + `DT_INIT_ARRAY`, matching the range the Switch loader constructs. Only
+`R_ARM_GLOB_DAT` and `R_ARM_JUMP_SLOT` fill a slot with a symbol address (`R_ARM_ABS32` patches
+data words — vtables — and `R_ARM_RELATIVE` carries no symbol), so the map is 706 slots for the
+image's 761 imports; the other 55 imports never receive one. That map is the prerequisite for
+resolving pool words, and it is also what the whole-image link needs when it places the GOT.
+
+**Import calls go through PLT stubs, not the symbol.** The image calls an import through a
+12-byte stub in `.text` (`add r12, pc, #hi`; `add r12, r12, #lo`; `ldr pc, [r12, #off]!`), whose
+computed address is a GOT slot. Decoding the idiom gives slot → stub; inverting it through the
+map gives **import → stub** (695 imports, one stub each), which is the address the original
+linked a `bl` to — the gate therefore resolves `bl <import>` against the stub map instead of
+refusing it. 7,085 pending functions call an import. The same names are merged into the bundle's
+name table, so a candidate is shown `; -> sqrtf` rather than `; -> func_613efd58`.
+
 ### Symbol identity & segmentation
 
 The ledger owns segment boundaries, so re-symbolisation is **conservative**: we **rename

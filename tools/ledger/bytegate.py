@@ -10,8 +10,8 @@ Pipeline
 1. Look up the ``(module, addr)`` entry in the committed ledger.
 2. Compile ``src/<module>/<group>.cpp`` with the pinned toolchain (``config/toolchain.json``)
    and ``-ffunction-sections``, so the function has its own section.
-3. Extract that function's bytes from the ELF32 object (by its defined ``FUNC`` symbol) and
-   note whether it carries relocations.
+3. Extract that function's bytes from the ELF32 object (by its defined ``FUNC`` symbol),
+   together with the relocations applied to its own section.
 4. Dump the original memory blocks (``tools/ghidra/dump_blocks.sh``) and compare the compiled
    function body against the original at its offset within its block.
 5. Optionally ``--update`` the ledger's ``verify`` axis on a match, together with the
@@ -37,10 +37,25 @@ reconstruction that happens to compile to the original's prefix would match. Dis
 that needs a disassembly-derived function extent (a later milestone); ``--body`` is the escape
 hatch until it lands.
 
-Scope: the gate currently compares raw bytes (stage 1). That is exactly correct for a
-**relocation-free leaf** (nothing in it depends on where it is placed). A function whose
-object carries relocations is reported and the raw compare still runs, but a clean match for
-non-leaves needs the address-agnostic, relocation-aware diff (a later milestone).
+Scope: the gate compares generated code against the original with **relocations resolved**
+(stage 2). A branch or call in an unlinked object encodes a target-independent placeholder
+(``0xEAFFFFFE`` for every ``b``, ``0xEBFFFFFE`` for every ``bl``) — the callee's identity lives
+only in the relocation. The gate therefore patches each ``R_ARM_CALL``/``R_ARM_JUMP24`` site
+with the immediate the linker would have produced, using the callee's **original** address from
+the ledger, and then compares bytes exactly. A wrong callee resolves to a different immediate
+and still fails, so this is not a weaker check; it is the comparison a link would have made.
+
+Fail-closed rule: a function may only claim a match when **every** relocation in its body was
+verified. Literal-pool words (``R_ARM_GOT_PREL`` and friends) are not resolved yet — they point
+into the linker's GOT layout, which needs the dynamic-relocation map — so a body carrying one
+is reported as ``unverified-reloc`` and never matches, even if the raw bytes happen to agree.
+A match reached through resolved relocations records ``gate=reloc`` in the ledger; a purely
+byte-identical one records ``gate=raw`` (see ``docs/architecture.md`` -> *Gate provenance*).
+
+An import has no ledger address, but the image does not call it by name either: it calls a
+12-byte **PLT stub** in ``.text``, which jumps through the import's GOT slot. ``gotmap`` recovers
+import -> stub from the stub's own code, so ``bl <import>`` resolves to the address the original
+linked to (``695`` imports, one stub each). A call to an unresolved name is still refused.
 
 Usage::
 
@@ -77,12 +92,14 @@ import sys
 from pathlib import Path
 
 from ledgerlib import read_entries, set_fields
+import gotmap
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_LEDGER = REPO / "config" / "main" / "ledger.tsv"
 DEFAULT_SRC_ROOT = REPO / "src"
 DEFAULT_TOOLCHAIN = REPO / "config" / "toolchain.json"
 DEFAULT_BUILD_CONFIG = REPO / "config" / "build.json"
+DEFAULT_STUB_CACHE = gotmap.DEFAULT_CACHE
 
 
 def include_dirs(build_config: Path) -> list[str]:
@@ -123,8 +140,13 @@ class ElfError(Exception):
     pass
 
 
-def _elf32(path: Path) -> tuple[list[dict], list[dict]]:
-    """Return (sections, symbols) for a little-endian ELF32 object."""
+def _elf32(path: Path) -> tuple[bytes, list[dict], list[dict], dict[int, list[dict]]]:
+    """Return (data, sections, symbols, symtabs) for a little-endian ELF32 object.
+
+    ``symbols`` is every symbol flattened (the function lookup); ``symtabs`` keys a symbol-table
+    section index to that table's own symbol list, which is what a relocation section's
+    ``sh_link`` points at.
+    """
     data = path.read_bytes()
     if data[:4] != b"\x7fELF" or data[4] != 1 or data[5] != 1:
         raise ElfError("not a little-endian ELF32 file")
@@ -153,20 +175,25 @@ def _elf32(path: Path) -> tuple[list[dict], list[dict]]:
         s["name"] = name_at(s["name_off"])
 
     symbols: list[dict] = []
+    symtabs: dict[int, list[dict]] = {}
     for s in sections:
         if s["type"] != 2:  # SHT_SYMTAB
             continue
         symstr = sections[s["link"]]
         symdata = data[symstr["offset"]:symstr["offset"] + symstr["size"]]
+        table: list[dict] = []
         for o in range(0, s["size"], 16):
             n, val, sz, info, _other, shndx = struct.unpack_from("<IIIBBH", data,
                                                                  s["offset"] + o)
-            symbols.append({
+            entry = {
                 "name": name_at_bytes(symdata, n),
                 "value": val, "size": sz, "info": info, "shndx": shndx,
                 "type": info & 0xF, "bind": info >> 4,
-            })
-    return sections, symbols
+            }
+            table.append(entry)
+            symbols.append(entry)
+        symtabs[s["index"]] = table
+    return data, sections, symbols, symtabs
 
 
 def name_at_bytes(blob: bytes, off: int) -> str:
@@ -174,14 +201,15 @@ def name_at_bytes(blob: bytes, off: int) -> str:
     return blob[off:end].decode("utf-8", "replace")
 
 
-def extract_function(obj: Path, names: list[str]) -> tuple[bytes, str, bool]:
-    """Return (bytes, symbol name, has_relocations) for the object's one function.
+def extract_function(obj: Path, names: list[str]) -> tuple[bytes, str, list[dict]]:
+    """Return (bytes, symbol name, relocations) for the object's one function.
 
     ``names`` are candidate identities (the ledger name and group); they disambiguate the
-    rare multi-function object. Raises if zero or an unidentifiable plurality is found.
+    rare multi-function object. ``relocations`` are the ones applied to the function's own
+    section (see :func:`function_relocations`). Raises if zero or an unidentifiable plurality
+    of functions is found.
     """
-    data = obj.read_bytes()
-    sections, symbols = _elf32(obj)
+    data, sections, symbols, symtabs = _elf32(obj)
     funcs = [s for s in symbols
              if s["type"] == 2 and s["shndx"] not in (0, 0xFFF1, 0xFFF2)]
     if not funcs:
@@ -198,10 +226,118 @@ def extract_function(obj: Path, names: list[str]) -> tuple[bytes, str, bool]:
 
     sec = sections[func["shndx"]]
     code = data[sec["offset"]:sec["offset"] + sec["size"]]
+    return code, func["name"], function_relocations(data, sections, symtabs, sec)
 
-    has_reloc = any(s["type"] in (4, 9) and s["info"] == sec["index"]  # SHT_RELA/SHT_REL
-                    for s in sections)
-    return code, func["name"], has_reloc
+
+# --- relocations ----------------------------------------------------------------------
+
+# The A32 branch/call relocation types. ``R_ARM_PC24``/``R_ARM_PLT32`` are the older
+# spellings of the same encodings as ``R_ARM_JUMP24``/``R_ARM_CALL``; clang emits the latter.
+BRANCH_RELOCS = {1: "R_ARM_PC24", 27: "R_ARM_PLT32", 28: "R_ARM_CALL", 29: "R_ARM_JUMP24"}
+
+
+def function_relocations(data: bytes, sections: list[dict], symtabs: dict[int, list[dict]],
+                         sec: dict) -> list[dict]:
+    """The relocations applied to ``sec`` (the function's own section), in offset order.
+
+    Only relocations that patch *this* section count. The ``.ARM.exidx`` entry of every
+    function in this image carries an ``R_ARM_PREL31`` against the exidx section, so it is
+    excluded by construction rather than by type. Each entry is
+    ``{offset, type, symbol, addend}``.
+    """
+    out: list[dict] = []
+    for s in sections:
+        if s["type"] not in (4, 9) or s["info"] != sec["index"]:  # SHT_RELA / SHT_REL
+            continue
+        table = symtabs.get(s["link"], [])
+        entsize = s["entsize"] or (8 if s["type"] == 9 else 12)
+        for o in range(0, s["size"], entsize):
+            r_off, r_info = struct.unpack_from("<II", data, s["offset"] + o)
+            addend = (struct.unpack_from("<i", data, s["offset"] + o + 8)[0]
+                      if entsize >= 12 else 0)
+            idx = r_info >> 8
+            out.append({
+                "offset": r_off, "type": r_info & 0xFF,
+                "symbol": table[idx]["name"] if idx < len(table) else "",
+                "addend": addend,
+            })
+    out.sort(key=lambda r: r["offset"])
+    return out
+
+
+def ledger_addresses(entries: list[dict]) -> dict[str, int]:
+    """Symbol name -> image address for every addressed ledger entry.
+
+    Ledger addresses are unique, so this is a bijection and a symbol's identity is its name;
+    aliases cannot collide. Externals have no address and are deliberately absent — their
+    calls resolve through a PLT stub instead (see :func:`branch_addresses`).
+    """
+    return {e["name"]: int(e["addr"], 16) for e in entries if e["addr"]}
+
+
+def branch_addresses(relocs: list[dict], entries: list[dict], nso: Path,
+                     stub_cache: Path | None) -> tuple[dict[str, int], int]:
+    """Symbol -> address for branch resolution, and how many sites used a PLT stub.
+
+    The ledger names every defined function. An import has no ledger address, but the image
+    calls it through a 12-byte PLT stub in ``.text``; ``gotmap`` recovers import -> stub from
+    the stub's own code and the GOT relocations. Ledger names win on any collision, and an
+    unavailable stub map is a warning (the site then stays ``unverified-reloc``, as before).
+    """
+    ledger = ledger_addresses(entries)
+    stubs: dict[str, int] = {}
+    if any(r["symbol"] not in ledger for r in relocs):
+        try:
+            stubs = gotmap.symbol_stubs(nso, stub_cache)
+        except (gotmap.GotError, OSError, ValueError) as e:
+            print(f"warning: PLT stub map unavailable ({e}); import calls stay unverified",
+                  file=sys.stderr)
+    via_stub = sum(1 for r in relocs
+                   if r["symbol"] in stubs and r["symbol"] not in ledger)
+    return {**stubs, **ledger}, via_stub
+
+
+def resolve_branches(cand: bytes, relocs: list[dict], insn_base: int,
+                     addresses: dict[str, int]) -> tuple[bytes, list[tuple[int, str]]]:
+    """Rewrite branch/call immediates to the value the linker would have produced.
+
+    The unresolved object carries this image's defining fact: an unlinked branch encodes the
+    target-independent placeholder ``0xEAFFFFFE``/``0xEBFFFFFE``, so only the relocation names
+    the callee. Patching the site with the callee's *original* address restores the exact byte
+    comparison — a wrong callee resolves to a different immediate and still fails.
+
+    Returns ``(patched, unresolved)``; each unresolved item is ``(offset, reason)``. The caller
+    must fail closed on a non-empty list: an unverified site means the comparison cannot be
+    trusted, not that the code is wrong.
+    """
+    buf = bytearray(cand)
+    unresolved: list[tuple[int, str]] = []
+    for r in relocs:
+        off = r["offset"]
+        site = f"+0x{off:x}"
+        name = BRANCH_RELOCS.get(r["type"])
+        if name is None:
+            unresolved.append((off, f"{site}: relocation type {r['type']} is not a verified "
+                                    f"branch/call"))
+            continue
+        target = addresses.get(r["symbol"])
+        if target is None:
+            unresolved.append((off, f"{site}: {r['symbol'] or '<no symbol>'} has no ledger "
+                                    f"address"))
+            continue
+        if off % 4 or off + 4 > len(buf):
+            unresolved.append((off, f"{site}: not an aligned instruction inside the body"))
+            continue
+        word = struct.unpack_from("<I", buf, off)[0]
+        if (word >> 25) & 0x7 != 0b101 or (word >> 28) == 0xF:
+            unresolved.append((off, f"{site}: {name} but the word is not an A32 branch"))
+            continue
+        delta = target + r["addend"] - (insn_base + off + 8)
+        if delta % 4 or not (-(1 << 25) <= delta < (1 << 25)):
+            unresolved.append((off, f"{site}: target {target:08x} is out of branch range"))
+            continue
+        struct.pack_into("<I", buf, off, (word & 0xFF000000) | ((delta >> 2) & 0xFFFFFF))
+    return bytes(buf), unresolved
 
 
 # --- reference bytes ------------------------------------------------------------------
@@ -306,14 +442,15 @@ def compare_body(cand: bytes, block: bytes, off: int, partition: int,
 
 def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: bool,
                 status: str, body: int | None, partition: int,
-                has_reloc: bool, gate: str = "raw") -> dict:
+                has_reloc: bool, gate: str = "raw",
+                relocs: dict | None = None) -> dict:
     """The machine-readable result of one gate run (the near-miss bank's closeness input).
 
     Pure, so it is unit-tested and stable: ``diff_count`` is the divergence count over the
     compared span, and ``body`` is the authoritative extent when one was asserted. ``diff_words``
     carries the differing instructions themselves (see :func:`diff_words`) so a caller can act on
-    a mismatch without re-deriving the comparison. ``gate`` is the provenance a match would be
-    recorded with (``raw`` today; ``reloc`` once relocation sites are verified).
+    a mismatch without re-deriving the comparison. ``gate`` is the provenance a match was
+    recorded with, and ``relocs`` the counts/reasons behind it.
     """
     span = min(len(cand), len(ref))
     diff_count = sum(1 for i in range(span) if cand[i] != ref[i])
@@ -326,6 +463,7 @@ def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: 
         "diff_count": diff_count, "first_diff": first_diff,
         "diff_words": diff_words(cand, ref),
         "has_reloc": has_reloc, "gate": gate,
+        "relocs": relocs or {"total": 0, "unresolved": []},
     }
 
 
@@ -340,6 +478,9 @@ def print_status(status: str, cand_len: int, partition: int,
               f"cannot fit this slot (wrong function?){RESET}")
     elif status == "body-length":
         print(f"  {RED}reason: compiled body {cand_len} B != asserted --body {body} B{RESET}")
+    elif status == "unverified-reloc":
+        print(f"  {RED}reason: a relocation site could not be verified (see the list "
+              f"above); refusing to claim a match{RESET}")
 
 
 # --- main -----------------------------------------------------------------------------
@@ -357,6 +498,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--toolchain", type=Path, default=DEFAULT_TOOLCHAIN)
     ap.add_argument("--build-config", type=Path, default=DEFAULT_BUILD_CONFIG)
     ap.add_argument("--build-dir", type=Path, default=REPO / "baserom" / "work" / "bytegate")
+    ap.add_argument("--stub-cache", type=Path, default=DEFAULT_STUB_CACHE,
+                    help="cached GOT/PLT map (default under baserom/work; built on first use)")
     ap.add_argument("--body", type=int, default=None,
                     help="authoritative body length in bytes; requires an exact length match")
     ap.add_argument("--show", action="store_true")
@@ -412,15 +555,27 @@ def main(argv: list[str] | None = None) -> int:
         return 3
 
     try:
-        cand, sym, has_reloc = extract_function(obj, [entry["name"], entry["group"]])
+        cand, sym, relocs = extract_function(obj, [entry["name"], entry["group"]])
     except ElfError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
     print(f"function: {entry['name']}  (object symbol {sym})")
-    if has_reloc:
-        print(f"  {DIM}note: object carries relocations — the gate compares raw bytes for "
-              f"now; a clean match for non-leaves needs the relocation-aware diff{RESET}")
+    patched, unresolved = cand, []
+    via_stub = 0
+    if relocs:
+        addresses, via_stub = branch_addresses(relocs, entries, args.nso, args.stub_cache)
+        patched, unresolved = resolve_branches(cand, relocs, int(addr, 16), addresses)
+        resolved = len(relocs) - len(unresolved)
+        via = f", {via_stub} via PLT stub" if via_stub else ""
+        if unresolved:
+            print(f"  {YELLOW}relocations: {resolved}/{len(relocs)} resolved{via} — "
+                  f"{len(unresolved)} cannot be verified{RESET}")
+            for _off, why in unresolved:
+                print(f"    {YELLOW}{why}{RESET}")
+        else:
+            print(f"  {DIM}relocations: {resolved}/{len(relocs)} resolved "
+                  f"(branch/call{via}){RESET}")
 
     if args.ref_bin is not None:
         ref_bin = args.ref_bin
@@ -436,15 +591,22 @@ def main(argv: list[str] | None = None) -> int:
 
     block = ref_bin.read_bytes()
     off = int(addr, 16) - block_start(ref_bin)
-    ok, ref, status = compare_body(cand, block, off, size, args.body)
+    ok, ref, status = compare_body(patched, block, off, size, args.body)
 
-    # Provenance of the comparison. ``raw`` until the relocation-aware diff lands: a
-    # non-leaf can only match byte-for-byte today when it carries no relocation at all.
-    gate = "raw"
+    # Provenance: ``reloc`` only when every relocation in the body was resolved. A single
+    # unverified site makes the verdict untrustworthy, so a raw-looking match is refused.
+    gate = "reloc" if relocs and not unresolved else "raw"
+    if unresolved and status != "body-length":
+        unverified = {site for site, _why in unresolved}
+        diverging = {w["offset"] for w in diff_words(patched, ref)}
+        if ok or diverging <= unverified:
+            ok, status = False, "unverified-reloc"
 
     if args.report is not None:
-        result = gate_result(args.module, addr, entry["name"], cand, ref, ok, status,
-                             args.body, size, has_reloc, gate)
+        result = gate_result(args.module, addr, entry["name"], patched, ref, ok, status,
+                             args.body, size, bool(relocs), gate,
+                             {"total": len(relocs), "via_stub": via_stub,
+                              "unresolved": [why for _off, why in unresolved]})
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
 
@@ -459,7 +621,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"{RED}{BOLD}>>> MISMATCH{RESET}  {entry['name']}  ({where})")
         print_status(status, len(cand), size, args.body)
-        print_diff(cand, ref, args.show)
+        print_diff(patched, ref, args.show)
 
     if ok and args.update:
         changed = set_fields(args.ledger, (args.module, addr),

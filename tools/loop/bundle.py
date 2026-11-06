@@ -116,6 +116,21 @@ def target_name(addr: str, names: dict[str, str]) -> str:
     return names.get(addr) or f"loc_{addr}"
 
 
+def import_names(nso: Path) -> dict[str, str]:
+    """``stub address (8-hex) -> import name``, from the cached GOT/PLT map.
+
+    A call to an imported function lands on a 12-byte PLT stub in ``.text``; without this the
+    bundle would label the callee ``loc_<addr>`` and the model would have to invent a name for
+    it. A missing or stale map is not fatal — the bundle just omits the names.
+    """
+    try:
+        import gotmap
+        return gotmap.stub_names(nso)
+    except Exception as e:  # a bundle must still be produced when the map is unavailable
+        print(f"warning: no PLT stub names ({e})", file=sys.stderr)
+        return {}
+
+
 def parse_disasm(text: str) -> list[dict]:
     """Parse ``AnnotateFunctions`` TSV into instruction dicts.
 
@@ -432,6 +447,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     names = name_table(entries, module)
+    names.update(import_names(args.nso))
     insns = annotate(parse_disasm(asm_text), names, blocks.read_word)
 
     meta = {

@@ -134,6 +134,14 @@ class AnnotateTests(unittest.TestCase):
         out = annotate(ins, self.NAMES, self.read_word)
         self.assertEqual(out[0]["flow_names"], ["loc_target"])
 
+    def test_a_plt_stub_target_can_carry_an_import_name(self):
+        # bundle.main merges gotmap.stub_names() into the name table, so a call to an import's
+        # 12-byte stub is labelled with the import instead of loc_<addr>.
+        names = {**self.NAMES, "613efd58": "sqrtf"}
+        ins = parse_disasm("60000148\t02bf4feb\tbl\t0x613efd58\t613efd58\n")
+        out = annotate(ins, names, self.read_word)
+        self.assertEqual(out[0]["flow_names"], ["sqrtf"])
+
     def test_literal_value_and_pointed_name(self):
         ins = parse_disasm("6000104c\t04009fe5\tldr\tr0, [0x60001058]\t\n")
         out = annotate(ins, self.NAMES, self.read_word)
