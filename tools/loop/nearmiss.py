@@ -55,7 +55,9 @@ DEFAULT_TOOLCHAIN = REPO / "config" / "toolchain.json"
 # Bump when the closeness formula changes, so old numbers stop being silently comparable.
 # v3: the gate resolves branch/call relocations, so a divergence at such a site is no longer
 # counted (and a body that used to look "one word off" now matches).
-METRIC = "closeness/v3"
+# v4: the gate also resolves literal-pool (GOT) relocations, removing another class of
+# phantom divergence.
+METRIC = "closeness/v4"
 
 
 # --- pure helpers (unit-tested) -------------------------------------------------------

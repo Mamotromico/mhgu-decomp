@@ -41,6 +41,7 @@ from run import (
     feedback_from_record,
     feedback_section,
     gate_argv,
+    gate_body,
     group_is_single,
     has_bit_op,
     has_nonstack_block_move,
@@ -110,6 +111,36 @@ class GroupIsSingleTests(unittest.TestCase):
     def test_data_entries_do_not_count(self):
         entries = [entry(), entry(kind="data", group="func_601a72e4")]
         self.assertTrue(group_is_single(entries, "main", "func_601a72e4"))
+
+
+class GateBodyTests(unittest.TestCase):
+    """The extent asserted to the gate: a pool-reading body owns its literal pool."""
+
+    def test_a_leaf_keeps_the_inventory_extent(self):
+        self.assertEqual(gate_body(b"\x1e\xff\x2f\xe1", 4), 4)
+
+    def test_a_pool_reader_drops_it_for_the_partition_rule(self):
+        # `ldr r0, [pc, #4]` — the compiler puts the pool inside the function's section, so the
+        # instruction-only inventory length would reject a correct candidate.
+        body = b"\x04\x00\x9f\xe5\x1e\xff\x2f\xe1\x00\x00\x00\x00"
+        self.assertIsNone(gate_body(body, 8))
+
+    def test_no_reference_bytes_keeps_the_extent(self):
+        self.assertEqual(gate_body(None, 8), 8)
+
+
+class GotReferencePromptTests(unittest.TestCase):
+    """A named pool target switches on the data-reference guidance."""
+
+    def test_a_named_pool_target_includes_the_section(self):
+        bundle = ("    6002b8f0  e59f100c  ldr  r1, [0x6002b904]  "
+                  "; = 0x0180da60 -> D_61730ebc\n")
+        prompt = build_prompt(entry(), bundle)
+        self.assertIn("-> D_61730ebc", prompt)
+        self.assertIn("NOT a constant", prompt)
+
+    def test_a_plain_bundle_omits_it(self):
+        self.assertNotIn("NOT a constant", build_prompt(entry(), "BUNDLE-TEXT"))
 
 
 class BuildPromptTests(unittest.TestCase):
@@ -183,6 +214,11 @@ class ArgvTests(unittest.TestCase):
     def test_gate_argv_adds_a_report_path(self):
         argv = gate_argv(layout(Path("/r/src")), entry(), 60, Path("/tmp/r.json"))
         self.assertEqual(argv[argv.index("--report") + 1], "/tmp/r.json")
+
+    def test_gate_argv_omits_the_extent_when_it_is_unknown(self):
+        # A literal-pool body is gated on the partition rule instead of an asserted length.
+        argv = gate_argv(layout(Path("/r/src")), entry(), None)
+        self.assertNotIn("--body", argv)
 
     def test_bundle_argv_targets_the_entry_and_body(self):
         argv = bundle_argv(layout(Path("/r/src")), entry(), 60)

@@ -46,9 +46,10 @@ has (lower = easier)::
 * ``size`` is the tiebreak within a tier (smaller first): the body length when read, else the
   inventory/partition length for an unreadable body.
 
-The tier is a **difficulty** ranking, not a verdict on what the gate accepts: a tier-2 body
-can still be matchable when its only relocations are branches, which the gate now resolves
-(that is what :func:`gateable` answers, and what ``tools/loop/run.py --matchable`` selects on).
+The tier is a **difficulty** ranking, not a verdict on what the gate accepts: the gate resolves
+branch/call and literal-pool relocations, so a tier-2 body is matchable unless it builds a
+PC-relative address (a jump-table suspect). That is what :func:`gateable` answers, and what
+``tools/loop/run.py --matchable`` selects on.
 
 All signals are **byte-pattern heuristics**: they scan 4-byte words for A32 encodings. A word of
 literal-pool data that happens to match an encoding, or a constant that happens to equal a loaded
@@ -190,17 +191,18 @@ def any_pool_reference(body: bytes, addr: str, text: bytes, in_image) -> bool:
 def gateable(body: bytes | None) -> bool:
     """Whether the current byte gate can verify this body.
 
-    The gate resolves **branch and call** relocations against the ledger, so a body that only
-    branches out is verifiable. It does not resolve literal-pool words (they name GOT slots,
-    which need the dynamic-relocation map) nor jump tables, so a body that reads a pool word or
-    builds a PC-relative address (``ADR``) stays unverifiable and must not be selected.
+    The gate resolves **branch/call** relocations against the ledger and **literal-pool**
+    relocations against the GOT map, so a body that branches out or reads a pool word is
+    verifiable. It does not resolve jump tables, so a body that builds a PC-relative address
+    (``ADR``) stays unverifiable and must not be selected.
 
     This is the reference-side proxy for the gate's object-side rule (which fails closed on any
-    non-branch relocation); a wrong guess therefore costs a failed gate run, never a false match.
+    relocation it cannot resolve); a wrong guess therefore costs a failed gate run, never a
+    false match.
     """
     if body is None:
         return False
-    return not has_pool_load(body) and not has_adr(body)
+    return not has_adr(body)
 
 
 def score(body: bytes | None, size: int, *, resolve=None) -> tuple[int, int]:

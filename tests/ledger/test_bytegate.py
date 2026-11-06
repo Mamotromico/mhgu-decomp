@@ -29,7 +29,10 @@ from bytegate import (
     function_relocations,
     gate_result,
     ledger_addresses,
+    pool_slots,
     resolve_branches,
+    resolve_pools,
+    resolve_relocations,
     should_color,
 )
 
@@ -285,6 +288,63 @@ class FunctionRelocationsTests(unittest.TestCase):
         relocs = function_relocations(data, [self.rel_section(2, 5, size=8)], {1: []},
                                       self.SEC)
         self.assertEqual(relocs[0]["symbol"], "")
+
+
+class PoolTests(unittest.TestCase):
+    """Literal-pool resolution: patch the word to ``GOT(symbol) + addend - P``."""
+
+    def test_patches_the_word_to_the_linked_value(self):
+        cand = struct.pack("<I", 8)                    # the object's in-place addend
+        patched, unresolved = resolve_pools(cand, [{"offset": 0, "type": 96,
+                                                    "symbol": "D_1", "addend": 0}],
+                                           0x2000, {"D_1": 0x1000})
+        self.assertEqual(unresolved, [])
+        self.assertEqual(struct.unpack("<I", patched)[0],
+                         (0x1000 + 8 - 0x2000) & 0xFFFFFFFF)
+
+    def test_a_symbol_without_a_slot_fails_closed(self):
+        _patched, unresolved = resolve_pools(struct.pack("<I", 8),
+                                             [{"offset": 0, "type": 96,
+                                               "symbol": "unknown", "addend": 0}],
+                                             0x2000, {})
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn("no GOT slot", unresolved[0][1])
+
+    def test_the_dispatcher_rejects_an_unsupported_type(self):
+        _patched, unresolved = resolve_relocations(
+            struct.pack("<II", 0, 0),
+            [{"offset": 0, "type": 2, "symbol": "D_1", "addend": 0}],
+            0x2000, {}, {})
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn("not verified", unresolved[0][1])
+
+
+class PoolSlotsTests(unittest.TestCase):
+    """``symbol -> slot``: imports by relocation, internal objects by slot contents."""
+
+    ENTRIES = [{"kind": "data", "addr": "6172f000", "size": "16"},
+               {"kind": "function", "addr": "60000000", "size": "4"}]
+    PAYLOAD = {
+        "slots": {"6183800c": {"symbol": "sqrtf"}},
+        "values": {"61838010": 0x6172F004,     # inside the data entry
+                   "61838014": 0x99999999},    # inside no data entry
+    }
+
+    def test_imports_come_from_the_relocation(self):
+        self.assertEqual(pool_slots(self.ENTRIES, self.PAYLOAD)["sqrtf"], 0x6183800C)
+
+    def test_an_internal_slot_is_named_by_the_address_it_holds(self):
+        self.assertEqual(pool_slots(self.ENTRIES, self.PAYLOAD)["D_6172f004"], 0x61838010)
+
+    def test_an_address_outside_any_data_entry_is_not_named(self):
+        self.assertNotIn("D_99999999", pool_slots(self.ENTRIES, self.PAYLOAD))
+
+    def test_a_relocation_named_slot_is_not_renamed_from_contents(self):
+        payload = {"slots": {"61838010": {"symbol": "an_import"}},
+                   "values": {"61838010": 0x6172F004}}
+        slots = pool_slots(self.ENTRIES, payload)
+        self.assertEqual(slots["an_import"], 0x61838010)
+        self.assertNotIn("D_6172f004", slots)
 
 
 class LedgerAddressesTests(unittest.TestCase):

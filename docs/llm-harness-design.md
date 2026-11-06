@@ -344,12 +344,13 @@ Without a filter, `--order easiest` fed the model the whole unmatchable tail onc
 exhausted — exactly the observed collapse: the fresh queue's median body grew 32 B → 76 B (mean
 140 B) and a day of 2,766 attempts produced 8 matches (~1.06M tokens per match).
 
-That rationale changed with the relocation-aware gate, which resolves branch/call relocations
-but still not literal-pool words or jump tables. So the filter that now matches the gate's real
-capability is **``--matchable``** (``complexity.gateable``: no pool load, no ``ADR``): **13,392**
-pending functions, versus 2,013 at tier 0. The tier stays as a *difficulty* ranking and is
-orthogonal — ``--max-tier`` alone would still exclude the branch-only functions the gate can now
-verify. Both are selection filters, not verdicts; nothing is written to the ledger.
+That rationale changed with the relocation-aware gate, which resolves branch/call and
+literal-pool relocations but still not jump tables. So the filter that now matches the gate's
+real capability is **``--matchable``** (``complexity.gateable``: no ``ADR``): **36,931** pending
+functions, versus 2,013 at tier 0 and 13,392 when branches alone were resolved. The tier stays
+as a *difficulty* ranking and is orthogonal — ``--max-tier`` alone would still exclude the
+functions the gate can now verify. Both are selection filters, not verdicts; nothing is written
+to the ledger.
 
 **Known bank contamination — resolved and banked.** A tail branch in an unlinked object is
 encoded as the ``b .`` placeholder (`0xEAFFFFFE`, `R_ARM_JUMP24` unapplied), so a correct source

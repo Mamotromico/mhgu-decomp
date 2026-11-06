@@ -138,8 +138,21 @@ slot → symbol map. `tools/ledger/gotmap.py` builds it from the image's own dyn
 `DT_PLTGOT` + `DT_INIT_ARRAY`, matching the range the Switch loader constructs. Only
 `R_ARM_GLOB_DAT` and `R_ARM_JUMP_SLOT` fill a slot with a symbol address (`R_ARM_ABS32` patches
 data words — vtables — and `R_ARM_RELATIVE` carries no symbol), so the map is 706 slots for the
-image's 761 imports; the other 55 imports never receive one. That map is the prerequisite for
-resolving pool words, and it is also what the whole-image link needs when it places the GOT.
+image's 761 imports; the other 55 imports never receive one.
+
+**Two kinds of slot, two ways to name them.** An *import* slot is named by the dynamic
+relocation that fills it. An *internal* slot has no relocation — the static link resolved it —
+but it **holds the object's address**, so the address names it as `D_<addr>`. That is what makes
+a literal-pool word verifiable: `R_ARM_GOT_PREL` is patched to `GOT(symbol) + addend − P`,
+where the addend is the object's own in-place word, and the comparison is then byte-exact.
+The bundle annotates the same target (`; = 0x… -> D_…`) and a conditional prompt section tells
+the model to declare the object rather than inline its address; without that the model emitted
+a constant and the indirection was missing.
+
+One extent caveat follows from this: the inventory's body is *instructions only*, while the
+compiler puts the literal pool inside the function's section. The loop therefore stops
+asserting `--body` for a body that reads a pool (`run.gate_body`) and lets the ledger's
+partition, which covers the pool, bound the comparison.
 
 **Import calls go through PLT stubs, not the symbol.** The image calls an import through a
 12-byte stub in `.text` (`add r12, pc, #hi`; `add r12, r12, #lo`; `ldr pc, [r12, #off]!`), whose

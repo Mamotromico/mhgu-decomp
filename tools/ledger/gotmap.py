@@ -348,7 +348,8 @@ def import_stubs(image: Image, model: dict | None = None) -> dict[str, int]:
 # The map is a function of the NSO only, and rebuilding it costs ~2.4 s (pure-Python LZ4 over
 # the whole image), so it is cached as JSON next to the other git-ignored work products. The
 # fingerprint is the image's size and mtime: a different file rebuilds, an identical one loads.
-CACHE_VERSION = 1
+# v2 adds ``values`` (slot contents), which the pool resolver needs.
+CACHE_VERSION = 2
 
 
 def _fingerprint(path: Path) -> dict:
@@ -366,6 +367,7 @@ def to_json(model: dict, nso: Path) -> dict:
                   for slot, info in model["slots"].items()},
         "stubs": {f"{stub:08x}": f"{slot:08x}" for stub, slot in model["stubs"].items()},
         "imports": {name: stub for name, stub in model["imports"].items()},
+        "values": {f"{slot:08x}": value for slot, value in model["values"].items()},
     }
 
 
@@ -403,6 +405,40 @@ def stub_names(nso: Path = DEFAULT_NSO,
             if slot in slots}
 
 
+def slot_targets(nso: Path = DEFAULT_NSO,
+                 cache: Path | None = DEFAULT_CACHE) -> dict[int, str]:
+    """``GOT slot -> a name for what it points at``, for a pool reference's target.
+
+    An import slot is named by its symbol. Any other slot holds an address, which a caller can
+    name from the ledger — so the raw payload's ``values`` is what this exposes, and the naming
+    (``D_<addr>``) is the caller's business.
+    """
+    payload = load_or_build(nso, cache)
+    named = {int(slot, 16): info["symbol"] for slot, info in payload.get("slots", {}).items()}
+    for slot, value in payload.get("values", {}).items():
+        named.setdefault(int(slot, 16), f"D_{int(value):08x}")
+    return named
+
+
+def slot_values(image: Image, ranges: list[tuple[str, int, int]]) -> dict[int, int]:
+    """``GOT slot -> the address it holds``, in the ledger's address space.
+
+    The raw NSO stores module-relative values, so the image base is added. A zero slot is an
+    import the loader has not patched yet and is omitted. For an internal symbol the slot is
+    what makes it reachable at all: the static link resolved it, so no relocation names it.
+    """
+    out: dict[int, int] = {}
+    for _name, lo, hi in ranges:
+        for slot in range(lo, hi, 4):
+            try:
+                value = image.u32(slot)
+            except GotError:
+                continue
+            if value:
+                out[slot] = value + BASE if value < BASE else value
+    return out
+
+
 def build(image: Image) -> dict:
     """Everything the map is derived from, in one pass."""
     dynamic = dynamic_entries(image)
@@ -417,7 +453,8 @@ def build(image: Image) -> dict:
             imports[info["symbol"]] = stub
     return {"dynamic": dynamic, "symbols": symbols, "slots": slots,
             "ranges": ranges, "extent": (ranges[0][1], ranges[-1][2]),
-            "stubs": stubs, "imports": imports}
+            "stubs": stubs, "imports": imports,
+            "values": slot_values(image, ranges)}
 
 
 def symbol_slots(slots: dict[int, dict], name: str) -> list[int]:

@@ -118,6 +118,26 @@ _BIT_OPS_SECTION = (
 
 _BIT_OP_MNEMONICS = ("rbit", "clz", "rev", "rev16", "revsh", "ubfx", "sbfx", "bfi", "bfc")
 
+# A pool load annotated with its target (``; = 0x… -> NAME``) is a data reference reached
+# through the GOT. Without this guidance a model substitutes the address as a constant, which
+# compiles to one instruction where the original has the whole indirection.
+_GOT_REFERENCE_SECTION = (
+    "A pc-relative load annotated `-> NAME` (for example `ldr r1, [0x6002b904]  ; = 0x… -> "
+    "D_61730ebc`) is NOT a constant: it reaches NAME through the GOT, in two instructions "
+    "(`ldr r1, [pc, #imm]` then `ldr r1, [pc, r1]`). Reproduce that as an ordinary C reference "
+    "to a declared object, and let the compiler emit the indirection:\n"
+    "    extern char NAME[];              // or a type/array that fits how it is used\n"
+    "    ... = &NAME[offset];             // / *NAME / NAME.field, whichever the code does\n"
+    "Do NOT write the address as a literal (`(void *)0x61730ebc`): that emits a plain "
+    "constant and the bytes will not match. Keep the name exactly as annotated.\n\n")
+
+_GOT_REFERENCE = re.compile(r"= 0x[0-9a-f]{8} -> ")
+
+
+def has_got_reference(bundle_text: str) -> bool:
+    """Whether the bundle resolves a pool word to a name (a data reference)."""
+    return bool(_GOT_REFERENCE.search(bundle_text))
+
 
 def has_bit_op(bundle_text: str) -> bool:
     """Whether the bundle disassembly contains a bit-manipulation instruction.
@@ -342,6 +362,7 @@ def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = No
                   f"declaration.")
     copy_section = _STRUCT_COPY_SECTION if has_nonstack_block_move(bundle_text) else ""
     bit_section = _BIT_OPS_SECTION if has_bit_op(bundle_text) else ""
+    got_section = _GOT_REFERENCE_SECTION if has_got_reference(bundle_text) else ""
     return (
         f"Write ordinary C or C++ whose compiled machine code reproduces the function below "
         f"exactly under the pinned toolchain. Reason about the function's *behaviour*, not its "
@@ -349,6 +370,7 @@ def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = No
         f"differ. Do NOT use inline assembly (__asm__) or a top-level asm() statement. The ARM "
         f"AAPCS ABI applies: r0-r3 carry the arguments and r0 the result; the prologue and "
         f"epilogue are generated for you.\n\n"
+        f"{got_section}"
         f"{copy_section}"
         f"Take each struct's layout from the instructions that touch it. A field's offset is the "
         f"displacement in its load/store — `ldrb r3, [r0, #0x20]` puts that field at +0x20. An "
@@ -376,13 +398,19 @@ def bundle_argv(layout: Layout, entry: dict, body: int) -> list[str]:
             "--body", str(body)]
 
 
-def gate_argv(layout: Layout, entry: dict, body: int,
+def gate_argv(layout: Layout, entry: dict, body: int | None,
               report: Path | None = None) -> list[str]:
-    """The byte-gate invocation. Fixed argv: no model text ever reaches it."""
+    """The byte-gate invocation. Fixed argv: no model text ever reaches it.
+
+    ``body`` is the asserted extent, or ``None`` to let the gate use its partition rule (a
+    literal-pool body owns bytes the inventory does not count).
+    """
     argv = [sys.executable, str(BYTEGATE), entry["module"], entry["addr"],
             "--src-root", str(layout.src_root), "--ledger", str(layout.ledger),
             "--toolchain", str(layout.toolchain), "--build-config", str(layout.build_config),
-            "--nso", str(layout.nso), "--body", str(body), "--update"]
+            "--nso", str(layout.nso), "--update"]
+    if body is not None:
+        argv += ["--body", str(body)]
     if report is not None:
         argv += ["--report", str(report)]
     return argv
@@ -762,7 +790,21 @@ def ask_model(entry: dict, layout: Layout, args, model, body: int,
     return model_client.strip_fences(completion.text), completion, prompt
 
 
-def write_and_gate(entry: dict, layout: Layout, body: int, draft: Path, candidate: str):
+def gate_body(raw_body: bytes | None, body: int) -> int | None:
+    """The extent to assert to the gate, or ``None`` to use the partition rule.
+
+    The inventory's body is the *instructions*; a function that reads a literal pool owns the
+    pool too, and the compiler emits it inside the function's section. Asserting the
+    instruction length would then reject a correct candidate as ``body-length``, so those
+    entries fall back to the partition rule (the ledger's ``size`` covers the pool).
+    """
+    if raw_body is not None and complexity.has_pool_load(raw_body):
+        return None
+    return body
+
+
+def write_and_gate(entry: dict, layout: Layout, body: int | None, draft: Path,
+                   candidate: str):
     """Write the candidate to its source path and run the byte gate.
 
     Returns ``(outcome, report, rc, gate_out)``. The report's presence is the source of truth:
@@ -849,7 +891,8 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
             return "error"
 
     # 3. write and verify (the gate is the only writer of verify=match).
-    outcome, report, rc, gate_out = write_and_gate(entry, layout, body, draft, candidate)
+    assert_body = gate_body(raw_body, body)
+    outcome, report, rc, gate_out = write_and_gate(entry, layout, assert_body, draft, candidate)
 
     # 4. a template that missed falls through to the model, so the path never regresses.
     if outcome != "match" and source == "template":
@@ -858,7 +901,8 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
             candidate, source = candidate2, "model"
             hit = None                     # the rule missed; this is a model attempt now
             completion, prompt = completion2, prompt2
-            outcome, report, rc, gate_out = write_and_gate(entry, layout, body, draft, candidate)
+            outcome, report, rc, gate_out = write_and_gate(entry, layout, assert_body, draft,
+                                                            candidate)
 
     # 5. record the attempt (append-only, parent-linked) — every attempt is kept.
     record = {

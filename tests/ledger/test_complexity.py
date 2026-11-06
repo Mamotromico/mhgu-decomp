@@ -84,8 +84,9 @@ class GateableTests(unittest.TestCase):
         body = word(0xE92D4800) + word(0xEB000010) + word(0xEAFFFFFE) + word(0xE8BD8800)
         self.assertTrue(gateable(body))
 
-    def test_a_pool_reader_is_not_gateable(self):
-        self.assertFalse(gateable(word(0xE59F0004) + word(0xE12FFF1E) + word(0x6172F000)))
+    def test_a_pool_reader_is_gateable(self):
+        # The gate resolves GOT_PREL through the GOT map, so reading a pool word is fine.
+        self.assertTrue(gateable(word(0xE59F0004) + word(0xE12FFF1E) + word(0x6172F000)))
 
     def test_an_adr_body_is_not_gateable(self):
         self.assertFalse(gateable(word(0xE28F0004) + word(0xE12FFF1E)))

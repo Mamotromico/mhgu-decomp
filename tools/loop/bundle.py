@@ -131,6 +131,57 @@ def import_names(nso: Path) -> dict[str, str]:
         return {}
 
 
+def pool_names(entries: list[dict], nso: Path) -> dict[int, str]:
+    """``GOT slot -> the name a candidate should use for it``, for pool annotations.
+
+    Uses the *same* resolver as the gate (``bytegate.pool_slots``), so a name the bundle shows
+    is exactly a name the gate can verify: an import's symbol, or ``D_<addr>`` for an internal
+    object (the slot holds its address, and the ledger says which addresses are data).
+    """
+    try:
+        import bytegate
+        import gotmap
+        slots = bytegate.pool_slots(entries, gotmap.load_or_build(nso))
+    except Exception as e:  # a bundle must still be produced when the map is unavailable
+        print(f"warning: no pool names ({e})", file=sys.stderr)
+        return {}
+    return {slot: symbol for symbol, slot in slots.items()}
+
+
+_LDR_OPERAND = re.compile(r"^\s*(r\d+)\s*,")
+_LDR_PC_REG = re.compile(r"^\s*(r\d+)\s*,\s*\[pc\s*,\s*(r\d+)\s*\]$\s*")
+
+
+def pool_slot(insns: list[dict], index: int, value: int) -> int | None:
+    """The GOT slot a pc-relative pool word reaches, or ``None``.
+
+    clang's PIC idiom loads the offset and consumes it immediately::
+
+        ldr r1, [0x600001a4]   ; = slot - (LPC + 8)
+        ldr r1, [pc, r1]       ; r1 = *(LPC + 8 + offset)  == the slot's contents
+
+    so the slot is ``value + (LPC + 8)``, where ``LPC`` is the **consumer** (the second
+    instruction), not the load. Only the adjacent same-register form is recognised; anything
+    else is left unannotated rather than guessed.
+    """
+    if index + 1 >= len(insns):
+        return None
+    consume_ins = insns[index + 1]
+    if consume_ins["mnemonic"].lower() != "ldr":
+        return None
+    load = _LDR_OPERAND.match(insns[index]["operands"] or "")
+    consume = _LDR_PC_REG.match(consume_ins["operands"] or "")
+    if not load or not consume:
+        return None
+    if not (load.group(1) == consume.group(1) == consume.group(2)):
+        return None
+    try:
+        lpc = int(consume_ins["addr"], 16)
+    except ValueError:
+        return None
+    return (value + lpc + 8) & 0xFFFFFFFF
+
+
 def parse_disasm(text: str) -> list[dict]:
     """Parse ``AnnotateFunctions`` TSV into instruction dicts.
 
@@ -165,15 +216,18 @@ def literal_slots(operands: str) -> list[int]:
     return [int(m, 16) for m in _ABS_OPERAND.findall(operands)]
 
 
-def annotate(insns: list[dict], names: dict[str, str], read_word) -> list[dict]:
+def annotate(insns: list[dict], names: dict[str, str], read_word,
+             pool: dict[int, str] | None = None) -> list[dict]:
     """Resolve branch-target names and literal-pool values; return new instruction dicts.
 
     ``read_word(addr:int) -> int | None`` supplies the binary word at a literal slot (the
     caller wires it to the dumped memory blocks; tests inject a stub). Each literal whose word
-    is itself a known address also gains a ``name``.
+    is itself a known address also gains a ``name``. With ``pool`` (slot -> name), a word that
+    is a GOT reference gains ``got`` (the slot) and ``got_name`` (what the candidate should
+    call it), which is what makes a data reference reconstructable.
     """
     out: list[dict] = []
-    for ins in insns:
+    for index, ins in enumerate(insns):
         rec = dict(ins)
         rec["flow_names"] = [target_name(a, names) for a in ins["flows"]]
         literals = []
@@ -185,6 +239,10 @@ def annotate(insns: list[dict], names: dict[str, str], read_word) -> list[dict]:
             pointed = names.get(f"{value:08x}")
             if pointed:
                 lit["name"] = pointed
+            got = pool_slot(insns, index, value) if pool else None
+            if got is not None and got in pool:
+                lit["got"] = f"{got:08x}"
+                lit["got_name"] = pool[got]
             literals.append(lit)
         rec["literals"] = literals
         out.append(rec)
@@ -231,7 +289,9 @@ def format_insn(ins: dict) -> str:
     notes = [f"-> {name}" for name in ins.get("flow_names", [])]
     for lit in ins.get("literals", []):
         note = f"= 0x{lit['value']:08x}"
-        if lit.get("name"):
+        if lit.get("got_name"):
+            note += f" -> {lit['got_name']}"
+        elif lit.get("name"):
             note += f" ({lit['name']})"
         notes.append(note)
     return (text.rstrip() + ("  ; " + ", ".join(notes) if notes else "")).rstrip()
@@ -448,7 +508,8 @@ def main(argv: list[str] | None = None) -> int:
 
     names = name_table(entries, module)
     names.update(import_names(args.nso))
-    insns = annotate(parse_disasm(asm_text), names, blocks.read_word)
+    insns = annotate(parse_disasm(asm_text), names, blocks.read_word,
+                     pool_names(entries, args.nso))
 
     meta = {
         "name": entry["name"], "module": module, "addr": entry["addr"],

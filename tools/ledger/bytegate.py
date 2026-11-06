@@ -46,16 +46,23 @@ the ledger, and then compares bytes exactly. A wrong callee resolves to a differ
 and still fails, so this is not a weaker check; it is the comparison a link would have made.
 
 Fail-closed rule: a function may only claim a match when **every** relocation in its body was
-verified. Literal-pool words (``R_ARM_GOT_PREL`` and friends) are not resolved yet — they point
-into the linker's GOT layout, which needs the dynamic-relocation map — so a body carrying one
-is reported as ``unverified-reloc`` and never matches, even if the raw bytes happen to agree.
-A match reached through resolved relocations records ``gate=reloc`` in the ledger; a purely
-byte-identical one records ``gate=raw`` (see ``docs/architecture.md`` -> *Gate provenance*).
+verified. Two relocation classes are resolved:
+
+* **branch/call** (`R_ARM_CALL`, `R_ARM_JUMP24`, …) — patched with the callee's original
+  address, from the ledger or, for an import, from its PLT stub;
+* **literal pool** (`R_ARM_GOT_PREL`) — patched to `GOT(symbol) + addend − P`, where the addend
+  is the object's own in-place word and `GOT(symbol)` comes from the map (an import's slot, or
+  an internal object's slot named by the address it holds).
+
+Anything else — a jump table, an unnameable symbol, a symbol with no GOT slot — is reported as
+`unverified-reloc` and never matches, even if the raw bytes happen to agree. A match reached
+through resolved relocations records `gate=reloc` in the ledger; a purely byte-identical one
+records `gate=raw` (see `docs/architecture.md` -> *Gate provenance*).
 
 An import has no ledger address, but the image does not call it by name either: it calls a
-12-byte **PLT stub** in ``.text``, which jumps through the import's GOT slot. ``gotmap`` recovers
-import -> stub from the stub's own code, so ``bl <import>`` resolves to the address the original
-linked to (``695`` imports, one stub each). A call to an unresolved name is still refused.
+12-byte **PLT stub** in `.text`, which jumps through the import's GOT slot. `gotmap` recovers
+import -> stub from the stub's own code, so `bl <import>` resolves to the address the original
+linked to (695 imports, one stub each). A call to an unresolved name is still refused.
 
 Usage::
 
@@ -84,6 +91,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import os
 import struct
@@ -235,6 +243,10 @@ def extract_function(obj: Path, names: list[str]) -> tuple[bytes, str, list[dict
 # spellings of the same encodings as ``R_ARM_JUMP24``/``R_ARM_CALL``; clang emits the latter.
 BRANCH_RELOCS = {1: "R_ARM_PC24", 27: "R_ARM_PLT32", 28: "R_ARM_CALL", 29: "R_ARM_JUMP24"}
 
+# Literal-pool relocations: the word names a GOT slot, and the linker writes
+# ``GOT(symbol) + addend - P`` where the addend is the object's in-place word.
+POOL_RELOCS = {96: "R_ARM_GOT_PREL"}
+
 
 def function_relocations(data: bytes, sections: list[dict], symtabs: dict[int, list[dict]],
                          sec: dict) -> list[dict]:
@@ -338,6 +350,83 @@ def resolve_branches(cand: bytes, relocs: list[dict], insn_base: int,
             continue
         struct.pack_into("<I", buf, off, (word & 0xFF000000) | ((delta >> 2) & 0xFFFFFF))
     return bytes(buf), unresolved
+
+
+def resolve_pools(cand: bytes, relocs: list[dict], insn_base: int,
+                  slots: dict[str, int]) -> tuple[bytes, list[tuple[int, str]]]:
+    """Rewrite literal-pool words to the value the linker would have produced.
+
+    For ``R_ARM_GOT_PREL`` the in-place word is the *addend* ``A``; the linked value is
+    ``GOT(symbol) + A - P``, with ``P`` the word's address in the original. ``slots`` maps a
+    symbol to the slot the original assigned it (an import from the relocation table, an
+    internal object from the slot contents), so a wrong symbol resolves to a different slot
+    and still fails the byte comparison.
+    """
+    buf = bytearray(cand)
+    unresolved: list[tuple[int, str]] = []
+    for r in relocs:
+        off = r["offset"]
+        site = f"+0x{off:x}"
+        slot = slots.get(r["symbol"])
+        if slot is None:
+            unresolved.append((off, f"{site}: {r['symbol'] or '<no symbol>'} has no GOT slot"))
+            continue
+        if off % 4 or off + 4 > len(buf):
+            unresolved.append((off, f"{site}: not an aligned word inside the body"))
+            continue
+        addend = struct.unpack_from("<I", buf, off)[0]
+        word = (slot + addend - (insn_base + off)) & 0xFFFFFFFF
+        struct.pack_into("<I", buf, off, word)
+    return bytes(buf), unresolved
+
+
+def resolve_relocations(cand: bytes, relocs: list[dict], insn_base: int,
+                        addresses: dict[str, int], slots: dict[str, int]
+                        ) -> tuple[bytes, list[tuple[int, str]]]:
+    """Resolve every relocation the gate understands; anything else fails closed."""
+    patched, unresolved = cand, []
+    branches = [r for r in relocs if r["type"] in BRANCH_RELOCS]
+    pools = [r for r in relocs if r["type"] in POOL_RELOCS]
+    for r in relocs:
+        if r["type"] not in BRANCH_RELOCS and r["type"] not in POOL_RELOCS:
+            unresolved.append((r["offset"], f"+0x{r['offset']:x}: relocation type {r['type']} "
+                                              f"is not verified"))
+    if branches:
+        patched, problems = resolve_branches(patched, branches, insn_base, addresses)
+        unresolved += problems
+    if pools:
+        patched, problems = resolve_pools(patched, pools, insn_base, slots)
+        unresolved += problems
+    return patched, unresolved
+
+
+def pool_slots(entries: list[dict], payload: dict) -> dict[str, int]:
+    """``symbol -> GOT slot`` for literal-pool resolution.
+
+    Two sources, because the image has two kinds of slot: an **import** is named by the
+    dynamic relocation that fills it, while an **internal** object is resolved by the static
+    link and is therefore named by nothing — but its slot *holds its address*, so the address
+    names it as ``D_<addr>``. The ledger defines which addresses are data, so only those are
+    offered; anything else stays unresolvable and fails closed.
+    """
+    out: dict[str, int] = {}
+    named: set[int] = set()
+    for slot_hex, info in payload.get("slots", {}).items():
+        slot = int(slot_hex, 16)
+        named.add(slot)
+        if info.get("symbol"):
+            out[info["symbol"]] = slot
+    blocks = sorted((int(e["addr"], 16), int(e["addr"], 16) + int(e["size"]))
+                    for e in entries if e["kind"] == "data" and e["addr"])
+    starts = [lo for lo, _hi in blocks]
+    for slot_hex, value in payload.get("values", {}).items():
+        slot = int(slot_hex, 16)
+        if slot in named:
+            continue
+        i = bisect.bisect_right(starts, value) - 1
+        if i >= 0 and blocks[i][0] <= value < blocks[i][1]:
+            out.setdefault(f"D_{value:08x}", slot)
+    return out
 
 
 # --- reference bytes ------------------------------------------------------------------
@@ -563,11 +652,27 @@ def main(argv: list[str] | None = None) -> int:
     print(f"function: {entry['name']}  (object symbol {sym})")
     patched, unresolved = cand, []
     via_stub = 0
+    via_pool = 0
     if relocs:
         addresses, via_stub = branch_addresses(relocs, entries, args.nso, args.stub_cache)
-        patched, unresolved = resolve_branches(cand, relocs, int(addr, 16), addresses)
+        slots: dict[str, int] = {}
+        if any(r["type"] in POOL_RELOCS for r in relocs):
+            try:
+                slots = pool_slots(entries,
+                                   gotmap.load_or_build(args.nso, args.stub_cache))
+            except (gotmap.GotError, OSError, ValueError) as e:
+                print(f"warning: GOT map unavailable ({e}); pool words stay unverified",
+                      file=sys.stderr)
+            via_pool = sum(1 for r in relocs
+                           if r["type"] in POOL_RELOCS and r["symbol"] in slots)
+        patched, unresolved = resolve_relocations(cand, relocs, int(addr, 16),
+                                                  addresses, slots)
         resolved = len(relocs) - len(unresolved)
-        via = f", {via_stub} via PLT stub" if via_stub else ""
+        via = ""
+        if via_stub:
+            via += f", {via_stub} via PLT stub"
+        if via_pool:
+            via += f", {via_pool} via GOT slot"
         if unresolved:
             print(f"  {YELLOW}relocations: {resolved}/{len(relocs)} resolved{via} — "
                   f"{len(unresolved)} cannot be verified{RESET}")
@@ -606,6 +711,7 @@ def main(argv: list[str] | None = None) -> int:
         result = gate_result(args.module, addr, entry["name"], patched, ref, ok, status,
                              args.body, size, bool(relocs), gate,
                              {"total": len(relocs), "via_stub": via_stub,
+                              "via_pool": via_pool,
                               "unresolved": [why for _off, why in unresolved]})
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")

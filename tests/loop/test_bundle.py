@@ -142,6 +142,22 @@ class AnnotateTests(unittest.TestCase):
         out = annotate(ins, names, self.read_word)
         self.assertEqual(out[0]["flow_names"], ["sqrtf"])
 
+    def test_a_pool_reference_is_named_through_its_consumer(self):
+        # ldr r1, [pool]; ldr r1, [pc, r1] -> slot = value + (LPC + 8).
+        value = 0x6183935C - 0x6002B8FC
+        ins = parse_disasm("6002b8f0\te59f100c\tldr\tr1, [0x6002b904]\t\n"
+                           "6002b8f4\te79f1001\tldr\tr1, [pc,r1]\t\n")
+        out = annotate(ins, self.NAMES, lambda a: value, {0x6183935C: "D_61730ebc"})
+        self.assertEqual(out[0]["literals"][0]["got"], "6183935c")
+        self.assertEqual(out[0]["literals"][0]["got_name"], "D_61730ebc")
+        self.assertIn("-> D_61730ebc", format_insn(out[0]))
+
+    def test_a_pool_reference_without_a_consumer_is_not_named(self):
+        ins = parse_disasm("6002b8f0\te59f100c\tldr\tr1, [0x6002b904]\t\n"
+                           "6002b8f4\te1a00000\tmov\tr0, r0\t\n")
+        out = annotate(ins, self.NAMES, lambda a: 0x10, {0x1: "D_1"})
+        self.assertNotIn("got_name", out[0]["literals"][0])
+
     def test_literal_value_and_pointed_name(self):
         ins = parse_disasm("6000104c\t04009fe5\tldr\tr0, [0x60001058]\t\n")
         out = annotate(ins, self.NAMES, self.read_word)
