@@ -6,9 +6,9 @@
 # Ghidra + Switch/NSO tooling live here so the whole pipeline is reproducible
 # and no host Java install is required (the JDK lives in this image).
 #
-# The *build* toolchain is the Phase 1 de facto pin: clang 5.0.1 + the libtinfo5
-# shim it needs. Its exact flags (VFP-only, no -mcpu, two hidden backend knobs)
-# live in AGENTS.md; only the bare compiler is baked into the image here.
+# The *build* toolchain is the pinned compiler: clang 4.0.1 (+ libtinfo5, which
+# its prebuilt binaries also link against). Exact flags live in AGENTS.md; only
+# the bare compiler is baked into the image here.
 # =============================================================================
 
 ARG BASE_IMAGE=ubuntu:24.04
@@ -48,6 +48,15 @@ ARG CLANG_VERSION=5.0.1
 ARG CLANG_TARBALL=clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-16.04.tar.xz
 ARG CLANG_URL=https://releases.llvm.org/${CLANG_VERSION}/${CLANG_TARBALL}
 ARG CLANG_SHA256=005f21861cd2953138df7cf511f1552ef7041bafb7cfc4b172264b7ff5fe09b4
+
+# Clang 4.0.1 — the compiler pin (see AGENTS.md, "Compiler pin revision"). This
+# is the project default (config/toolchain.json); 5.0.1 is kept alongside for A/B
+# runs and the few functions only it matches. The release ships this variant as
+# clang+llvm-<v>-x86_64-linux-gnu-debian8.
+ARG CLANG401_VERSION=4.0.1
+ARG CLANG401_TARBALL=clang+llvm-${CLANG401_VERSION}-x86_64-linux-gnu-debian8.tar.xz
+ARG CLANG401_URL=https://releases.llvm.org/${CLANG401_VERSION}/${CLANG401_TARBALL}
+ARG CLANG401_SHA256=ca48a4def4cbc9dd6af3f46ce1dc2bd903d26c7ad51387f57884ad1eaa58e42f
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -108,21 +117,34 @@ RUN set -eux; \
     rm /tmp/libtinfo5.deb
 
 # ---------------------------------------------------------------------------
-# clang 5.0.1 (the pinned cross-compiler)
+# clang 5.0.1 (secondary — for A/B runs and the few 5.0.1-only functions)
 # ---------------------------------------------------------------------------
-# Extracted to /opt/clang-5.0.1 and put on PATH so `clang`/`clang++`/`clang-5.0.1`
-# all resolve to it. This is the *bare* compiler; the project's target flags
-# (AArch32 target, VFP-only, no -mcpu, the two hidden backend knobs) are applied by
-# the build, not baked in here — see AGENTS.md for the authoritative flag list.
-ENV CLANG_HOME=/opt/clang-5.0.1
-ENV PATH=/opt/clang-5.0.1/bin:${PATH}
+# Installed to /opt/clang-5.0.1 and NOT put on PATH (4.0.1 is the default); it is
+# selected explicitly via config/toolchain-5.0.1.json. This is the *bare*
+# compiler; target flags are applied by the build, not baked in here.
 RUN set -eux; \
     curl -fL --retry 3 -o /tmp/clang.tar.xz "${CLANG_URL}"; \
     echo "${CLANG_SHA256}  /tmp/clang.tar.xz" | sha256sum -c -; \
     mkdir -p /tmp/clang.extract; \
     tar -xJf /tmp/clang.tar.xz -C /tmp/clang.extract; \
-    mv /tmp/clang.extract/clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-16.04 "${CLANG_HOME}"; \
-    rm -rf /tmp/clang.tar.xz /tmp/clang.extract; \
+    mv /tmp/clang.extract/clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-16.04 /opt/clang-5.0.1; \
+    rm -rf /tmp/clang.tar.xz /tmp/clang.extract
+
+# ---------------------------------------------------------------------------
+# clang 4.0.1 (the pinned cross-compiler)
+# ---------------------------------------------------------------------------
+# Extracted to /opt/clang-4.0.1 and put on PATH so `clang`/`clang++` resolve to
+# it (config/toolchain.json). Same libtinfo5 and picolibc dependencies as 5.0.1.
+# See AGENTS.md -> "Compiler pin revision".
+ENV CLANG_HOME=/opt/clang-4.0.1
+ENV PATH=/opt/clang-4.0.1/bin:${PATH}
+RUN set -eux; \
+    curl -fL --retry 3 -o /tmp/clang401.tar.xz "${CLANG401_URL}"; \
+    echo "${CLANG401_SHA256}  /tmp/clang401.tar.xz" | sha256sum -c -; \
+    mkdir -p /tmp/clang401.extract; \
+    tar -xJf /tmp/clang401.tar.xz -C /tmp/clang401.extract; \
+    mv /tmp/clang401.extract/clang+llvm-${CLANG401_VERSION}-x86_64-linux-gnu-debian8 "${CLANG_HOME}"; \
+    rm -rf /tmp/clang401.tar.xz /tmp/clang401.extract; \
     clang --version
 
 # ---------------------------------------------------------------------------

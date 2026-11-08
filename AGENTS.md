@@ -95,8 +95,9 @@ Byte-matching (and the prebuilt loader) depend on exact versions.
 | Ghidra SHA-256 | `b62e81a0390618466c019c60d8c2f796ced2509c4c1aea4a37644a77272cf99d` | Verified in the Dockerfile. |
 | Ghidra Switch Loader | `1.6.1-c600d05-Ghidra_12.1.2` | Tag format `<ver>-<commit>-Ghidra_<ver>` — commit-specific, pin the full tag. |
 | Loader SHA-256 | `0bc6374c11cb7a1275a0eda22184b9b2efe5a9a7e415cc29361c334966c1f477` | Verified in the Dockerfile. |
-| clang | `5.0.1` | De facto pin (reproduction stand-in); installed at `/opt/clang-5.0.1`, on `PATH`. |
-| clang tarball SHA-256 | `005f21861cd2953138df7cf511f1552ef7041bafb7cfc4b172264b7ff5fe09b4` | Verified in the Dockerfile. |
+| clang | `4.0.1` | The compiler pin (reproduction stand-in); installed at `/opt/clang-4.0.1`, on `PATH`. |
+| clang tarball SHA-256 | `ca48a4def4cbc9dd6af3f46ce1dc2bd903d26c7ad51387f57884ad1eaa58e42f` | Verified in the Dockerfile. |
+| clang (secondary) | `5.0.1` | Kept at `/opt/clang-5.0.1` (not on `PATH`) for A/B runs and the few 5.0.1-only functions; `config/toolchain-5.0.1.json`. |
 | libtinfo5 | `6.1-1ubuntu1.18.04.1` | ncurses-5 ABI the pinned clang links against; from the Ubuntu 18.04 archive. |
 | Base image | `ubuntu:24.04` | Chosen for batteries-included apt; size is not a concern for a dev image. |
 
@@ -205,8 +206,147 @@ arguments/results still cross the ABI in the VFP s-registers (**hardfp**,
 `-mfloat-abi=hard`). Full evidence and method:
 [`docs/compiler-identification.md`](docs/compiler-identification.md).
 
-> **Running clang:** the devcontainer ships the pinned compiler at `/opt/clang-5.0.1`
-> (on `PATH`, so `clang`/`clang-5.0.1` resolve to it) with the `libtinfo.so.5` it needs.
+### Compiler pin revision: clang 4.0.1 + `-pre-RA-sched=source` (evidence)
+
+The 5.0.1 pin cannot reproduce some instruction-selection and scheduling choices the
+original made, so a large class of functions is **structurally unmatchable** under it
+(no C source shape and no `-mllvm` knob fixes them — verified by exhaustive flag
+search). The divergence classes:
+
+- **`bfc` vs `bic`.** For a bitfield clear whose mask is BIC-encodable (e.g. `x & ~3`),
+  clang 5.0.1 always emits `bic`; the original emits `bfc`. 4,173 ledger functions
+  contain a true `bfc` (R15 base); 3,379 of them have only BIC-encodable clear masks and
+  **none** have ever matched under 5.0.1.
+- **If-conversion.** For a small `if` with a store, the original predicates the body
+  (`movweq`/`strbeq`); 5.0.1 emits an early-return branch.
+- **Scheduling.** e.g. the original loads both operands before zeroing the result
+  register; 5.0.1 interleaves the zeroing.
+
+**clang 4.0.1** reproduces all three exactly. Under 4.0.1 it:
+
+- matches the four representative probes 5.0.1 fails (`613d733c`, `60553a4c`,
+  `60082510`, `6122c168`) — these are real game functions, and they match **without**
+  any if-conversion knob;
+- matches **2,354 / 2,376** of the already-matched `src/` corpus (**99.1%**, after the
+  source re-derivation described below);
+- re-gates **10/23** stored `deepseek-v4-pro` candidates from mismatch to match.
+
+**The profile carries only `-mllvm -pre-RA-sched=source`.** It fixes three corpus
+regressions and breaks none. The earlier candidate, `-mllvm -disable-ifcvt-simple`,
+was **wrong**: it was fitted to the project's own five PoC fixtures (`find2`, `find3`,
+`find2s`, `findsub`, `new_a`), which are loop-`return` shapes the original did *not*
+if-convert, but it breaks the far more common `if (c) return X;` guard (4.0.1's default
+predicates that exactly the way the original does) — re-gating the whole corpus under
+it dropped to **2,220 / 2,376 (93.4%)**, 156 regressions, 108 of them that guard. The
+five PoC fixtures are therefore a misleading sample; the four real probes are the
+honest evidence. `-hoist-cheap-insts=true` is not needed on 4.0.1.
+
+The profile is `config/toolchain.json` (the default); 5.0.1 remains selectable via
+`config/toolchain-5.0.1.json`. The Dockerfile installs 4.0.1 to `/opt/clang-4.0.1` on
+`PATH`, with 5.0.1 kept alongside at `/opt/clang-5.0.1`.
+
+**Status: now the default.** 4.0.1 is the pin (the devcontainer ships `/opt/clang-4.0.1`).
+Source shapes were re-derived under 4.0.1, taking the corpus from 27 to **22 remaining
+regressions**
+(10 `body-length`, 12 `mismatch`):
+
+- **predicated early return in a loop** (7: `6013fe3c`, `604f8b78`, `6050f78c`,
+  `6069d9e8`, `6069ddfc`, `6069eb18`, `610b0960`) — 4.0.1 if-converts a loop-exit
+  `return` into `popcc {…,pc}`; the original branches. No source shape (early return,
+  ternary, `break`+result, nested if, `__builtin_expect`, inline-asm barrier) defeats
+  it; only disabling the if-converter globally does, at the cost of the 108 guards
+  above. Note the reference *does* if-convert leaf `return` guards (`bxne lr`), so this
+  is a `pop {…,pc}`-specific heuristic difference. **Accepted residual.**
+- **instruction ordering** (5: `602aa498`, `602aa814`, `6050c964`, `60876a94`,
+  `610e897c`) — two independent loads/ops swapped. Statement reordering does not change
+  SelectionDAG scheduling; no `-pre-RA-sched`/`-misched`/`-regalloc` knob matches it.
+  An `asm volatile("" ::: "memory")` barrier fixes three of the original eight (see
+  below) but not these. **Accepted residual.**
+- **multi-instruction predicated return** (5: `605bc604`, `60627aac`, `61122598`,
+  `613720ec`, `605089e4`) — the original predicates `ldrbne/movne/cmpne/bxne lr`;
+  4.0.1 branches (or predicates the other side). **Accepted residual.**
+- **tail-duplication / block placement** (2: `6003bb78` — one branch byte only,
+  `601cb7e8`) and **stack-argument hoisting** (2: `601ac4d8`, `60c17abc`) — 4.0.1 hoists
+  the 5th-argument load above the first store, and duplications differ. `-disable-tail-
+  duplicate` fixes these but drops the corpus to 2,290, so it cannot be global.
+  **Accepted residual.**
+- **4.0.1-vs-5.0.1 DAG choice** (1: `60260440` — predicates the else-body instead of the
+  hoisted `mov`+`bxhi lr`). **Accepted residual.**
+
+Eight were fixed by re-deriving the source shape under 4.0.1 (all still byte-match):
+`func_6018e958` (early-return form gives `movne` instead of `movwne`),
+`func_6054ee64` (store the halfword before loading the divisor), `func_6003b788`
+(nested `if` instead of `continue`), `func_6080c93c` (`unsigned char x = field; x--;`
+instead of `(unsigned char)(field - 1)`, which defeats the mask DAG-combine),
+`func_6016b920` (the same in-place `unsigned short` increment trick),
+`func_6053a058` and `func_6018b110` (an `asm volatile("" ::: "memory")` barrier
+between the argument loads and the callee-pointer load pins the reference order), and
+`func_600a7e80` (a 4-byte `bx lr` stub; the ledger claimed `verify=match` with no
+source).
+
+**Configuration search: exhausted.** A sweep of ~170 candidate profiles on 4.0.1 —
+scheduling (`-pre-RA-sched`, `-misched*`, post-RA), if-conversion
+(`-disable-ifcvt-*`, `-ifcvt-limit`, `-early-ifcvt-limit`, `-ifcvt-fn-*`), tail
+duplication/merging (`-disable-tail-duplicate`, `-tail-dup-size/-limit/-placement-*`,
+`-tail-merge-*`), unrolling/inlining, GVN/LICM/CGP, register allocation, the
+vectorisers, and `-O1/-Os/-Oz` — found **no profile better than
+`-pre-RA-sched=source` alone (22 regressions)**. The residual splits as:
+
+- **6** (`6013fe3c`, `604f8b78`, `6050f78c`, `6069d9e8`, `6069ddfc`, `6069eb18`)
+  are fixed only by `-disable-ifcvt-simple`, which costs **156** regressions (it also
+  breaks the common `if (c) return X;` guard);
+- **2** (`6003bb78`, `610b0960`) are fixed only by `-disable-ifcvt-simple-false`,
+  which costs **92** (`610b0960` is also fixed by `-ifcvt-limit=0`);
+- **2** (`6003bb78`, `601cb7e8`) are fixed only by `-tail-merge-size<=1`, which costs
+  **110** (90 new regressions);
+- **13** are moved by **no knob at all**.
+
+**Reference-project audit (2026-11) found nothing new.** Cross-checked the real
+Switch decomp toolchains: SSBU (`-fno-common`, `-fno-short-enums`,
+`-mno-implicit-float`, `-fno-strict-aliasing`, `-fno-slp-vectorize`),
+OdysseyDecomp/Lego City (`-O3`, `-mno-implicit-float`, `-fno-strict-aliasing`),
+sead (`-fno-strict-aliasing`), and MHGU's own `forge` AArch32 Makefile
+(`-march=armv8-a+crc+crypto`, `-mfpu=crypto-neon-fp-armv8`, `-mtune=cortex-a57`,
+`-fno-threadsafe-statics`, `-fno-unwind-tables`). All are **inert** for this code
+(identical objects) or change nothing on the 22; forge's `-mtp=soft` /
+`-mfloat-abi=softfp` are GCC/ABI choices incompatible with the evidenced hardfp
+clang pin. SSBU's `tools/fuzz_flags.py` adds ~56 `-mllvm` candidates (machine
+sinking, block placement, live intervals, scheduler); only three alter codegen
+(`-disable-machine-sink`, `-join-liveintervals=false`, `-machine-sink-split=false`)
+and none fixes a residual. SSBU's remaining leverage is non-stock: a patched
+compiler (`-mllvm -aarch64-nx-prologue`, +91 matches) and object post-processing
+scripts (`fix_prologue_sched`, `fix_insn_reorder`, `fix_return_width`, …) — i.e.
+a maintained fork or byte patching, not a stock configuration.
+
+**`forge` is not a compiler option.** forge builds with devkitPro **devkitARM**
+(`arm-none-eabi-g++`, GCC 13.2), not clang — it is a homebrew `subsdk` (libnx),
+not a reconstruction of the game's executable. Measured directly: on 40
+functions that clang 4.0.1 already matches, GCC reproduces **1/40** under both
+`-mfloat-abi=hard` and `softfp` (clang: 40/40). Its `-mtp=soft`,
+`-fpermissive`, `-enable-libstdcxx-allocator=new` are GCC-only, and its `softfp`
+ABI contradicts the game's evidenced hardfp float passing.
+
+The residual is therefore not configuration-addressable: it is a per-function
+if-conversion/scheduling heuristic difference between 4.0.1 and the original's
+backend, or a source-shape issue. Fixing these means re-deriving source shapes, not
+tuning flags.
+
+`tools/ledger/revalidate.py` is the gate for a pin change: it selects every
+`verify=match` function, recompiles its existing `src/` file with a chosen profile,
+re-runs the byte gate (faithfully resolving the inventory body vs. the partition, and
+branch/pool relocations), and reports the exact regressions. It writes JSON/TSV
+reports and exits non-zero when anything regresses, so it can gate a pin flip in CI.
+Run it with `--clang PATH` to try an extracted tarball before the devcontainer is
+rebuilt.
+
+> **Note (gate):** the byte gate already resolves branch/call and literal-pool
+> relocations, so 4-byte tail-call thunks (`b <target>`) now match; earlier runs that
+> used a raw-byte gate produced false mismatches on every non-leaf. Re-gate stored
+> candidates before concluding a function is unmatchable.
+
+> **Running clang:** the devcontainer ships the pinned compiler at `/opt/clang-4.0.1`
+> (on `PATH`, so `clang`/`clang++` resolve to it) with the `libtinfo.so.5` it needs;
+> `/opt/clang-5.0.1` is kept as a secondary (see `config/toolchain-5.0.1.json`).
 > Note `llvm-objdump` 3.9.1 mis-decodes some instructions and emits a byte-shifted
 > stream: **read code with `clang -S` or Ghidra.**
 
@@ -240,11 +380,12 @@ codebase (≈81% byte overlap), so the compiler gives no reason to prefer base. 
   truth for the toolchain.
 - The compiler/SDK is **pinned** — do not "upgrade" tooling without explicit
   approval; byte-matching depends on exact versions.
-- The **compiler is installed**: the Dockerfile downloads the pinned clang 5.0.1
-  tarball (SHA-256 verified) to `/opt/clang-5.0.1` on `PATH`, with the `libtinfo5` it
-  needs. It ships the *bare* compiler; the project's target flags are applied by the
+- The **compiler is installed**: the Dockerfile downloads the pinned clang 4.0.1
+  tarball (SHA-256 verified) to `/opt/clang-4.0.1` on `PATH`, with the `libtinfo5` it
+  needs (5.0.1 is kept at `/opt/clang-5.0.1` as a secondary). It ships the *bare*
+  compiler; the project's target flags are applied by the
   build (see [Compiler & runtime](#compiler--runtime-phase-1--resolved-de-facto-pin)).
-  Do not add a guessed toolchain or a second clang.
+  Do not add a guessed toolchain or a third clang.
 
 ---
 
@@ -336,14 +477,15 @@ Curated prior art (study for conventions; do not copy blindly):
 ## Open questions / TODO
 
 - [x] Load the executable in Ghidra; confirm **AArch32 vs AArch64** → **AArch32**
-      (`ARM:LE:32:v8`, base `0x60000000`), confirmed by the loader and NPDM alike.
-- [x] **Pin the compiler** (Phase 1 outcome) → **de facto pin: clang 5.0.1 + two hidden
-      backend flags** (`-mllvm -pre-RA-sched=source -mllvm -hoist-cheap-insts=true`, no
-      `-mcpu`). All seven probe functions byte-match under it; **no stock configuration**
-      does (best 5/7). The residual gap is two independent backend heuristics, positive
-      evidence for a **non-stock/fork AArch32 backend**; since the real NintendoSDK
-      toolchain is unobtainable, 5.0.1 + both knobs is adopted as the working pin.
-      Residual functions fall back to behaviour-match (sm64ds/SSBU precedent).
+      (`ARM:LE:32:v8`, base `0x60000000`), confirclang 5.0.1 + two hidden backend
+      flags** was the initial de facto pin; it was **revised to clang 4.0.1 +
+      `-mllvm -pre-RA-sched=source`** (see "Compiler pin revision" above), which is now
+      the project default (`config/toolchain.json`). All seven probe functions byte-match
+      under it; **no stock configuration** does (best 5/7). The residual gap is two
+      independent backend heuristics, positive evidence for a **non-stock/fork AArch32
+      backend**; since the real NintendoSDK toolchain is unobtainable, 4.0.1 is adopted
+      as the working pin. Residual functions fall back to behaviour-match (sm64ds/SSBU
+      precedent). Residual functions fall back to behaviour-match (sm64ds/SSBU precedent).
       Evidence in [`docs/compiler-identification.md`](docs/compiler-identification.md).
 - [x] **Choose the target title version** → **the latest title update** (CNMT `Patch`,
       version `262144`). Both builds report SDK `4.4.1` (compiler unchanged) and the

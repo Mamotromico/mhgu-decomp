@@ -574,6 +574,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--src-root", type=Path, default=Layout.src_root)
     ap.add_argument("--work", type=Path, default=Layout.work)
     ap.add_argument("--model-config", type=Path, default=Layout.model_config)
+    ap.add_argument("--toolchain", type=Path, default=Layout.toolchain,
+                    help="compiler profile for the byte gate (default: config/toolchain.json — "
+                         "clang 4.0.1). config/toolchain-5.0.1.json remains available for "
+                         "A/B runs and the few functions only 5.0.1 matches.")
     ap.add_argument("--base-url", default=None)
     ap.add_argument("--endpoint", default=None)
     ap.add_argument("--model-name", default=None)
@@ -641,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
 
     layout = Layout(ledger=args.ledger, inventory=args.inventory, nso=args.nso,
                     context=args.context, src_root=args.src_root, work=args.work,
-                    model_config=args.model_config)
+                    model_config=args.model_config, toolchain=args.toolchain)
 
     if not layout.ledger.exists():
         print(f"error: missing ledger {layout.ledger}", file=sys.stderr)

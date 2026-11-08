@@ -153,8 +153,9 @@ The analysis environment is reproducible via the devcontainer in `.devcontainer/
     native X server.
 
 >🤖
-> - **clang 5.0.1** (the Phase 1 de facto pin) at `/opt/clang-5.0.1`, on `PATH` — the
->   cross-compiler for Phase 2 — together with the `libtinfo5` it needs.
+> - **clang 4.0.1** (the compiler pin) at `/opt/clang-4.0.1`, on `PATH` — the
+>   cross-compiler for Phase 2 — together with the `libtinfo5` it needs. clang 5.0.1 is
+>   kept at `/opt/clang-5.0.1` as a secondary for A/B runs (`config/toolchain-5.0.1.json`).
 >
 > Only the *bare* compiler is installed; the project's target flags are applied by the
 > build (see [AGENTS.md](AGENTS.md) for the authoritative list). The compiler is a

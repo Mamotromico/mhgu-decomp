@@ -1,0 +1,21 @@
+{
+  "_comment": "ALTERNATE compiler profile: clang 4.0.1 + -mllvm -pre-RA-sched=source. This is the corrected pin candidate (see AGENTS.md -> 'Compiler pin revision: clang 4.0.1'). It reproduces the reference instruction selection that 5.0.1 structurally cannot: BFC for a BIC-encodable bitfield clear, predication of a small if-block, and the original load/zero scheduling. Evidence: the four previously-unmatchable probes (613d733c, 60553a4c, 60082510, 6122c168) all byte-match under 4.0.1, and the 2,376-function matched corpus re-gates to 2,354 matches (99.1%) under this profile -- far better than the 2,220 (93.4%) the earlier -disable-ifcvt-simple variant scored. The 22 residual regressions (10 body-length, 12 mismatch) are 4.0.1-vs-reference if-conversion/scheduling heuristic differences and are documented in AGENTS.md. This is now the project default — see `config/toolchain.json`. This file is kept as a legacy alias for anything that still references it by name.",
+  "clang": "/opt/clang-4.0.1/bin/clang",
+  "cflags": [
+    "-target", "armv8a-none-eabi",
+    "-mfpu=neon-fp-armv8",
+    "-mfloat-abi=hard",
+    "-O2",
+    "-fomit-frame-pointer",
+    "-fPIC",
+    "-fno-exceptions",
+    "-fno-rtti",
+    "-ffreestanding",
+    "-std=c++1z",
+    "-isystem", "/opt/clang-4.0.1/include/c++/v1",
+    "-isystem", "/usr/lib/picolibc/arm-none-eabi/include",
+    "-D_LIBCPP_HAS_NO_THREADS",
+    "-mllvm", "-pre-RA-sched=source"
+  ],
+  "section_flags": ["-ffunction-sections", "-fdata-sections"]
+}
