@@ -27,8 +27,10 @@ import bundle
 import model
 import nearmiss
 from run import (
+    SYSTEM,
     Feedback,
     Layout,
+    asm_violation,
     attempt_entry,
     attempt_store,
     attempted_counts,
@@ -37,6 +39,7 @@ from run import (
     build_prompt,
     bundle_argv,
     context_path,
+    describe_word_diff,
     ensure_under,
     feedback_from_record,
     feedback_section,
@@ -44,10 +47,15 @@ from run import (
     gate_body,
     group_is_single,
     has_bit_op,
+    has_guarded_return,
+    has_mask_for_address,
     has_nonstack_block_move,
     parse_reference_instructions,
     process,
+    bank_seeds,
+    process_repair,
     prompt_fingerprint,
+    repair_prompt,
     resolve_entry,
     safe_draft_path,
     select_next,
@@ -201,6 +209,132 @@ class BuildPromptTests(unittest.TestCase):
 
     def test_empty_bundle_has_no_block_move(self):
         self.assertFalse(has_nonstack_block_move(""))
+
+
+class GuardedReturnSectionTests(unittest.TestCase):
+    """A conditional `bxCC lr` guard means the original branched; the prompt must teach the
+    memory barrier that stops clang 4.0.1 from predicating the guarded body away."""
+
+    GUARD = ("## disassembly\n\n"
+             "    6013f6d4  0020a0e1  cpy     r2, r0\n"
+             "    6013f6dc  070051e3  cmp     r1, #0x7\n"
+             "    6013f6e0  1eff2f81  bxhi    lr\n")
+
+    def test_conditional_return_is_detected(self):
+        self.assertTrue(has_guarded_return(self.GUARD))
+        for cond in ("bxeq", "bxne", "bxgt", "bxlt", "bxcs", "bxcc", "bxge", "bxle"):
+            self.assertTrue(has_guarded_return(
+                f"    60010000  e12fff1e  {cond}    lr\n"), cond)
+
+    def test_a_plain_return_is_not_a_guarded_return(self):
+        self.assertFalse(has_guarded_return("    60010000  e12fff1e  bx      lr\n"))
+        self.assertFalse(has_guarded_return(""))
+        self.assertFalse(has_guarded_return("    60010000  e12fff1e  pop     {r4,pc}\n"))
+
+    def test_guidance_forbids_asm_only_when_a_guard_is_present(self):
+        self.assertNotIn("guarded body", build_prompt(entry(), ""))
+        prompt = build_prompt(entry(), self.GUARD)
+        self.assertIn("predicate a small guarded body", prompt)
+        self.assertIn("Do NOT try to win those bytes with inline assembly", prompt)
+        self.assertNotIn('asm volatile("" ::: "memory")', prompt)
+
+
+class MaskForAddressSectionTests(unittest.TestCase):
+    """`bfc` on a loaded pointer used as a base: the masked value IS the base, so the prompt
+    must push pointer arithmetic (integer math makes clang reorder `add` before `bfc`)."""
+
+    BODY = ("## disassembly\n\n"
+            "    608857e4  7c0d90e5  ldr     r0, [r0,#0xd7c]\n"
+            "    608857e8  1f00c3e7  bfc     r0, #0x0, #0x4\n"
+            "    608857ec  130a90ed  vldr.32 s0, [r0,#0x4c]\n")
+
+    def test_mask_used_as_an_address_is_detected(self):
+        self.assertTrue(has_mask_for_address(self.BODY))
+
+    def test_a_mask_not_used_as_an_address_is_ignored(self):
+        self.assertFalse(has_mask_for_address(
+            "    60010000  e7c3001f  bfc     r0, #0x0, #0x4\n"
+            "    60010004  e12fff1e  bx      lr\n"))
+        self.assertFalse(has_mask_for_address(""))
+
+    def test_guidance_names_pointer_arithmetic_only_when_needed(self):
+        self.assertNotIn("clear its low bits", build_prompt(entry(), ""))
+        self.assertIn("clear its low bits", build_prompt(entry(), self.BODY))
+
+
+class TypedLoadGuidanceTests(unittest.TestCase):
+    def test_the_memcpy_trap_is_always_warned_against(self):
+        prompt = build_prompt(entry(), "")
+        self.assertIn("__builtin_memcpy", prompt)
+        self.assertIn("TYPED pointer", prompt)
+
+
+class InlineAssemblyRuleTests(unittest.TestCase):
+    """Hand-written instructions can never match compiled C++, so the rule is enforced on the
+    candidate, not just stated. Only a declarator symbol binding is allowed; the empty barrier is
+    rejected too, because it was being used to fabricate branches 4.0.1 if-converts."""
+
+    def test_the_empty_barrier_is_rejected(self):
+        for src in ('extern "C" int f(int *p) {\n'
+                    '    int r = 0;\n'
+                    '    if (p) { asm volatile("" ::: "memory"); r = *p; }\n'
+                    '    return r;\n}\n',
+                    'asm volatile("");',
+                    '__asm__ volatile("" ::: "memory");',
+                    'asm volatile("" ::: "memory");'):
+            self.assertIsNotNone(asm_violation(src), src)
+
+    def test_a_symbol_binding_is_allowed(self):
+        self.assertIsNone(asm_violation(
+            'extern "C" void reconstructed(void) asm("weird.name");'))
+
+    def test_hand_written_instructions_are_rejected(self):
+        for src in ('asm volatile("mov r0, #0");',
+                    '__asm__ __volatile__("ldr r0, [r1]");',
+                    'asm("bx lr");',
+                    'asm volatile("nop" ::: "memory");'):
+            self.assertIsNotNone(asm_violation(src), src)
+
+    def test_the_violation_reports_the_offending_construct(self):
+        self.assertIn("nop", asm_violation('asm volatile("nop");'))
+
+    def test_ordinary_code_has_no_violation(self):
+        for src in ('extern "C" int f(int *p) { return *p; }',
+                    'struct S { char pad[8]; int v; };', ""):
+            self.assertIsNone(asm_violation(src), src)
+
+    def test_the_prompt_states_the_ban(self):
+        prompt = build_prompt(entry(), "")
+        self.assertIn("is rejected", prompt)
+        self.assertNotIn('asm volatile("" ::: "memory")', prompt)
+        self.assertIn("Never write inline assembly", SYSTEM)
+        self.assertIn("asm", SYSTEM)
+
+
+class BodyLengthFeedbackTests(unittest.TestCase):
+    """A too-long body must say so: the diff words only cover the reference prefix, so
+    without the sizes the model cannot see the surplus instruction it has to delete."""
+
+    def test_a_longer_body_says_how_many_bytes_too_long(self):
+        fb = Feedback("mismatch", status="body-length", diff_count=10,
+                      diff_words=[{"offset": 0, "got": "7c1d90e5", "want": "7c0d90e5"}],
+                      compiled_body=20, expected_body=16)
+        text = feedback_section(entry(), "", fb)
+        self.assertIn("20 B", text)
+        self.assertIn("16 B", text)
+        self.assertIn("4 BYTES TOO LONG", text)
+        self.assertIn("1 instruction(s) too many", text)
+
+    def test_a_shorter_body_is_reported_as_too_short(self):
+        fb = Feedback("mismatch", status="body-length", diff_count=4,
+                      compiled_body=24, expected_body=28)
+        self.assertIn("4 BYTE(S) TOO SHORT", feedback_section(entry(), "", fb))
+
+    def test_sizes_are_parsed_from_the_gate_output(self):
+        record = {"outcome": "mismatch", "gate_status": "body-length", "diff_count": 10,
+                  "gate_output": "compiled 20 B, original 16 B\n"}
+        fb = feedback_from_record(record, Path("/nonexistent"))
+        self.assertEqual((fb.compiled_body, fb.expected_body), (20, 16))
 
 
 class ArgvTests(unittest.TestCase):
@@ -589,6 +723,223 @@ class ProcessTests(unittest.TestCase):
         self.assertNotIn("feedback_used", self.log()[0])
 
 
+class RepairPromptTests(unittest.TestCase):
+    """Repair mode's prompt: the usual task plus a minimal-edit instruction and the
+    ``UNREACHABLE`` escape, after the previous translation unit."""
+
+    def _report(self, diff=8):
+        return {"ok": False, "status": "mismatch", "cand_len": 60, "ref_len": 60,
+                "diff_count": diff,
+                "diff_words": [{"offset": 0, "got": "5c1080e5", "want": "170a80ed"}]}
+
+    def test_plain_prompts_have_no_repair_instruction(self):
+        self.assertNotIn("REPAIR pass", build_prompt(entry(), "B"))
+        fb = Feedback("mismatch", status="mismatch", diff_count=8)
+        self.assertNotIn("REPAIR pass", build_prompt(entry(), "B", fb))
+
+    def test_repair_prompt_asks_for_a_minimal_edit(self):
+        prompt = repair_prompt(entry(), "B", "SRC", self._report())
+        self.assertIn("REPAIR pass", prompt)
+        self.assertIn("SMALLEST edit", prompt)
+        self.assertIn("UNREACHABLE", prompt)
+        self.assertIn("SRC", prompt)                    # the previous TU is included
+        self.assertIn("0x0", prompt)                     # the diff row
+
+    def test_the_repair_instruction_comes_last(self):
+        prompt = repair_prompt(entry(), "B", "SRC", self._report())
+        self.assertGreater(prompt.index("REPAIR pass"), prompt.index("--- end ---"))
+
+    def test_a_compile_failure_prompt_quotes_the_compiler(self):
+        prompt = repair_prompt(entry(), "B", "SRC", None, "error: expected ';'")
+        self.assertIn("did not compile", prompt)
+        self.assertIn("expected ';'", prompt)
+
+
+class _SeqModel:
+    """A model that returns the scripted replies in order."""
+
+    def __init__(self, replies: list[str]):
+        self.replies = list(replies)
+        self.prompts: list[str] = []
+
+    def complete(self, prompt, *, system=None):
+        self.prompts.append(prompt)
+        text = self.replies.pop(0) if self.replies else ""
+        return Namespace(text=text, model="fake", prompt_tokens=1, completion_tokens=2,
+                         latency_s=0.0, finish_reason="stop", reasoning="",
+                         reasoning_tokens=None)
+
+
+def fake_gate_seq(verdicts):
+    """A ``run_subprocess`` stand-in returning scripted ``(rc, status, diff, cand_len)``."""
+    pending = list(verdicts)
+
+    def _run(argv):
+        rc, status, diff_count, cand_len = pending.pop(0)
+        report = Path(argv[argv.index("--report") + 1])
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps({
+            "module": "main", "addr": "601a72e4", "name": "func_601a72e4",
+            "ok": rc == 0, "status": status, "body": 60, "partition": 1368,
+            "cand_len": cand_len, "ref_len": 60, "diff_count": diff_count,
+            "first_diff": 0 if diff_count else None, "diff_words": [],
+            "has_reloc": False}))
+        return rc, f">>> {status.upper()}"
+
+    return _run
+
+
+class ProcessRepairTests(unittest.TestCase):
+    """One repair session, with the gate and model stubbed out."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        root = Path(self._dir.name)
+        md = root / "ctx" / "main" / "601a72e4.md"
+        md.parent.mkdir(parents=True)
+        md.write_text("# bundle: func_601a72e4\n")
+        inv = root / "inventory.tsv"
+        inv.write_text("601a72e4\tfunction\t60\tFUN\n")
+        tc = root / "toolchain.json"
+        tc.write_text('{"clang": "clang"}')
+        self.lay = Layout(ledger=Path("/ledger"), inventory=inv, nso=Path("/nso"),
+                          context=root / "ctx", src_root=root / "src",
+                          build_config=Path("/bc"), toolchain=tc, work=root / "work")
+        self.args = Namespace(body=None, rebuild=False, dry_run=False, force=False,
+                              repair_rounds=4, repair_seeds={("main", "601a72e4"):
+                                                             ("SEED", 7)})
+        self.draft = self.lay.src_root / "main" / "func_601a72e4.cpp"
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def log(self) -> list[dict]:
+        return attempts.read_attempts(attempt_store(self.lay) / "log.jsonl")
+
+    def bank_best(self) -> dict | None:
+        bank = nearmiss.load_bank(bank_path(self.lay))
+        return bank["records"].get("main:601a72e4")
+
+    def test_a_seed_that_already_matches_is_banked_without_asking(self):
+        model = _SeqModel([])
+        with mock.patch("run.run_subprocess", new=fake_gate_seq([(0, "match", 0, 60)])):
+            outcome = process_repair(entry(), [entry()], self.lay, self.args, model)
+        self.assertEqual(outcome, "match")
+        self.assertEqual(model.prompts, [])
+        self.assertEqual(self.draft.read_text(), "SEED")
+        self.assertEqual(self.log()[0]["source"], "repair")
+        self.assertIsNone(self.bank_best())
+
+    def test_a_closing_round_banks_the_match_and_keeps_it_in_src(self):
+        model = _SeqModel(["MID", "WIN"])
+        verdicts = [(1, "mismatch", 8, 60), (1, "mismatch", 4, 60), (0, "match", 0, 60)]
+        with mock.patch("run.run_subprocess", new=fake_gate_seq(verdicts)):
+            outcome = process_repair(entry(), [entry()], self.lay, self.args, model)
+        self.assertEqual(outcome, "match")
+        self.assertEqual(self.draft.read_text(), "WIN")
+        self.assertEqual([r["source"] for r in self.log()], ["repair"] * 3)
+        self.assertEqual([r["parent"] for r in self.log()], [None, 1, 2])
+        self.assertEqual(len(model.prompts), 2)
+        banked = self.bank_best()          # only the two misses are banked, the best is 8
+        assert banked is not None
+        self.assertEqual(banked["closeness"], [0, 4])
+
+    def test_a_non_improving_reply_is_discarded_and_src_stays_clean(self):
+        model = _SeqModel(["WORSE1", "WORSE2"])
+        verdicts = [(1, "mismatch", 8, 60), (1, "mismatch", 20, 60),
+                    (1, "mismatch", 16, 60)]
+        with mock.patch("run.run_subprocess", new=fake_gate_seq(verdicts)):
+            outcome = process_repair(entry(), [entry()], self.lay, self.args, model)
+        self.assertEqual(outcome, "mismatch")
+        self.assertFalse(self.draft.exists())
+        banked = self.bank_best()
+        assert banked is not None
+        self.assertEqual(banked["closeness"], [0, 8])   # the seed, not the wandering edits
+
+    def test_unreachable_stops_the_session(self):
+        model = _SeqModel(["UNREACHABLE"])
+        with mock.patch("run.run_subprocess", new=fake_gate_seq([(1, "mismatch", 8, 60)])):
+            outcome = process_repair(entry(), [entry()], self.lay, self.args, model)
+        self.assertEqual(outcome, "mismatch")
+        self.assertEqual(len(self.log()), 1)            # the seed only; the sentinel is not gated
+        self.assertFalse(self.draft.exists())
+
+    def test_inline_assembly_in_a_repair_reply_is_rejected_before_the_gate(self):
+        model = _SeqModel(['asm volatile("nop");', "WIN"])
+        verdicts = [(1, "mismatch", 8, 60), (0, "match", 0, 60)]
+        with mock.patch("run.run_subprocess", new=fake_gate_seq(verdicts)):
+            outcome = process_repair(entry(), [entry()], self.lay, self.args, model)
+        self.assertEqual(outcome, "match")
+        self.assertEqual(len(self.log()), 2)            # rejected reply recorded nothing
+        self.assertEqual(self.draft.read_text(), "WIN")
+
+    def test_no_banked_candidate_is_an_error(self):
+        self.args.repair_seeds = {}
+        with mock.patch("run.bank_seed", return_value=None):
+            outcome = process_repair(entry(), [entry()], self.lay, self.args, None)
+        self.assertEqual(outcome, "error")
+        self.assertFalse(self.draft.exists())
+
+    def test_a_transport_error_mid_session_leaves_no_draft(self):
+        class Boom:
+            def complete(self, prompt, *, system=None):
+                raise model.ModelError("the server went away")
+
+        with mock.patch("run.run_subprocess", new=fake_gate_seq([(1, "mismatch", 8, 60)])):
+            with self.assertRaises(model.ModelError):
+                process_repair(entry(), [entry()], self.lay, self.args, Boom())
+        self.assertFalse(self.draft.exists())     # src/ holds matched code only
+
+    def test_a_merged_tu_keeps_the_best_candidate_not_the_last(self):
+        entries = [entry(), entry(addr="601a72e8", group="func_601a72e4")]
+        model = _SeqModel(["CLOSER", "WORSE"])
+        verdicts = [(1, "mismatch", 8, 60), (1, "mismatch", 4, 60),
+                    (1, "mismatch", 20, 60)]
+        with mock.patch("run.run_subprocess", new=fake_gate_seq(verdicts)):
+            outcome = process_repair(entry(), entries, self.lay, self.args, model)
+        self.assertEqual(outcome, "mismatch")
+        self.assertEqual(self.draft.read_text(), "CLOSER")
+
+
+class BankSeedsTests(unittest.TestCase):
+    """``--repair`` reads the banked candidate's source from the attempt store."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        root = Path(self._dir.name)
+        self.lay = Layout(ledger=Path("/ledger"), inventory=Path("/inv"),
+                          nso=Path("/nso"), context=Path("/ctx"), src_root=root / "src",
+                          build_config=Path("/bc"), toolchain=root / "tc",
+                          work=root / "work")
+        self.lay.toolchain.write_text('{"clang": "clang"}')
+        self.pin = nearmiss.eval_pin(self.lay.toolchain)
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def test_returns_the_banked_candidate_source(self):
+        stored = attempts.append(attempt_store(self.lay),
+                                 {"module": "main", "addr": "60000024",
+                                  "name": "f", "outcome": "mismatch"},
+                                 candidate_text="int f(void) { return 0; }") ["id"]
+        bank = nearmiss.empty_bank()
+        nearmiss.upsert(bank, "main", "60000024", [0, 4], self.pin, attempt_id=stored)
+        nearmiss.save_bank(bank_path(self.lay), bank)
+        seeds = bank_seeds(self.lay)
+        self.assertEqual(seeds[("main", "60000024")][0].strip(),
+                         "int f(void) { return 0; }")
+        self.assertEqual(seeds[("main", "60000024")][1], stored)
+
+    def test_a_record_from_another_pin_is_skipped(self):
+        bank = nearmiss.empty_bank()
+        nearmiss.upsert(bank, "main", "60000024", [0, 4], "old-pin", attempt_id=1)
+        nearmiss.save_bank(bank_path(self.lay), bank)
+        self.assertEqual(bank_seeds(self.lay), {})
+
+    def test_a_missing_bank_is_empty(self):
+        self.assertEqual(bank_seeds(self.lay), {})
+
+
 class AttemptEntryTests(unittest.TestCase):
     """The per-entry retry loop, with the single-attempt step stubbed."""
 
@@ -690,6 +1041,46 @@ class ReferenceInstructionsTests(unittest.TestCase):
     def test_only_the_disassembly_section_is_read(self):
         ref = parse_reference_instructions(self.BUNDLE, "601a72e4")
         self.assertNotIn(8, ref)
+
+
+class DescribeWordDiffTests(unittest.TestCase):
+    """The near-miss hint: raw differing hex must become an edit the model can make."""
+
+    def test_a_condition_code_difference_names_both_conditions(self):
+        # movcc r0,r1 (0x31A00001) vs movls r0,r1 (0x91A00001)
+        hint = describe_word_diff("0100a031", "0100a091")
+        self.assertIn("condition code", hint)
+        self.assertIn("`cc`", hint)
+        self.assertIn("`ls`", hint)
+
+    def test_a_missing_writeback_is_reported(self):
+        # ldr r1,[r0,r1] vs ldr r1,[r0,r1]!
+        hint = describe_word_diff("011090e7", "0110b0e7")
+        self.assertIn("`!`", hint)
+        self.assertIn("original writes", hint)
+
+    def test_a_missing_writeback_on_a_halfword_load_is_reported(self):
+        # ldrh r2,[r0,r2] vs ldrh r2,[r0,r2]!
+        self.assertIn("`!`", describe_word_diff("b22090e1", "b220b0e1"))
+
+    def test_a_load_store_swap_is_reported(self):
+        # str r1,[r0,#8] vs ldr r1,[r0,#8]
+        self.assertIn("load vs store", describe_word_diff("081080e5", "081090e5"))
+
+    def test_an_immediate_difference_is_reported(self):
+        # movw r2,#0x10 vs movw r2,#0x01
+        self.assertIn("immediate", describe_word_diff("102040e3", "012040e3"))
+
+    def test_identical_words_say_nothing(self):
+        self.assertEqual(describe_word_diff("0100a0e1", "0100a0e1"), "")
+
+    def test_an_unrecognised_difference_says_nothing_rather_than_guessing(self):
+        # A pure register-allocation difference (mov r1,#0 vs mov r2,#0).
+        self.assertEqual(describe_word_diff("0010a0e3", "0020a0e3"), "")
+
+    def test_malformed_input_is_tolerated(self):
+        self.assertEqual(describe_word_diff("zz", "0100a091"), "")
+        self.assertEqual(describe_word_diff("", ""), "")
 
 
 class FeedbackSectionTests(unittest.TestCase):

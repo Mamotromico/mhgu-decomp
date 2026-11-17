@@ -138,6 +138,29 @@ def _is_ldrb_r0_r1(w: int) -> bool:
     return (w & 0x0FFFFFFF) == 0x07D00001        # ldrb r0, [r0, r1]
 
 
+# --- masked-pointer-base shapes -------------------------------------------------------
+#
+# `ldr r0,[r0,#D]` -> `bfc r0,#0,#W` -> address use is the "load a pointer, align it
+# down, then index through it" idiom. The *masked* value is the base, so the C must
+# express it as a pointer (`(char *)v + K` / `*(T *)(v + K)`): as plain integer
+# arithmetic clang folds the constant and emits `add`/`ldr` *before* the `bfc`, and the
+# bytes then differ. All observed instances clear the low bits (`lsb == 0`).
+
+def _bfc_rd0(w: int) -> bool:
+    """``bfc r0, #lsb, #width`` (Rd fixed at r0; lsb/msb are the varying fields)."""
+    return (w & 0xFFF00000) == 0xE7C00000 and (w & 0x7F) == 0x1F and ((w >> 12) & 0xF) == 0
+
+
+def _bfc_bits(w: int) -> int:
+    """The bits a ``bfc`` clears, e.g. ``0xF`` for ``bfc r0,#0,#4`` (rendered as ``~0xFu``)."""
+    lsb, msb = (w >> 7) & 0x1F, (w >> 16) & 0x1F
+    return ((1 << (msb - lsb + 1)) - 1) << lsb
+
+
+def _is_vldr_s0_r0(w: int) -> bool:
+    return (w & 0xFFFF0F00) == 0xED900A00        # vldr.32 s0, [r0, #imm]
+
+
 def _render_get_word(symbol: str, offset: int) -> str:
     cxx, binding = _decl(symbol)
     return (f'extern "C" int {cxx}(char *p){binding};\n'
@@ -190,6 +213,26 @@ def _render_get_sbyte(symbol: str, offset: int) -> str:
     cxx, binding = _decl(symbol)
     return (f'extern "C" int {cxx}(char *p){binding};\n'
             f'extern "C" int {cxx}(char *p) {{ return *(signed char *)(p + {offset}); }}\n')
+
+
+def _render_masked_pointer_add(symbol: str, load_disp: int, mask: int, k: int) -> str:
+    cxx, binding = _decl(symbol)
+    return (f'extern "C" unsigned {cxx}(char *p){binding};\n'
+            f'extern "C" unsigned {cxx}(char *p) {{\n'
+            f'    unsigned v = *(unsigned *)(p + {load_disp});\n'
+            f'    v &= ~0x{mask:x}u;\n'
+            f'    return (unsigned)((char *)v + {k});\n'
+            f'}}\n')
+
+
+def _render_masked_pointer_float(symbol: str, load_disp: int, mask: int, disp: int) -> str:
+    cxx, binding = _decl(symbol)
+    return (f'extern "C" float {cxx}(char *p){binding};\n'
+            f'extern "C" float {cxx}(char *p) {{\n'
+            f'    unsigned v = *(unsigned *)(p + {load_disp});\n'
+            f'    v &= ~0x{mask:x}u;\n'
+            f'    return *(float *)(v + {disp});\n'
+            f'}}\n')
 
 
 @dataclass(frozen=True)
@@ -275,6 +318,20 @@ TEMPLATES: tuple[Template, ...] = (
         lambda ws: len(ws) == 3 and ws[2] == _W_BX_LR
         and _is_movw_r1(ws[0]) and _is_ldrb_r0_r1(ws[1]),
         lambda sym, ws: _render_get_byte(sym, _movw_imm(ws[0])),
+    ),
+    Template(
+        "masked-pointer-add",
+        lambda ws: (len(ws) == 4 and ws[3] == _W_BX_LR and _is_ldr_r0(ws[0])
+                    and _bfc_rd0(ws[1]) and _is_add_r0_imm(ws[2])),
+        lambda sym, ws: _render_masked_pointer_add(
+            sym, ws[0] & 0xFFF, _bfc_bits(ws[1]), _imm12(ws[2])),
+    ),
+    Template(
+        "masked-pointer-float",
+        lambda ws: (len(ws) == 4 and ws[3] == _W_BX_LR and _is_ldr_r0(ws[0])
+                    and _bfc_rd0(ws[1]) and _is_vldr_s0_r0(ws[2])),
+        lambda sym, ws: _render_masked_pointer_float(
+            sym, ws[0] & 0xFFF, _bfc_bits(ws[1]), (ws[2] & 0xFF) * 4),
     ),
 )
 

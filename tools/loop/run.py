@@ -36,6 +36,8 @@ Usage::
     python3 tools/loop/run.py --entry 601a72e4 --attempts 5 --no-feedback  # plain resampling
     python3 tools/loop/run.py --from-bank --bank-max-divergences 3 --limit 20  # review close misses
     python3 tools/loop/run.py --matchable --limit 20   # only what the gate can verify today
+    python3 tools/loop/run.py --repair --limit 20       # repair banked near misses (minimal edits)
+    python3 tools/loop/run.py --repair --entry 601a72e4 --repair-rounds 6
     python3 tools/loop/run.py --dry-run                # select + bundle + prompt, no model
     python3 tools/loop/run.py --rebuild                # regenerate the bundle (Ghidra)
 """
@@ -62,6 +64,7 @@ import bundle
 import complexity
 import model as model_client
 import nearmiss
+import repair
 import templates
 import worklist
 from ledgerlib import entry_key, read_entries
@@ -72,9 +75,9 @@ BUNDLE = REPO / "tools" / "loop" / "bundle.py"
 SYSTEM = (
     "You reconstruct C/C++ functions from ARM (AArch32) disassembly for a byte-matching "
     "decompilation. Reply with a complete translation unit (the function definition and any "
-    "declarations it needs). Never use inline assembly (__asm__) or top-level asm statements — "
-    "the compiler must generate the instructions from ordinary C/C++. No prose, no Markdown "
-    "fences.")
+    "declarations it needs). Never write inline assembly (__asm__/asm), volatile or otherwise, "
+    "and never write machine instructions or top-level asm statements — the compiler must "
+    "generate every instruction from ordinary C/C++. No prose, no Markdown fences.")
 
 # A rendered bundle disassembly line: `    <addr>  <bytes>  <mnemonic> <operands> [; notes]`.
 _BUNDLE_INSN = re.compile(r"^\s+([0-9a-f]{8})\s+([0-9a-f]+)\s+(\S+)\s*(.*)$")
@@ -134,6 +137,114 @@ _GOT_REFERENCE_SECTION = (
 _GOT_REFERENCE = re.compile(r"= 0x[0-9a-f]{8} -> ")
 
 
+# A conditional return (`bxhi lr`, `bxeq lr`, ...) means the original kept the guard as a
+# *branch*. clang 4.0.1 if-converts the small guarded body into predicated instructions
+# instead (`addls`/`ldrls`, `moveq`), which is shorter than the original. There is no source
+# shape that restores the branch (see AGENTS.md, "The inline-assembly rule"), and faking it
+# with a barrier is forbidden, so this is guidance on what to *avoid* rather than a recipe.
+_GUARDED_RETURN = re.compile(r"^\s+[0-9a-f]{8}\s+[0-9a-f]+\s+bx(hi|eq|ne|gt|lt|cs|cc|ge|le)\s+lr",
+                             re.M)
+
+_GUARDED_RETURN_SECTION = (
+    "A conditional return (`bxhi lr`, `bxeq lr`, …) means the original kept this guard as a "
+    "*real branch*. clang 4.0.1 tends to predicate a small guarded body instead "
+    "(`addls`/`ldrls`, `moveq`), which is shorter than the original and will not match. Do NOT "
+    "try to win those bytes with inline assembly — it is forbidden and is rejected before the "
+    "gate. Write the most natural guard (`if (idx <= 7) { r = ...; } return r;`) and accept the "
+    "mismatch; a candidate that fabricates the branch is worse than one that honestly fails.\n\n")
+
+# `ldr rX,[rX,#D]` -> `bfc rX,#lsb,#width` -> an address use is "load a pointer, align it
+# down, index through it". The masked value IS the base, so the C must treat it as a
+# pointer; as integer arithmetic clang folds the constant and reorders `add` before `bfc`.
+_MASK_FOR_ADDRESS_SECTION = (
+    "A `bfc` on a loaded pointer that is then used as an address means \"load a pointer, "
+    "clear its low bits, index through it\". The masked value is the BASE — express it as a "
+    "pointer, not as integer arithmetic:\n"
+    "    unsigned v = *(unsigned *)(p + 0xd7c);\n"
+    "    v &= ~0xfu;                                  // the `bfc`\n"
+    "    return *(float *)(v + 0x5c);                 // v is the base              (a load)\n"
+    "    return (unsigned)((char *)v + 0x40);         // the same, returning an address\n"
+    "Written as `return v + 0x40;` clang folds the constant and emits `add` before `bfc`, "
+    "which does not match the original's `bfc`-then-`add`.\n\n")
+
+
+_PREINDEXED = re.compile(
+    r"^\s+[0-9a-f]{8}\s+[0-9a-f]+\s+(?:ldr|str)(?:b|h|sb|sh|d)?\s+r\d+,\s*\[[^\]]*\]!",
+    re.M | re.I)
+
+# `ldrh r2, [r0, r2]!` / `str r1, [r0, #-4]!` — pre-indexed with writeback. The C must update the
+# base pointer *and* keep using it; written as `*(T *)((char *)p + imm)` clang drops the
+# writeback (it is dead), so the body comes out one instruction short.
+_PREINDEXED_SECTION = (
+    "A `!` on a memory operand (`ldrh r2, [r0, r2]!`, `str r1, [r0, #0x18]!`) is a "
+    "PRE-INDEXED WRITEBACK: the address is computed, used, AND stored back into the base "
+    "register in one instruction. Reproduce it by assigning to the pointer inside the "
+    "expression and then using the updated pointer again:\n"
+    "    unsigned short v = *(unsigned short *)(p = (unsigned short *)((char *)p + 0x1a0));\n"
+    "    *p = (unsigned short)(v | mask);            // the writeback is only kept because p "
+    "is read here\n"
+    "Written instead as `*(unsigned short *)((char *)p + 0x1a0)` the writeback is dead and "
+    "clang drops it, so the body is one instruction short. For a post-indexed form "
+    "(`[r0], #imm`) the pointer advances *after* the access.\n\n")
+
+
+# Repair mode's extra instruction. It is appended *after* the previous translation unit so it
+# is the last thing the model reads: the candidate is already the right length, so the job is
+# a minimal edit, and the one honest escape is to say the remaining bytes are register
+# allocation (which no source shape controls).
+_REPAIR_SECTION = (
+    "\n## This is a REPAIR pass\n\n"
+    "The translation unit above was your previous answer. It already compiles to exactly the "
+    "original body length; only the instructions listed as differing are wrong. Make the "
+    "SMALLEST edit that fixes them — change one expression, one type, or the order of two "
+    "independent statements — and return the whole translation unit again. Do not restructure "
+    "the function, do not rename anything, do not rewrite parts that already match, and never "
+    "change what the code computes.\n\n"
+    "If every remaining difference is only WHICH REGISTER holds a value (the mnemonics, "
+    "immediates and widths all agree), the source is already correct and the rest is the "
+    "original compiler's register allocation. In that case reply with exactly `UNREACHABLE` "
+    "and nothing else.\n\n")
+
+
+def has_preindexed(bundle_text: str) -> bool:
+    """Whether the disassembly has a pre-indexed load/store with writeback (see the section)."""
+    return bool(_PREINDEXED.search(bundle_text))
+
+
+def has_guarded_return(bundle_text: str) -> bool:
+    """Whether the disassembly returns conditionally (a guard the original did not predicate)."""
+    return bool(_GUARDED_RETURN.search(bundle_text))
+
+
+def has_mask_for_address(bundle_text: str) -> bool:
+    """Whether a masked register is used as an address (the align-down-then-index idiom).
+
+    Walks the parsed instructions: after a ``bfc rd`` the next one or two instructions use
+    ``rd`` either as a memory base (``[rd]``/``[rd, …]``, which also covers ``vldr s0,
+    [rd, #imm]`` where the base is the *second* operand) or as the first operand of an
+    ``add``/``sub`` (address arithmetic). Either way the masked value is a base.
+    """
+    insns = []
+    for line in bundle_text.splitlines():
+        m = _BUNDLE_INSN.match(line)
+        if m:
+            insns.append((m.group(3), m.group(4).strip()))
+    for i, (mnemonic, operands) in enumerate(insns):
+        if not mnemonic.startswith("bfc"):
+            continue
+        reg = operands.split(",")[0].strip()
+        if not (reg.startswith("r") and reg[1:].isdigit()):
+            continue
+        for next_mnemonic, next_operands in insns[i + 1:i + 3]:
+            if f"[{reg}]" in next_operands or f"[{reg}," in next_operands:
+                return True
+            if next_mnemonic.startswith(("add", "sub")) \
+                    and next_operands.startswith(reg + ","):
+                return True
+    return False
+
+
+
 def has_got_reference(bundle_text: str) -> bool:
     """Whether the bundle resolves a pool word to a name (a data reference)."""
     return bool(_GOT_REFERENCE.search(bundle_text))
@@ -186,6 +297,8 @@ class Feedback:
     diff_words: list = field(default_factory=list)
     candidate: str | None = None
     compile_error: str | None = None
+    compiled_body: int | None = None
+    expected_body: int | None = None
 
 
 def parse_reference_instructions(bundle_text: str, base_addr: str) -> dict[int, str]:
@@ -210,13 +323,81 @@ def parse_reference_instructions(bundle_text: str, base_addr: str) -> dict[int, 
     return out
 
 
+_COND_NAME = ("eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
+              "hi", "ls", "ge", "lt", "gt", "le", "al", "nv")
+
+
+def describe_word_diff(got: str, want: str) -> str:
+    """Say in words how the candidate's A32 word differs from the original's, or ``""``.
+
+    ``got``/``want`` are the gate's byte-order hex strings (memory order, as they appear in the
+    object and in the image). The point is to turn "got 0100a031 want 0100a091" — which the model
+    cannot decode — into "condition code differs: yours `cc`, original `ls`", so a near-miss
+    becomes an edit it can actually make. Only the checks that are unambiguous on an A32 word are
+    attempted; anything else returns ``""`` rather than a guess.
+    """
+    try:
+        g = int.from_bytes(bytes.fromhex(got), "little")
+        w = int.from_bytes(bytes.fromhex(want), "little")
+    except ValueError:
+        return ""
+    if g == w or len(got) != 8:
+        return ""
+    if (g ^ w) & 0xF0000000:
+        return (f"condition code differs: yours `{_COND_NAME[(g >> 28) & 0xF]}`, "
+                f"original `{_COND_NAME[(w >> 28) & 0xF]}` (check `<` vs `<=` and signed vs "
+                f"unsigned in the comparison)")
+    # Single data transfer immediate/register form: bits 27-26 == 01.
+    if (g & 0x0C000000) == 0x04000000 and (w & 0x0C000000) == 0x04000000:
+        if (g ^ w) & 0x00100000:
+            return ("load vs store: yours is a " + ("load" if g & 0x00100000 else "store") +
+                    ", the original is a " + ("load" if w & 0x00100000 else "store"))
+        if (g ^ w) & 0x00400000:
+            return "byte vs word access (the original uses a different width)"
+        if (g ^ w) & 0x00200000:
+            if w & 0x00200000:
+                return ("the original writes the address back (`!`, pre-indexed); yours does "
+                        "not — assign to the pointer inside the expression and then use the "
+                        "updated pointer again")
+            return "yours writes the address back (`!`); the original does not"
+        if (g ^ w) & 0x00800000:
+            return "the offset sign differs (positive vs negative displacement)"
+    # Block transfer: `stm` vs `ldm` (bit 20).
+    if (g & 0x0E000000) == 0x08000000 and (w & 0x0E000000) == 0x08000000:
+        if (g ^ w) & 0x00100000:
+            return ("load vs store: yours is a " + ("load (`ldm`)" if g & 0x00100000
+                                                    else "store (`stm`)")
+                    + ", the original is a " + ("load (`ldm`)" if w & 0x00100000
+                                                else "store (`stm`)"))
+    # Halfword / signed transfer (bits 27-25 == 000 with the 0x90 misc discriminator).
+    if (g & 0x0E000090) == 0x00000090 and (w & 0x0E000090) == 0x00000090:
+        if (g ^ w) & 0x00100000:
+            return ("load vs store: yours is a " + ("load" if g & 0x00100000 else "store")
+                    + ", the original is a " + ("load" if w & 0x00100000 else "store"))
+        if (g ^ w) & 0x00200000:
+            if w & 0x00200000:
+                return ("the original writes the address back (`!`, pre-indexed); yours does "
+                        "not — assign to the pointer inside the expression and then use the "
+                        "updated pointer again")
+            return "yours writes the address back (`!`); the original does not"
+    if (g ^ w) & 0x0FFFFFFF == 0:
+        return ""
+    if not ((g ^ w) & 0x0FFFF000) and ((g ^ w) & 0xFFF):
+        return "a different (or differently encoded) immediate value"
+    return ""
+
+
 def feedback_section(entry: dict, bundle_text: str,
-                     feedback: "Feedback | None") -> str:
+                     feedback: "Feedback | None", repair_pass: bool = False) -> str:
     """Render the retry guidance appended to the prompt; empty when there is no feedback.
 
     A mismatch names the exact instructions that differ (offset, candidate bytes, reference
     bytes, and the reference mnemonic when the bundle carries it); a compile error quotes the
     compiler. The previous translation unit is included so the model edits rather than regenerates.
+
+    ``repair_pass`` appends the repair-mode instruction (a minimal edit, or ``UNREACHABLE`` for
+    a register-allocation-only difference) *after* the previous translation unit, so it is the
+    last thing the model reads.
     """
     if feedback is None:
         return ""
@@ -231,22 +412,46 @@ def feedback_section(entry: dict, bundle_text: str,
         rows = []
         for w in feedback.diff_words:
             insn = ref.get(w["offset"])
+            hint = describe_word_diff(w["got"], w["want"])
             rows.append(f"    +0x{w['offset']:x}  got {w['got']}  want {w['want']}"
-                        + (f"   ; original: {insn}" if insn else ""))
+                        + (f"   ; original: {insn}" if insn else "")
+                        + (f"   <- {hint}" if hint else ""))
         if not rows:
             rows.append(f"    (compiled body {feedback.status}; see the disassembly above)")
+        size_note = ""
+        if feedback.status == "body-length" and feedback.compiled_body \
+                and feedback.expected_body:
+            delta = feedback.compiled_body - feedback.expected_body
+            if delta > 0:
+                size_note = (f"Your candidate compiled to {feedback.compiled_body} B but the "
+                             f"original body is {feedback.expected_body} B — "
+                             f"{delta} BYTES TOO LONG ({delta // 4} instruction(s) too many). "
+                             "The differing instructions listed below only cover the prefix; "
+                             "find the surplus instruction(s) in your translation unit and "
+                             "remove them (a separate `add` before a load is the usual cause).\n\n")
+            else:
+                size_note = (f"Your candidate compiled to {feedback.compiled_body} B but the "
+                             f"original body is {feedback.expected_body} B — "
+                             f"{-delta} BYTE(S) TOO SHORT; the compiler collapsed an operation "
+                             "you wrote as several steps.\n\n")
         body = (
-            "## Previous attempt did not match\n\n"
+            size_note
+            + "## Previous attempt did not match\n\n"
             "The last candidate compiled, but the machine code differs from the original "
             f"({feedback.diff_count} differing byte(s)). Fix ONLY the instructions below; keep "
             "the rest of the translation unit unchanged. `got` is your bytes, `want` is the "
-            "original's; registers may differ by design, so prefer a source change that makes "
-            "the compiler emit the `want` instruction:\n\n"
+            "original's. The logic must stay EXACTLY the same — never change what the code "
+            "computes to chase a byte. If the only difference is which register holds a value, "
+            "your source is already correct; try an equivalent phrasing (a different local's "
+            "type, reordering independent statements, a pointer instead of an index) rather "
+            "than altering the computation:\n\n"
             + "\n".join(rows))
     parts = [body]
     if feedback.candidate:
         parts.append("--- your previous translation unit ---\n"
                      + feedback.candidate.strip() + "\n--- end ---")
+    if repair_pass:
+        parts.append(_REPAIR_SECTION.strip())
     return "\n\n".join(parts) + "\n"
 
 
@@ -267,9 +472,22 @@ def feedback_from_record(record: dict | None, store_dir: Path) -> Feedback | Non
     if record["outcome"] == "error":
         return Feedback("error", candidate=candidate,
                         compile_error=record.get("gate_output") or "")
+    compiled, expected = _body_sizes(record.get("gate_output") or "")
     return Feedback("mismatch", status=record.get("gate_status"),
                     diff_count=record.get("diff_count"),
-                    diff_words=record.get("diff_words") or [], candidate=candidate)
+                    diff_words=record.get("diff_words") or [], candidate=candidate,
+                    compiled_body=compiled, expected_body=expected)
+
+
+_BODY_SIZES = re.compile(r"compiled (\d+) B, original (\d+) B")
+
+
+def _body_sizes(gate_output: str) -> tuple[int | None, int | None]:
+    """The compiled and reference body sizes a ``body-length`` verdict reports, if present."""
+    m = _BODY_SIZES.search(gate_output)
+    if not m:
+        return None, None
+    return int(m.group(1)), int(m.group(2))
 
 
 @dataclass
@@ -333,7 +551,8 @@ def group_is_single(entries: list[dict], module: str, group: str) -> bool:
                and e["kind"] == "function") == 1
 
 
-def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = None) -> str:
+def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = None,
+                 repair_pass: bool = False) -> str:
     """The user prompt: the required symbol plus the whole context bundle.
 
     The instructions are load-bearing: an early pilot had the model reproduce the disassembly
@@ -363,15 +582,29 @@ def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = No
     copy_section = _STRUCT_COPY_SECTION if has_nonstack_block_move(bundle_text) else ""
     bit_section = _BIT_OPS_SECTION if has_bit_op(bundle_text) else ""
     got_section = _GOT_REFERENCE_SECTION if has_got_reference(bundle_text) else ""
+    guard_section = _GUARDED_RETURN_SECTION if has_guarded_return(bundle_text) else ""
+    mask_section = _MASK_FOR_ADDRESS_SECTION if has_mask_for_address(bundle_text) else ""
+    preindex_section = _PREINDEXED_SECTION if has_preindexed(bundle_text) else ""
     return (
         f"Write ordinary C or C++ whose compiled machine code reproduces the function below "
         f"exactly under the pinned toolchain. Reason about the function's *behaviour*, not its "
         f"registers: the register allocation was the original compiler's choice and yours will "
-        f"differ. Do NOT use inline assembly (__asm__) or a top-level asm() statement. The ARM "
+        f"differ. Do NOT use inline assembly — ``__asm__``/``asm``, ``asm volatile``, or a "
+        f"top-level asm() statement — and never write machine instructions by hand: the "
+        f"compiler must emit every instruction from ordinary C/C++. A candidate containing any "
+        f"asm other than a declarator symbol binding (`void f(void) asm(\"name\");`, used only "
+        f"to fix an object symbol name) is rejected before the gate. The ARM "
         f"AAPCS ABI applies: r0-r3 carry the arguments and r0 the result; the prologue and "
         f"epilogue are generated for you.\n\n"
         f"{got_section}"
         f"{copy_section}"
+        f"{guard_section}"
+        f"{preindex_section}"
+        f"{mask_section}"
+        f"Load and store memory through a TYPED pointer: `*(unsigned *)(p + 0x1d8)`, "
+        f"`*(float *)(v + 0x4c)`. Do NOT copy with `__builtin_memcpy` from a `char *` — "
+        f"clang cannot assume alignment there and emits four byte-sized loads/stores instead "
+        f"of one word access, which lengthens the body and can never match.\n\n"
         f"Take each struct's layout from the instructions that touch it. A field's offset is the "
         f"displacement in its load/store — `ldrb r3, [r0, #0x20]` puts that field at +0x20. An "
         f"array element's size is the pointer-increment constant — `add r0, r0, #0x30` means "
@@ -387,8 +620,34 @@ def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = No
         f"{symbol}\n"
         f"Reply with the translation unit only — no prose, no Markdown fences.\n\n"
         f"{bundle_text}\n"
-        f"{feedback_section(entry, bundle_text, feedback)}"
+        f"{feedback_section(entry, bundle_text, feedback, repair_pass)}"
     )
+
+
+def repair_prompt(entry: dict, bundle_text: str, source: str, report: dict | None,
+                  gate_output: str = "") -> str:
+    """The repair-mode prompt for the current best candidate.
+
+    It is the ordinary task prompt plus a :class:`Feedback` describing this candidate's
+    divergence — which reuses the tested diff rows, the reference mnemonics and the
+    ``describe_word_diff`` hints — plus the repair instruction. ``report`` is ``None`` when the
+    candidate did not compile; the compiler's message is then the feedback instead.
+    """
+    if report is None and not gate_output:
+        # A dry run has not compiled the seed, so there is no divergence to report yet; show
+        # the candidate and the repair instruction, and leave the diff for the real session.
+        return (build_prompt(entry, bundle_text, None)
+                + "\n--- your previous (banked) translation unit ---\n"
+                + source.strip() + "\n--- end ---\n\n" + _REPAIR_SECTION.strip() + "\n")
+    if report is None:
+        feedback = Feedback("error", candidate=source, compile_error=gate_output or "")
+    else:
+        feedback = Feedback("mismatch", status=report.get("status"),
+                            diff_count=report.get("diff_count"),
+                            diff_words=report.get("diff_words") or [], candidate=source,
+                            compiled_body=report.get("cand_len"),
+                            expected_body=report.get("ref_len"))
+    return build_prompt(entry, bundle_text, feedback, repair_pass=True)
 
 
 def bundle_argv(layout: Layout, entry: dict, body: int) -> list[str]:
@@ -457,6 +716,49 @@ def bank_priorities(layout: Layout) -> dict[tuple[str, str], list[int]]:
             continue
         priorities[(record.get("module"), record.get("addr"))] = list(record["closeness"])
     return priorities
+
+
+def bank_seeds(layout: Layout) -> dict[tuple[str, str], tuple[str, str | None]]:
+    """The banked near-miss candidate **source** for each entry, current pin only.
+
+    The bank records the closeness and the ``attempt_id`` of the best near miss; the source
+    itself lives in the attempt store, so repairing needs the log record to find the blob. A
+    record from another eval pin is skipped — its candidate was judged by a different gate, so
+    the numbers are not comparable (``tools/ledger/regate_candidates.py`` is the tool for
+    re-judging those). Returns ``(module, addr) -> (source_text, attempt_id)``.
+    """
+    try:
+        bank = nearmiss.load_bank(bank_path(layout))
+        pin = nearmiss.eval_pin(layout.toolchain)
+    except ValueError as e:
+        print(f"warning: {e}; --repair ignored", file=sys.stderr)
+        return {}
+    store = attempt_store(layout)
+    try:
+        records = attempts.read_attempts(store / "log.jsonl")
+    except attempts.AttemptError as e:
+        print(f"warning: {e}; --repair ignored", file=sys.stderr)
+        return {}
+    by_id = {r.get("id"): r for r in records}
+    seeds: dict[tuple[str, str], tuple[str, str | None]] = {}
+    for record in bank.get("records", {}).values():
+        if record.get("pin") != pin:
+            continue
+        attempt_id = record.get("attempt_id")
+        owner = by_id.get(attempt_id)
+        if not owner or not owner.get("candidate"):
+            continue
+        blob = store / owner["candidate"]
+        if not blob.exists():
+            continue
+        seeds[(record.get("module"), record.get("addr"))] = (blob.read_text(), attempt_id)
+    return seeds
+
+
+def bank_seed(layout: Layout, module: str,
+              addr: str) -> tuple[str, str | None] | None:
+    """One entry's banked candidate source (a per-entry view over :func:`bank_seeds`)."""
+    return bank_seeds(layout).get((module, addr))
 
 
 def matchable_filter(layout: Layout, text: bytes | None):
@@ -623,13 +925,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-tier", type=int, default=None, metavar="N",
                     help="only entries whose complexity tier is <= N (a *difficulty* ranking; "
                          "0 = clean leaves). For 'what the gate can verify', use --matchable")
-    ap.add_argument("--matchable", action="store_true",
+    ap.add_argument("--matchable", action=argparse.BooleanOptionalAction, default=True,
                     help="only entries the gate can verify today: branch/call relocations are "
-                         "resolved, literal-pool words and jump tables are not "
-                         "(complexity.gateable)")
+                         "resolved, literal-pool words, jump tables and linker veneers are not "
+                         "(complexity.gateable). ON by default — such an entry cannot match, so "
+                         "attempting it only pollutes the match rate; pass --no-matchable to "
+                         "override (e.g. to inspect a specific body)")
     ap.add_argument("--no-feedback", dest="feedback", action="store_false",
                     help="on a retry, do not feed the previous attempt's divergence back into "
                          "the prompt (resample the base prompt; also disables the stall stop)")
+    ap.add_argument("--repair", action="store_true",
+                    help="repair mode: seed each entry from its banked near miss and ask the "
+                         "model for a minimal edit of that exact translation unit, keeping a "
+                         "reply only when it is strictly closer. Only a candidate that compiles "
+                         f"to the original body length with <= {repair.MAX_DIFF_WORDS} differing "
+                         "words is repairable (a length difference is a different shape, not an "
+                         "edit). Without --entry it selects the bank closest-first")
+    ap.add_argument("--repair-rounds", type=int, default=4, metavar="N",
+                    help="repair mode: maximum minimal-edit rounds per entry (default 4); the "
+                         "loop also stops on a match, an ineligible candidate, or an "
+                         "UNREACHABLE reply")
     ap.add_argument("--force", action="store_true",
                     help="process entries whose source already exists (overwrites)")
     ap.add_argument("--no-skip-existing", dest="skip_existing", action="store_false",
@@ -653,6 +968,20 @@ def main(argv: list[str] | None = None) -> int:
     entries = read_entries(layout.ledger)
     # One reference ``.text`` read serves both the easy-first ordering and the template pass.
     reference = complexity.load_text(layout.nso)
+
+    if args.repair:
+        # Repair works off the bank, so it selects the bank closest-first unless a single
+        # entry was named. The default divergence cap matches the repair budget.
+        if not args.entry:
+            args.from_bank = True
+            if args.bank_max_divergences is None:
+                args.bank_max_divergences = repair.MAX_DIFF_WORDS * 4
+        args.repair_seeds = bank_seeds(layout)
+        if not args.repair_seeds:
+            print("error: --repair found no comparable banked candidates "
+                  f"({bank_path(layout)}); run a normal pass first so there is a near miss to "
+                  "repair", file=sys.stderr)
+            return 1
 
     # One explicit target, or the next N pending entries.
     targets: list[dict] = []
@@ -731,6 +1060,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for entry in targets:
             outcome, used = attempt_entry(entry, entries, layout, args, model,
+                                          one=process_repair if args.repair else process,
                                           raw_text=reference)
             attempts_run += used
             matched += outcome == "match"
@@ -841,6 +1171,78 @@ def truncated(completion, model) -> bool:
     return not reason and bool(cap) and tokens is not None and tokens >= cap
 
 
+# --- the inline-assembly rule, enforced -------------------------------------------------
+#
+# The prompt forbids hand-written instructions: a translation unit must let the compiler pick
+# every opcode. Exactly one construct spells `asm` without being hand-written code, and it is
+# allowed:
+#
+#   * a symbol binding `... f(void) asm("mangled.name");`, which names the object symbol and
+#     emits nothing.
+#
+# There is deliberately **no** allowance for the empty scheduling barrier
+# `asm volatile("" ::: "memory")`. It does emit no instructions, but it was being used to make
+# clang 4.0.1 reproduce branches the reference compiler kept and 4.0.1 if-converts (the `bxhi lr`
+# guard class). Those matches were real bytes but not reconstructions: the source contained a
+# construct the project bans, and the technique has been removed (see AGENTS.md, "The
+# inline-assembly rule"). Any other asm is rejected before it reaches the gate, so "no inline
+# asm" is a checked rule rather than a guideline the model can quietly ignore.
+
+_ASM_CALL = re.compile(r"\b(?:__asm__|asm)\b\s*(?:volatile\s*|__volatile__\s*)?\(")
+_SYMBOL_BINDING = re.compile(r'^\s*"[^"]*"\s*$')
+
+
+def _brace_depth(src: str, index: int) -> int:
+    """The ``{``-depth before ``index``, ignoring braces inside string literals."""
+    depth, in_string, escaped = 0, False, False
+    for ch in src[:index]:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+    return depth
+
+
+def _prev_significant(src: str, index: int) -> str:
+    """The last non-space character before ``index`` ('' at the start)."""
+    j = index - 1
+    while j >= 0 and src[j].isspace():
+        j -= 1
+    return src[j] if j >= 0 else ""
+
+
+def asm_violation(src: str) -> str | None:
+    """The first disallowed ``asm`` construct in a candidate, or ``None`` when it is clean.
+
+    Allowed: a symbol binding at file scope attached to a declarator (``void f(void)
+    asm("name");``). Everything else — the empty barrier ``asm volatile("" ::: "memory")``,
+    instruction strings such as ``asm("nop")``, or a top-level ``asm("...")`` statement — is a
+    violation.
+    """
+    for match in _ASM_CALL.finditer(src):
+        depth, i = 1, match.end()
+        while i < len(src) and depth:
+            depth += {"(": 1, ")": -1}.get(src[i], 0)
+            i += 1
+        inner = src[match.end():i - 1]
+        if (_SYMBOL_BINDING.match(inner)
+                and _brace_depth(src, match.start()) == 0
+                and (_prev_significant(src, match.start()).isalnum()
+                     or _prev_significant(src, match.start()) == ")")):
+            continue
+        return (match.group(0) + inner + ")").strip()
+    return None
+
+
 def process(entry: dict, entries: list[dict], layout: Layout, args, model,
             raw_text: bytes | None = None, feedback: "Feedback | None" = None) -> str:
     """One loop iteration. Returns 'match' | 'mismatch' | 'error' | 'truncated' | 'dry-run'.
@@ -894,6 +1296,15 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
                 return "truncated"
             return "error"
 
+    # 2b. the inline-assembly rule is checked, not trusted: hand-written instructions cannot
+    #     match compiled C++, so such a candidate is never written or gated.
+    bad_asm = asm_violation(candidate)
+    if bad_asm is not None:
+        print(f"{name}: rejected candidate — disallowed inline assembly "
+              f"({bad_asm[:120]}); only a declarator symbol binding "
+              '(`void f(void) asm("name");`) is permitted')
+        return "error"
+
     # 3. write and verify (the gate is the only writer of verify=match).
     assert_body = gate_body(raw_body, body)
     outcome, report, rc, gate_out = write_and_gate(entry, layout, assert_body, draft, candidate)
@@ -901,7 +1312,7 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
     # 4. a template that missed falls through to the model, so the path never regresses.
     if outcome != "match" and source == "template":
         candidate2, completion2, prompt2 = ask_model(entry, layout, args, model, body, feedback)
-        if candidate2.strip():
+        if candidate2.strip() and asm_violation(candidate2) is None:
             candidate, source = candidate2, "model"
             hit = None                     # the rule missed; this is a model attempt now
             completion, prompt = completion2, prompt2
@@ -954,6 +1365,140 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
             print(f"  note: {entry['group']} is a merged TU; leaving {draft} in place")
         print(f"    {outcome.upper()}  {name}  attempt {stored['id']}  {note}")
     return outcome
+
+
+def cleanup_repair_draft(entry: dict, entries: list[dict], draft: Path,
+                         keep_source: str | None = None) -> None:
+    """Leave ``src/`` matched-only after a repair session that did not match.
+
+    A single-function translation unit is removed; a merged one must stay, so the *best*
+    candidate (``keep_source``) is written back rather than whatever the last round produced.
+    """
+    if group_is_single(entries, entry["module"], entry["group"]):
+        draft.unlink(missing_ok=True)
+        return
+    if keep_source:
+        draft.write_text(keep_source)
+    print(f"  note: {entry['group']} is a merged TU; leaving {draft} in place")
+
+
+def process_repair(entry: dict, entries: list[dict], layout: Layout, args, model,
+                   raw_text: bytes | None = None, feedback: "Feedback | None" = None) -> str:
+    """One loop iteration in **repair mode** (``--repair``): iterate on a banked near miss.
+
+    Instead of asking for a fresh translation unit, this seeds the loop with the entry's best
+    banked candidate and hands it to :func:`repair.repair`, which asks the model for a *minimal
+    edit* of that exact unit and keeps a reply only when the gate says it is strictly closer
+    (``|cand_len - ref_len|``, then ``diff_count``). The gate remains the only writer of
+    ``verify=match``; every gated candidate is still appended to the attempt log and (when it
+    misses) folded into the bank, so a repair session is as auditable as a normal attempt.
+
+    ``feedback`` is accepted only to satisfy the ``one`` protocol of :func:`attempt_entry` —
+    repair threads its own divergence, so a run-level retry must not double it.
+
+    The draft is left in ``src/`` only on a match (the near-miss rule: matched code only).
+    """
+    module, addr, name = entry["module"], entry["addr"], entry["name"]
+    body, extent_source = resolve_body(layout, entry, args.body)
+
+    draft = ensure_under(safe_draft_path(entry, layout.src_root), layout.src_root)
+    if draft.exists() and not args.force:
+        raise ValueError(f"{draft} exists (use --force to overwrite)")
+
+    seeds = getattr(args, "repair_seeds", None)
+    seed = seeds.get((module, addr)) if seeds else None
+    if seed is None:
+        seed = bank_seed(layout, module, addr)
+    if seed is None:
+        print(f"    repair: {name} has no banked candidate to repair")
+        return "error"
+    seed_source, seed_id = seed
+
+    bundle_text = build_bundle_text(layout, entry, args, body)
+    raw_body = complexity.body_of(raw_text, addr, body) if raw_text is not None else None
+    assert_body = gate_body(raw_body, body)
+    if args.dry_run:
+        print(f"--- repair prompt for {name} ({body} B, {extent_source}; "
+              f"seed attempt {seed_id}) ---")
+        print(repair_prompt(entry, bundle_text, seed_source, None, ""))
+        return "dry-run"
+
+    meta: dict = {}
+
+    def gate(source: str):
+        """Compile + byte-compare one candidate, recording it like a normal attempt."""
+        bad_asm = asm_violation(source)
+        if bad_asm is not None:
+            print(f"{name}: rejected candidate — disallowed inline assembly "
+                  f"({bad_asm[:120]}); only a declarator symbol binding "
+                  '(`void f(void) asm("name");`) is permitted')
+            return None, "rejected: disallowed inline assembly"
+        outcome, report, rc, gate_out = write_and_gate(entry, layout, assert_body, draft,
+                                                       source)
+        record = {
+            "module": module, "addr": addr, "name": name, "body": body,
+            "extent_source": extent_source, "outcome": outcome, "gate_rc": rc,
+            "source": "repair", "repair_seed": seed_id,
+            "model": meta.get("model", "seed"),
+            "prompt_tokens": meta.get("prompt_tokens"),
+            "completion_tokens": meta.get("completion_tokens"),
+            "reasoning_tokens": meta.get("reasoning_tokens"),
+            "latency_s": meta.get("latency_s", 0.0),
+            "prompt_sha256": prompt_fingerprint(meta.get("prompt", "")),
+            "gate_output": gate_out.strip()[-4000:],
+        }
+        if report is not None:
+            record["gate_status"] = report["status"]
+            record["diff_count"] = report["diff_count"]
+            record["diff_words"] = report.get("diff_words", [])
+            record["gate"] = report.get("gate")
+        stored = attempts.append(attempt_store(layout), record, candidate_text=source)
+        if report is not None and outcome != "match":
+            try:
+                pin = nearmiss.eval_pin(layout.toolchain)
+                nearmiss.record(bank_path(layout), module, addr,
+                                nearmiss.closeness(report["diff_count"],
+                                                   report["cand_len"], body),
+                                pin, name=name, attempt_id=stored["id"],
+                                gate_status=report["status"])
+            except ValueError:
+                pass
+        return report, gate_out
+
+    def ask(prompt: str) -> str:
+        print(f"    asking {getattr(model, 'model', 'model')} …", file=sys.stderr, flush=True)
+        with heartbeat(name):
+            completion = model.complete(prompt, system=SYSTEM)
+        print(f"    reply in {completion.latency_s:.0f}s "
+              f"({completion.completion_tokens} tok)", file=sys.stderr, flush=True)
+        meta.update(model=completion.model, prompt_tokens=completion.prompt_tokens,
+                    completion_tokens=completion.completion_tokens,
+                    reasoning_tokens=completion.reasoning_tokens,
+                    latency_s=completion.latency_s, prompt=prompt)
+        return model_client.strip_fences(completion.text)
+
+    try:
+        result = repair.repair(
+            seed_source, gate=gate, ask=ask,
+            prompt_for=lambda source, report, out: repair_prompt(entry, bundle_text, source,
+                                                                 report, out),
+            rounds=getattr(args, "repair_rounds", 4),
+            log=lambda msg: print(msg, file=sys.stderr))
+    except BaseException:
+        # A transport error mid-session must not leave an unmatched draft in src/ (that tree
+        # holds matched code only), nor a stale source that would hide the entry from selection.
+        cleanup_repair_draft(entry, entries, draft)
+        raise
+
+    if result.matched:
+        print(f">>> MATCH  {name}  (repair, {result.rounds_used} round(s))  -> {draft}")
+        return "match"
+    cleanup_repair_draft(entry, entries, draft, result.source)
+    note = (f"closeness={list(repair.closeness(result.report))}" if result.report is not None
+            else "no gate report")
+    print(f"    {result.outcome.upper()}  {name}  repair stopped after "
+          f"{result.rounds_used} round(s)  {note}")
+    return result.outcome
 
 
 def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,

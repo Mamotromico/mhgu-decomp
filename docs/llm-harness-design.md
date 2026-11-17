@@ -373,6 +373,38 @@ fits a `bic` immediate lowers to `bic` instead), `rev16` needs a 16-bit value, a
 `(short)__builtin_bswap16(x)`. The section is **conditional** (`has_bit_op`), like the struct-copy
 guidance, so functions that contain none of these instructions do not pay for it.
 
+**Built — repair mode (`--repair`).** A retry improves on the *previous attempt*, but it still
+starts the entry from the plain prompt and resamples the whole function. For the case that
+matters most — a candidate that compiles to **exactly the original body length** and differs in a
+handful of instructions — that is wasteful: the model has already found the right shape and only
+needs to change those instructions. `--repair` therefore seeds the loop from the entry's **banked**
+candidate and runs a monotone edit loop (`tools/loop/repair.py`):
+
+```
+seed (banked candidate) -> gate
+  already a match? -> bank it, done
+  while eligible and rounds remain:
+      prompt = task prompt + diff rows/hints + "minimal edit" instruction + previous TU
+      reply  = model
+      keep it ONLY if the gate says it is strictly closer
+```
+
+Three rules make it safe. **Eligibility** is narrow: the report must be a ``mismatch`` (not a
+``body-length`` — that is a different shape, not an edit) whose compiled length equals the
+reference, with at most ``MAX_DIFF_WORDS`` (6) differing words. **Monotonicity** is the core
+property: a reply is adopted only when ``(|cand_len − ref_len|, diff_count)`` — the bank's own
+``closeness``, read from the gate's report — strictly improves, so a session can never end worse
+than its seed and its budget cannot walk backwards. **The gate stays authoritative**: every
+gated candidate is recorded in the attempt log (``source: "repair"``, plus ``repair_seed``) and
+folded into the bank, and only the gate writes ``verify=match``.
+
+The model gets one honest escape: if the remaining differences are only *which register* holds a
+value, no source shape controls that, so it replies ``UNREACHABLE`` and the loop stops instead of
+spending the rest on an unwinnable edit. Inline assembly is still rejected before the gate
+(``asm_violation``), and a transport error mid-session removes the draft, so ``src/`` is left
+holding matched code only. ``--repair`` without ``--entry`` selects from the bank closest-first
+with the divergence cap set to the repair budget.
+
 ---
 
 ## Decisions and open questions

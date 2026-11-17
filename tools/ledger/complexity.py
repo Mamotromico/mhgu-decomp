@@ -188,19 +188,52 @@ def any_pool_reference(body: bytes, addr: str, text: bytes, in_image) -> bool:
     return False
 
 
+def is_veneer(body: bytes | None) -> bool:
+    """Whether a body is a linker-generated GOT import veneer, not compilable C.
+
+    The stub band at the end of ``.text`` (``0x613f18xx``–``0x613f1dxx``) is made of 12-byte
+    thunks that load ``pc`` from a ``.got.plt`` slot::
+
+        add  r12, pc, #0x400000   ; 4 MB page step (encoded imm8=4, rot=6)
+        add  r12, r12, #imm       ; rotated immediate: the page offset
+        ldr  pc, [r12, #imm]!     ; pre-indexed GOT load straight into pc
+
+    The linker emits these; no C source produces them, so they can never byte-match and must
+    never be selected. Detected byte-exactly (all three words masked), not heuristically.
+
+    In the ledger they are ``kind=import-stub`` and carry ``gate=link``; their bodies are
+    re-derived from the GOT map by ``tools/ledger/importstub.py`` (see ``AGENTS.md`` ->
+    *Linker veneers are not functions*). This detector is what keeps them out of the queue.
+    """
+    if body is None or len(body) != 12:
+        return False
+    w0 = int.from_bytes(body[0:4], "little")
+    w1 = int.from_bytes(body[4:8], "little")
+    w2 = int.from_bytes(body[8:12], "little")
+    return (
+        (w0 & 0x0FFFFFFF) == 0x028FC604            # add r12, pc, #0x400000
+        and (w1 & 0x0FFF0000) == 0x028C0000         # add r12, r12, #imm
+        and (w2 & 0x0FFF0000) == 0x05BC0000         # ldr pc, [r12, #imm]!
+        and ((w2 >> 12) & 0xF) == 15                # destination register is pc
+    )
+
+
 def gateable(body: bytes | None) -> bool:
     """Whether the current byte gate can verify this body.
 
     The gate resolves **branch/call** relocations against the ledger and **literal-pool**
     relocations against the GOT map, so a body that branches out or reads a pool word is
     verifiable. It does not resolve jump tables, so a body that builds a PC-relative address
-    (``ADR``) stays unverifiable and must not be selected.
+    (``ADR``) stays unverifiable and must not be selected. A linker-generated **veneer**
+    (:func:`is_veneer`) is not a function at all and is likewise never selectable.
 
     This is the reference-side proxy for the gate's object-side rule (which fails closed on any
     relocation it cannot resolve); a wrong guess therefore costs a failed gate run, never a
     false match.
     """
     if body is None:
+        return False
+    if is_veneer(body):
         return False
     return not has_adr(body)
 

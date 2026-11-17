@@ -60,7 +60,7 @@ single committed record of both *identity* and *status*, keyed by the same `(mod
 | axis | values | written by | meaning |
 | --- | --- | --- | --- |
 | `verify` | `none`, `behaviour`, `match` | byte gate | quality of the reconstruction; `behaviour` = equivalent but **not** byte-identical |
-| `gate` | `""`, `raw`, `reloc` | byte gate | **provenance** of a `verify=match`: byte-identical compare, or at least one address-dependent word verified through its relocation (*Gate provenance*, below) |
+| `gate` | `""`, `raw`, `reloc`, `link` | byte gate / stub check | **provenance** of a `verify=match`: byte-identical compare, at least one address-dependent word verified through its relocation (*Gate provenance*, below), or an `import-stub` body derived from the GOT map (*Import stubs*, below) |
 | `review` | `generated`, `reviewed` | reviewer | readability tier (*Generated vs. reviewed code*); `reviewed` preserves the byte match |
 | `enroll` | `rombytes`, `complete` | reconciler | build input — original bytes vs. our compiled object |
 | `reloc` | *(derived)* | link build | relocation/link check — **computed, never authored** |
@@ -80,15 +80,22 @@ single committed record of both *identity* and *status*, keyed by the same `(mod
 predicate so the definitions cannot drift (sm64ds `bytegate.counts_as_matched`):
 
 ```text
-include(e)    := e.kind != external                 # externals leave the denominator
-counted(e)    := include(e) and not is_alias(e)     # honesty guard, below
+include(e)    := e.kind not in (external, import-stub)   # not source-reconstructed
+counted(e)    := include(e) and not is_alias(e)          # honesty guard, below
 decompiled(e) := counted(e) and e.verify == match
 behaviour(e)  := counted(e) and e.verify == behaviour
+built_stub(e) := e.kind == import-stub and e.verify == match   # link output, see below
 done(e)       := decompiled(e) and link_build.region_ok(e)
 
 Decompiled = |decompiled| / |counted|
 Linked     = |done|       / |counted|
 ```
+
+**`import-stub` is a kind, not a match.** A linker-generated GOT import stub is real
+`.text` at a real address, but no C source produces it, so it leaves the denominator the
+way an external does — while keeping its `addr`/`block`/`size` so the block partition
+stays gapless. It carries `gate=link`, its own `built_stub` bucket, and is never counted as
+decompiled. See *Import stubs are link output* below.
 
 **Honesty guards** (settle the alias / shared-"matched" half):
 
@@ -160,7 +167,33 @@ computed address is a GOT slot. Decoding the idiom gives slot → stub; invertin
 map gives **import → stub** (695 imports, one stub each), which is the address the original
 linked a `bl` to — the gate therefore resolves `bl <import>` against the stub map instead of
 refusing it. 7,085 pending functions call an import. The same names are merged into the bundle's
-name table, so a candidate is shown `; -> sqrtf` rather than `; -> func_613efd58`.
+name table, so a candidate is shown `; -> sqrtf` rather than `; -> plt_613efd58`.
+
+### Import stubs are link output
+
+The same 12-byte stubs are also **symbols in `.text`** — one per import, 674 of them at the end
+of the block. They are not compiled code: the linker emitted them, and the slot a stub jumps
+through holds an address the loader resolves in *another module*. No C source can produce them,
+so under the per-function gate they could never match (they absorbed 3,209 model attempts — 20 %
+of the budget — at a 0 % ceiling, and because near-miss ranking sorts by closeness they sorted to
+the front of the queue).
+
+They are therefore **`kind=import-stub`**, excluded from the denominator like externals but
+keeping `addr`/`block`/`size` so the partition still tiles the block:
+
+- **Derived, not decompiled.** `tools/ledger/importstub.py` re-encodes the body from
+  `(stub address, GOT slot)` alone — the split of the distance into the linker's three
+  immediates, with *every* valid modified-immediate encoding enumerated and the reference bytes
+  choosing — and accepts the row only when a candidate reproduces the reference exactly. A stub
+  no split reproduces stays `verify=none` and is reported.
+- **`gate=link`** is the provenance, and it is reserved for this kind; `validate.py` enforces
+  that nothing else can carry it and that a stub can carry nothing else.
+- **Reported separately.** `ledgerlib.built_stub` is its own bucket, so "674 stubs reproduced"
+  can never be read as 674 decompiled functions. The decompiled figure is unchanged by them.
+- **Not a link reproduction either.** Reproducing the *link* would need the vendor linker and
+  its exact GOT slot assignment (measured: neither GNU `ld` nor `lld` reproduces it — see
+  `tools/build/linkcheck.py`). Deriving the body from the recorded slot is what is achievable
+  and it is what is verified here.
 
 ### Symbol identity & segmentation
 
@@ -331,8 +364,11 @@ placeholder until its real name is understood, and renaming is a ledger edit —
 second symbol (see *Symbol identity & segmentation*).
 
 - **Unknown code:** `func_<8hex>`, full base kept — e.g. `func_60001234`.
-- **Unknown data:** `D_<8hex>` — e.g. `D_6172f000`. The `func_`/`D_` pair marks *kind* (code
-  vs. data).
+- **Linker import stubs:** `plt_<8hex>` — e.g. `plt_613f18d0`. They are neither code nor
+  data: the name says the body is a GOT jump stub, so nobody mistakes one for a function
+  (`kind=import-stub`, see *Import stubs are link output*).
+- **Unknown data:** `D_<8hex>` — e.g. `D_6172f000`. The `func_`/`D_`/`plt_` triple marks
+  *kind* (code vs. data vs. link output).
 - **Scope prefixes** `g_` (external linkage) and `s_` (file-local / internal linkage) are
   added once linkage is known. They sit on a different axis from the placeholder, so a
   symbol can be `D_<addr>` (unknown) or `gName` / `sVar_<addr>` (scope known, name not yet).

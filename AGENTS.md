@@ -260,8 +260,9 @@ regressions**
 - **instruction ordering** (5: `602aa498`, `602aa814`, `6050c964`, `60876a94`,
   `610e897c`) — two independent loads/ops swapped. Statement reordering does not change
   SelectionDAG scheduling; no `-pre-RA-sched`/`-misched`/`-regalloc` knob matches it.
-  An `asm volatile("" ::: "memory")` barrier fixes three of the original eight (see
-  below) but not these. **Accepted residual.**
+  An `asm volatile("" ::: "memory")` barrier *used* to pin the reference order for a few of
+  these; that technique has been withdrawn (see *The inline-assembly rule*), so those
+  matches are demoted back to unmatched. **Accepted residual.**
 - **multi-instruction predicated return** (5: `605bc604`, `60627aac`, `61122598`,
   `613720ec`, `605089e4`) — the original predicates `ldrbne/movne/cmpne/bxne lr`;
   4.0.1 branches (or predicates the other side). **Accepted residual.**
@@ -278,11 +279,175 @@ Eight were fixed by re-deriving the source shape under 4.0.1 (all still byte-mat
 `func_6054ee64` (store the halfword before loading the divisor), `func_6003b788`
 (nested `if` instead of `continue`), `func_6080c93c` (`unsigned char x = field; x--;`
 instead of `(unsigned char)(field - 1)`, which defeats the mask DAG-combine),
-`func_6016b920` (the same in-place `unsigned short` increment trick),
-`func_6053a058` and `func_6018b110` (an `asm volatile("" ::: "memory")` barrier
-between the argument loads and the callee-pointer load pins the reference order), and
+`func_6016b920` (the same in-place `unsigned short` increment trick), and
 `func_600a7e80` (a 4-byte `bx lr` stub; the ledger claimed `verify=match` with no
-source).
+source). Two more, `func_6053a058` and `func_6018b110`, were previously "fixed" with an
+`asm volatile("" ::: "memory")` barrier between the argument loads and the callee-pointer
+load. **That is not a reconstruction** — the barrier is a banned construct — so the barrier
+was removed, both functions now mismatch (the ordering is a 4.0.1 scheduler difference no
+source shape reproduces: 7 spellings tried), and their ledger rows are `verify=none`.
+
+### Source shapes that fix "unmatchable" classes (verified 2026-11)
+
+The masked-pointer class below was previously written off as a 4.0.1 residual; it is a
+**source-shape** problem, not a compiler limit. It is a deterministic template in
+`tools/ledger/templates.py` and documented in the loop prompt (`tools/loop/run.py`).
+Measured on one 100-entry model-loop run, it converted **8 further entries to byte matches
+at zero model cost**.
+
+- **Masked pointer used as a base (`ldr` → `bfc` → address use).** The masked value is
+  the *base*, so it must be expressed as a pointer (`*(float *)(v + 0x5c)`,
+  `(unsigned)((char *)v + 0x40)`). As integer arithmetic (`return v + 0x40;`) clang folds
+  the constant and emits `add` **before** `bfc`; the original is `bfc` then `add`.
+  Templates `masked-pointer-add` (7/7) and `masked-pointer-float` (1/1).
+- **Conditional return guard (`bxhi lr`/`bxeq lr`/…).** For `if (idx > 7) return 0;
+  return a[idx];` 4.0.1 if-converts the single-statement guarded body into
+  `addls`/`ldrls` and folds the `bx lr` — 24 B where the original branches, 28 B. A
+  `guarded-word-index` template used to claim 18/18 here by inserting an
+  `asm volatile("" ::: "memory")` barrier as the guarded block's first statement. **The
+  template has been deleted.** The barrier is not a reconstruction, it is a banned
+  construct, and the 8 ledger rows it produced (`6005ceb4`, `6013f6d4`, `6013f6f0`,
+  `602768f4`, `60276960`, `60277394`, `602773b0`, plus `60282780`) are demoted to
+  `verify=none`. Verified since: **no source shape restores that branch** — 25 spellings
+  (early-return, ternary, `if`/`else`, `goto`, `while`+`break`, `do`/`while(0)`, nested
+  `if`, separate offset variable, `switch`, `volatile` load, `__builtin_expect` with both
+  probabilities, typed array indexing) all if-convert. That is expected from the LLVM
+  source: ARM's `isProfitableToIfCvt` charges the branch a flat `+1` plus
+  `MispredictionPenalty/10` while predication is charged `NumCycles`, so a 2-instruction
+  block with a 4-cycle load is "profitable" even at probability 1 (`ARMBaseInstrInfo.cpp`,
+  release_40). **Accepted residual**, gated to behaviour-match at best.
+
+- **Pre-indexed writeback (`ldrh r2,[r0,r2]!`, `str r1,[r0,#0x18]!`).** The address is
+  computed, used *and* written back to the base in one instruction. The C must update the
+  pointer inside the expression **and then read it again**, or the writeback is dead and
+  clang silently drops it (body one instruction short):
+  `unsigned short v = *(unsigned short *)(p = (unsigned short *)((char *)p + 0x1a0));`
+  followed by a use of `p`. Verified: `func_60501848` byte-matches on the first try from
+  this shape (the model's `*(T *)((char *)p + imm)` never can). A post-indexed form
+  (`[r0], #imm`) advances the pointer *after* the access. ~6,000 pending bodies contain a
+  `!` writeback, so this is the highest-yield shape in the queue. The loop detects it
+  (`run.has_preindexed`) and injects `_PREINDEXED_SECTION`.
+
+**Do not use `__builtin_memcpy(&w, char_ptr + off, 4)`.** clang cannot assume alignment
+through a `char *` and emits four byte-sized loads (a 40 B body for a 16 B original). Load
+through a typed pointer (`*(unsigned *)(p + off)`) instead. This was the single most
+expensive model mistake in the run; the prompt now warns against it.
+
+The loop also now reports body sizes on a `body-length` verdict: the diff words only cover
+the reference *prefix*, so without "20 B vs 16 B — 4 BYTES TOO LONG" the model cannot see
+the surplus instruction it must delete.
+
+### Linker veneers are not functions (674 `import-stub` rows, 0.25 % of the denominator)
+
+The end of `.text` (`0x613efd58`–`0x613f1de0`) holds **674 twelve-byte GOT import stubs**:
+
+```text
+add  r12, pc, #0x400000  ; 4 MB page step (encoded imm8=4, rot=6)
+add  r12, r12, #imm      ; rotated immediate — the page offset
+ldr  pc, [r12, #imm]!    ; pre-indexed .got.plt load straight into pc
+```
+
+Worked example (`613f18d0`): `r12 = 0x613f18d8 + 0x400000 + 0x47000 = 0x618388d8`, then
+`ldr pc, [r12, #0x5c]!` reads `0x61838934` in `.got.plt`, which holds `0x623cf000` — the
+loader-resolved address of an imported function in another module. That is why the slot
+cannot be reproduced by C: its value is a link/load-time fact about *other* modules.
+
+The inventory counted them as `kind=function`. **No C source produces them**, so they can
+never byte-match — but they were 3,209 model attempts (20 % of the whole attempt budget) at
+a 0 % ceiling, and because the near-miss bank ranks by closeness they sorted to the *front*
+of the queue. `complexity.is_veneer` detects them byte-exactly and `gateable()` rejects
+them, so `--matchable` (ON by default since 2026-11) can never select one.
+
+**Resolved (2026-11): they are `kind=import-stub`, and each body is derived and verified.**
+The ledger now carries them as a kind of their own instead of `function`:
+
+- `kind=import-stub`, name `plt_<addr>`, `enroll=""` — excluded from the denominator
+  (`ledgerlib.included`) while keeping `addr`/`block`/`size`, so the block partition still
+  tiles. Denominator 267,181 → **266,507**; the decompiled figure is untouched.
+- `verify=match` / **`gate=link`** — a new, reserved provenance. `validate.py` rejects
+  `gate=link` on any other kind and any other gate on a stub.
+- **Derived, not decompiled.** `tools/ledger/importstub.py` re-encodes the 12 bytes from
+  `(stub address, GOT slot address)` alone — enumerating every valid modified-immediate
+  encoding of the linker's three-step split and letting the reference bytes choose — and
+  accepts the row only if a candidate reproduces the reference exactly. All **674/674**
+  currently derive; `--apply` is idempotent (a second run changes 0 rows).
+- `ledgerlib.built_stub` is its **own bucket**, so "674 stubs reproduced" can never be read
+  as 674 decompiled functions.
+
+This is not a link reproduction: reproducing the *link* needs the vendor linker and its GOT
+slot assignment (neither GNU `ld` nor `lld` reproduces it — see `tools/build/linkcheck.py`).
+Deriving each body from the recorded slot is the achievable and verified half.
+
+Re-run after a re-seed or a renamed import: `python3 tools/ledger/importstub.py --check`
+(report) / `--apply` (stamp). Seeding itself stays image-free — the retype is a post-seed
+step, documented in `gen_ledger.py`.
+
+### Re-gate stored candidates before believing a verdict
+
+`baserom/work/attempts/log.jsonl` is **append-only history**, not current state: a record's
+`MISMATCH` was issued by *whatever gate existed then*, and entries that later matched keep
+their old failure rows. Two consequences, both measured:
+
+- **Never compute a match rate from the log.** It reports stale failures and understates the
+  result (the log says 9363 attempts / 2238 matches on "plain" entries; the ledger says
+  2311 of 3530 such entries are matched).
+- **A stored candidate may already match.** `tools/ledger/regate_candidates.py` recompiles
+  the blobs under `baserom/work/attempts/main/<addr>/<id>.cpp` with the *current* pin and
+  gate — free, no model calls. On the whole "plain" backlog it converted 86/1296 entries
+  (6.6 %); run it with `--update` to bank the winners (they keep their `src/` file). The
+  raw-byte gate era produced false mismatches on *every* non-leaf, so 4-byte `b <target>`
+  thunks in particular are almost all already correct.
+### Repair a near miss instead of resampling it (`--repair`)
+
+A retry resends the task and hopes for a better sample. When a candidate already compiles to
+**exactly the original body length** and differs in a few instructions, that is the wrong tool:
+the model found the shape, it just needs to be told which instructions are wrong. `--repair`
+seeds the loop from the entry's **banked** candidate and asks for a *minimal edit* of that exact
+translation unit (`tools/loop/repair.py`, wired in `run.process_repair`).
+
+Rules that must not be relaxed:
+
+- **Eligibility is narrow.** Only a gate report with `status == "mismatch"`, compiled length ==
+  reference length, and at most `MAX_DIFF_WORDS` (6, i.e. 24 B) differing bytes. A
+  `body-length` report is a *different shape*, not an edit, and is refused.
+- **Monotone.** A reply replaces the best candidate only if `(|cand_len − ref_len|, diff_count)`
+  strictly decreases — the bank's own `closeness`, read from the gate report. So a repair
+  session can never end worse than its seed, and the round budget cannot walk backwards.
+- **The gate is still the only authority.** Every gated candidate is appended to the attempt log
+  (`source: "repair"`, plus `repair_seed`) and folded into the bank; only the gate writes
+  `verify=match`. Inline assembly remains rejected *before* the gate, and a transport error
+  removes the draft, so `src/` stays matched-only.
+- **`UNREACHABLE` is the honest exit.** If only register allocation differs, no source shape
+  controls it, so the model replies `UNREACHABLE` and the loop stops rather than burning rounds.
+  Do not "fix" that by adding a barrier — the empty barrier is banned (see *The inline-assembly
+  rule*).
+
+`--repair` without `--entry` selects from the bank closest-first with the divergence cap set to
+the repair budget; `--repair-rounds` (default 4) caps the edits per entry. It is a *conversion*
+mechanism for the near-miss band, not a substitute for a fresh pass.
+### The inline-assembly rule (enforced)
+
+Translated source must let the compiler choose every opcode: hand-written instructions cannot
+match compiled C++. **One** `asm` spelling is allowed:
+
+- a **symbol binding** attached to a declarator, `... f(void) asm("mangled.name");` — it emits
+  nothing and only names the object symbol.
+
+Everything else — `asm("nop")`, a top-level `asm("...")` statement, any instruction string —
+is a violation. The loop **enforces** this (`run.asm_violation`): a candidate containing a
+disallowed construct is rejected before it reaches the gate, so the ban is a checked rule, not
+a guideline.
+
+**The empty barrier is banned too** (`asm volatile("" ::: "memory")`), even though it emits no
+instructions at all. It was previously allowed as a *scheduling* constraint, and three tricks
+were built on it: the `guarded-word-index` template, the `bxCC lr`-guard prompt section, and
+two hand-fixed functions. That was wrong in kind, not in degree: the barrier only works because
+LLVM cannot predicate inline asm, so it makes clang emit a branch the reference compiler chose
+freely — the source no longer explains the bytes, it coerces them. Every ledger row that
+depended on it was a *fabricated* match, so all nine were demoted to `verify=none` and the
+template, the prompt section and the barrier allowance were removed (2026-11). Source that
+compiles only because of an `asm` barrier is not a reconstruction; the honest result is
+`verify=none` plus a near-miss note.
 
 **Configuration search: exhausted.** A sweep of ~170 candidate profiles on 4.0.1 —
 scheduling (`-pre-RA-sched`, `-misched*`, post-RA), if-conversion
@@ -495,9 +660,9 @@ Curated prior art (study for conventions; do not copy blindly):
       dropped. All Ghidra output is draft-only, generated into the git-ignored
       `baserom/work/`, and **never committed**; the committed ledger stays authoritative.
       See [`docs/architecture.md`](docs/architecture.md).
-- [x] Define the symbol/module naming convention → `func_`/`D_` placeholders (full base),
-      `g_`/`s_` scope prefixes, module namespaces for internal symbols, discovered mangling
-      reproduced exactly for externals. See [`docs/architecture.md`](docs/architecture.md) →
+- [x] Define the symbol/module naming convention → `func_`/`D_`/`plt_` placeholders (full
+      base), `g_`/`s_` scope prefixes, module namespaces for internal symbols, discovered
+      mangling reproduced exactly for externals. See [`docs/architecture.md`](docs/architecture.md) →
       *Symbol & data naming*.
 - [ ] Verify ARM32 support in `reccmp` / `asm-differ` / `splat`; decide whether to port
       `nx-decomp-tools` or build on `asm-differ`.

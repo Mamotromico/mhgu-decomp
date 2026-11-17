@@ -156,8 +156,11 @@ class RemapIncludeTests(unittest.TestCase):
             inc = prefix / "include" / "c++" / "v1"
             inc.mkdir(parents=True)
             clang = str(prefix / "bin" / "clang")
+            # A path that cannot exist on a build host: the remap only applies when the
+            # installed libc++ directory is missing, so naming a real one makes this test
+            # depend on the machine it runs on.
             cflags = ["-target", "armv8a-none-eabi", "-isystem",
-                      "/opt/clang-4.0.1/include/c++/v1", "-O2"]
+                      "/nonexistent-clang/include/c++/v1", "-O2"]
             out = revalidate.remap_include_flags(cflags, clang)
             self.assertEqual(out[3], str(inc))
             self.assertEqual(out[0], "-target")

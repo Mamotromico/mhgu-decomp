@@ -213,5 +213,40 @@ class ProposeRuleTests(unittest.TestCase):
         self.assertIsNone(propose_rule(None, "f"))
 
 
+class MaskedPointerTests(unittest.TestCase):
+    """`ldr` -> `bfc` -> use is "load a pointer, align it down": the masked value is the
+    base, so it must be a pointer in the source (integer arithmetic reorders `add`/`bfc`)."""
+
+    # ldr r0,[r0,#0xd7c]; bfc r0,#0,#4; add r0,r0,#0x40; bx lr
+    ADD_BODY = (0xE5900D7C, 0xE7C3001F, 0xE2800040, BX_LR)
+    # ldr r0,[r0,#0xd7c]; bfc r0,#0,#4; vldr.32 s0,[r0,#0x5c]; bx lr
+    FLOAT_BODY = (0xE5900D7C, 0xE7C3001F, 0xED900A17, BX_LR)
+
+    def test_masked_pointer_add_uses_pointer_arithmetic(self):
+        self.assertEqual(
+            propose(body(*self.ADD_BODY), "func_608857b4"),
+            'extern "C" unsigned func_608857b4(char *p);\n'
+            'extern "C" unsigned func_608857b4(char *p) {\n'
+            '    unsigned v = *(unsigned *)(p + 3452);\n'
+            '    v &= ~0xfu;\n'
+            '    return (unsigned)((char *)v + 64);\n'
+            '}\n')
+
+    def test_masked_pointer_float_loads_through_the_masked_base(self):
+        self.assertEqual(
+            propose(body(*self.FLOAT_BODY), "func_608857d4"),
+            'extern "C" float func_608857d4(char *p);\n'
+            'extern "C" float func_608857d4(char *p) {\n'
+            '    unsigned v = *(unsigned *)(p + 3452);\n'
+            '    v &= ~0xfu;\n'
+            '    return *(float *)(v + 92);\n'
+            '}\n')
+
+    def test_the_mask_is_derived_from_the_bfc_width(self):
+        # bfc r0,#0,#8 -> ~0xff
+        wider = (0xE5900D7C, 0xE7C7001F, 0xE2800040, BX_LR)
+        self.assertIn("v &= ~0xffu;", propose(body(*wider), "f"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

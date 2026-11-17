@@ -25,6 +25,7 @@ from complexity import (
     has_literal_pool,
     has_pool_load,
     is_call,
+    is_veneer,
     load_blocks,
     make_key,
     score,
@@ -93,6 +94,29 @@ class GateableTests(unittest.TestCase):
 
     def test_an_unreadable_body_is_not_gateable(self):
         self.assertFalse(gateable(None))
+
+    def test_a_linker_veneer_is_not_gateable(self):
+        # add r12,pc,#4 ; add r12,r12,#0x46000 ; ldr pc,[r12,#0xfd4]!
+        body = word(0xE28FC604) + word(0xE28CCA46) + word(0xE5BCFFD4)
+        self.assertTrue(is_veneer(body))
+        self.assertFalse(gateable(body))
+
+
+class IsVeneerTests(unittest.TestCase):
+    def test_the_documented_stub_is_a_veneer(self):
+        self.assertTrue(is_veneer(word(0xE28FC604) + word(0xE28CCA47) + word(0xE5BCF05C)))
+
+    def test_the_varying_parts_of_the_stub_are_free(self):
+        # A different page delta and GOT slot still decode as a veneer.
+        self.assertTrue(is_veneer(word(0xE28FC604) + word(0xE28CCA46) + word(0xE5BCFD64)))
+
+    def test_a_near_miss_encoding_is_not_a_veneer(self):
+        # `ldr pc,[r12,#imm]` without writeback is an ordinary jump, not a veneer.
+        self.assertFalse(is_veneer(word(0xE28FC604) + word(0xE28CCA47) + word(0xE59CF05C)))
+
+    def test_a_short_body_is_not_a_veneer(self):
+        self.assertFalse(is_veneer(word(0xE28FC604) + word(0xE28CCA47)))
+        self.assertFalse(is_veneer(None))
 
 
 class ScoreTests(unittest.TestCase):

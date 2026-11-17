@@ -12,10 +12,17 @@ columns that must land together.
 
 The predicate is expressed once::
 
-    include(e)    := e.kind != external                 # externals leave the denominator
-    counted(e)    := include(e) and not is_alias(e)     # honesty guard
+    include(e)    := e.kind not in (external, import-stub)   # leave the denominator
+    counted(e)    := include(e) and not is_alias(e)          # honesty guard
     decompiled(e) := counted(e) and e.verify == match
     behaviour(e)  := counted(e) and e.verify == behaviour
+    built_stub(e) := e.kind == import-stub and e.verify == match
+
+``import-stub`` is a **linker-generated** GOT import stub (the 12-byte ``add/add/ldr pc``
+thunks at the end of ``.text``), not compiled code — so it leaves the denominator like an
+external, but it keeps its address/block/size because it *does* occupy ``.text`` and the
+block partition must stay gapless. Its ``verify=match`` means "derived from the GOT map and
+byte-identical to the reference" (see ``tools/ledger/importstub.py``), never "decompiled".
 
 ``is_alias`` is a placeholder returning false until alias detection is settled (an open
 item in ``docs/architecture.md``); the zero-size guard is implemented, since it needs no
@@ -33,8 +40,8 @@ from pathlib import Path
 LEDGER_COLUMNS = [
     "module",
     "addr",
-    "kind",       # function | data | external
-    "name",       # ledger identity: func_/D_/discovered, never the Ghidra raw name
+    "kind",       # function | data | import-stub | external
+    "name",       # ledger identity: func_/D_/plt_/discovered, never the Ghidra raw name
     "block",      # memory block (.text/.rodata/.data/.bss); "" for externals
     "group",      # translation-unit membership; one-function-per-file default = name
     "size",       # bytes; "" for externals
@@ -44,16 +51,20 @@ LEDGER_COLUMNS = [
     "verify",     # none | behaviour | match
     "gate",       # how verify was established: "" (no match) | raw | reloc
     "review",     # generated | reviewed
-    "enroll",     # rombytes | complete ("" for externals)
+    "enroll",     # rombytes | complete ("" for externals and import-stubs)
 ]
 
-KINDS = ("function", "data", "external")
+KINDS = ("function", "data", "import-stub", "external")
+# Kinds that are not reconstructed from source and therefore never in the denominator.
+# ``external`` has no address at all; ``import-stub`` has one (it is real ``.text``).
+UNCOUNTED_KINDS = ("external", "import-stub")
 VERIFY_VALUES = ("none", "behaviour", "match")
 # Provenance of a ``verify=match``. ``""`` is not evidence: it is the only value an entry
 # without a match may carry. ``raw`` is the byte-identical compare; ``reloc`` means at least
 # one address-dependent word was verified through its relocation rather than byte-for-byte
-# (see ``docs/architecture.md`` -> *Gate provenance*).
-GATE_VALUES = ("raw", "reloc")
+# (see ``docs/architecture.md`` -> *Gate provenance*); ``link`` is a linker-generated
+# ``import-stub`` reproduced from the GOT map (never compiled), see ``importstub.py``.
+GATE_VALUES = ("raw", "reloc", "link")
 REVIEW_VALUES = ("generated", "reviewed")
 ENROLL_VALUES = ("rombytes", "complete")
 NAMING_CLASSES = ("discovered", "generated")
@@ -76,8 +87,13 @@ def entry_key(entry: dict) -> tuple[str, str]:
 # --- the shared predicate -------------------------------------------------------------
 
 def included(e: dict) -> bool:
-    """A non-external entry counts toward the denominator."""
-    return e["kind"] != "external"
+    """A source-reconstructed entry counts toward the denominator.
+
+    Externals (no address, provided by the SDK) and ``import-stub`` entries (linker output,
+    not compilable C — see ``AGENTS.md`` -> *Linker veneers are not functions*) are both
+    excluded; a stub still occupies ``.text``, so it stays in the block partition.
+    """
+    return e["kind"] not in UNCOUNTED_KINDS
 
 
 def is_zero_size(e: dict) -> bool:
@@ -106,12 +122,29 @@ def behaviour(e: dict) -> bool:
     return counted(e) and e["verify"] == "behaviour"
 
 
+def is_import_stub(e: dict) -> bool:
+    """A linker-generated GOT import stub (not compiled code, not in the denominator)."""
+    return e["kind"] == "import-stub"
+
+
+def built_stub(e: dict) -> bool:
+    """An ``import-stub`` reproduced byte-identically from the GOT map.
+
+    This is *not* a decompilation: the body is derived from ``(stub address, GOT slot)`` the
+    same way the linker derived it, and checked against the reference bytes. It is reported
+    separately from ``decompiled`` so the two can never be confused.
+    """
+    return is_import_stub(e) and e["verify"] == "match" and e["gate"] == "link"
+
+
 def matched_counts(entries: list[dict]) -> dict:
     """The published buckets, all derived from the one predicate."""
     return {
         "counted": sum(1 for e in entries if counted(e)),
         "decompiled": sum(1 for e in entries if decompiled(e)),
         "behaviour": sum(1 for e in entries if behaviour(e)),
+        "import_stubs": sum(1 for e in entries if is_import_stub(e)),
+        "import_stubs_built": sum(1 for e in entries if built_stub(e)),
     }
 
 

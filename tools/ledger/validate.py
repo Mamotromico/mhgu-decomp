@@ -14,12 +14,15 @@ Invariants checked
 * **Field domains** — ``kind``, ``name_class``, ``verify``, ``gate``, ``review``,
   ``enroll``, ``guess`` are within their declared sets; addresses are 8-hex lowercase;
   non-externals carry a block and a positive integer size; externals carry no
-  address/block/size/group.
+  address/block/size/group; ``import-stub`` carries no ``enroll`` (it is link output, never
+  a translation unit) but does keep its address/block/size so the partition stays gapless.
 * **Gate provenance** — ``gate`` is non-empty **exactly** when ``verify=match``; an entry
   without a match carries ``""`` (a match with no provenance, or provenance without a
-  match, is a contradiction). Externals always carry ``""``.
+  match, is a contradiction). Externals always carry ``""``. ``link`` is reserved for
+  ``import-stub`` (a body derived from the GOT map, never compiled) and ``import-stub``
+  may carry nothing else.
 * **Naming** — a ``generated`` name is exactly ``func_<addr>`` (function) / ``D_<addr>``
-  (data); a ``discovered`` name is reproduced verbatim.
+  (data) / ``plt_<addr>`` (import-stub); a ``discovered`` name is reproduced verbatim.
 * **Key uniqueness** — no duplicate ``(module, addr)`` (non-externals) or ``(module,
   name)`` (externals).
 * **Order** — addressed entries ascending by ``(module, addr)``; externals last, by
@@ -67,7 +70,7 @@ REPO = Path(__file__).resolve().parents[2]
 DEFAULT_LEDGER = REPO / "config" / "main" / "ledger.tsv"
 
 ADDR_RE = re.compile(r"^[0-9a-f]{8}$")
-GEN_NAME_RE = re.compile(r"^(func|D)_([0-9a-f]{8})$")
+GEN_NAME_RE = re.compile(r"^(func|D|plt)_([0-9a-f]{8})$")
 BINDS = ("LOCAL", "GLOBAL", "WEAK")
 
 
@@ -121,13 +124,13 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
             m = GEN_NAME_RE.match(e["name"])
             if not m:
                 errors.append(f"{where}: generated name {e['name']!r} is not "
-                              f"func_/D_<addr>")
+                              f"func_/D_/plt_<addr>")
             else:
                 prefix, naddr = m.group(1), m.group(2)
-                if prefix == "func" and kind != "function":
-                    errors.append(f"{where}: func_ name on kind {kind!r}")
-                if prefix == "D" and kind != "data":
-                    errors.append(f"{where}: D_ name on kind {kind!r}")
+                want = {"func": "function", "D": "data", "plt": "import-stub"}[prefix]
+                if kind != want:
+                    errors.append(f"{where}: {prefix}_ name on kind {kind!r} "
+                                  f"(that prefix means {want!r})")
                 if naddr != e["addr"]:
                     errors.append(f"{where}: generated name address {naddr} != "
                                   f"row addr {e['addr']}")
@@ -146,6 +149,14 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
             errors.append(f"{where}: bad review {e['review']!r}")
         if e["guess"] not in ("0", "1"):
             errors.append(f"{where}: bad guess {e['guess']!r}")
+
+        # ``link`` is the linker-artifact provenance: only an import-stub may carry it, and an
+        # import-stub is the only thing it may be used for.
+        if e["gate"] == "link" and kind != "import-stub":
+            errors.append(f"{where}: gate=link on kind {kind!r} (only import-stub)")
+        if kind == "import-stub" and e["gate"] not in ("", "link"):
+            errors.append(f"{where}: import-stub must have gate='' or 'link', "
+                          f"got {e['gate']!r}")
 
         if kind == "external":
             seen_external = True
@@ -186,7 +197,11 @@ def validate(path: Path, blocks: Path | None) -> list[str]:
 
         if not e["block"]:
             errors.append(f"{where}: missing block")
-        if e["enroll"] not in ENROLL_VALUES:
+        if kind == "import-stub":
+            # A stub is link output, not a translation unit: it is never enrolled for source.
+            if e["enroll"] != "":
+                errors.append(f"{where}: import-stub must have empty enroll")
+        elif e["enroll"] not in ENROLL_VALUES:
             errors.append(f"{where}: bad enroll {e['enroll']!r}")
         try:
             size_ok = int(e["size"]) > 0
@@ -251,10 +266,12 @@ def main(argv: list[str] | None = None) -> int:
     errors = validate(args.ledger, args.blocks)
     entries = read_entries(args.ledger) if args.ledger.exists() else []
     # .get, not []: a wrong header has no "kind" column and must not crash the summary
-    counted = sum(1 for e in entries if e.get("kind") != "external")
+    counted = sum(1 for e in entries if e.get("kind") not in ("external", "import-stub"))
+    stubs = sum(1 for e in entries if e.get("kind") == "import-stub")
     print(f"validate: {args.ledger}")
     print(f"  entries           {len(entries)}")
-    print(f"  counted (non-ext) {counted}")
+    print(f"  counted (source)  {counted}")
+    print(f"  import-stubs      {stubs}")
     if errors:
         print(f"  FAIL: {len(errors)} invariant violation(s)")
         for err in errors[:50]:
