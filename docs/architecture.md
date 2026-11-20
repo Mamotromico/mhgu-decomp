@@ -156,10 +156,13 @@ The bundle annotates the same target (`; = 0x… -> D_…`) and a conditional pr
 the model to declare the object rather than inline its address; without that the model emitted
 a constant and the indirection was missing.
 
-One extent caveat follows from this: the inventory's body is *instructions only*, while the
-compiler puts the literal pool inside the function's section. The loop therefore stops
-asserting `--body` for a body that reads a pool (`run.gate_body`) and lets the ledger's
-partition, which covers the pool, bound the comparison.
+One extent rule follows from this: the inventory's body is *instructions only*, while the
+compiler puts the literal pool inside the function's section. The loop decodes each reference
+PC-relative literal load and extends the instruction extent through alignment bytes and every
+referenced pool word (`complexity.function_extent`). That validated extent is passed as
+`--body`; the ledger partition and reference block are bounds only. Missing reference bytes,
+unaligned or out-of-partition pool targets, and candidates with a different length fail closed.
+No comparison uses the candidate's length to accept a matching prefix.
 
 **Import calls go through PLT stubs, not the symbol.** The image calls an import through a
 12-byte stub in `.text` (`add r12, pc, #hi`; `add r12, r12, #lo`; `ldr pc, [r12, #off]!`), whose
@@ -515,6 +518,14 @@ and **fully linked** is `complete_* ← enroll = complete` (the build-input axis
 whole-image `reloc` check refines it at build time). Categories are modules (`main`); per-unit
 detail is opt-in (`--units`), because the ledger's one-function-per-file default makes `group`
 one-per-function and the full unit list hundreds of MB.
+
+Byte accounting distinguishes **partition size** from **verified extent**. Total code/data keep
+the ledger partitions, preserving the stable block-tiling denominator. Matched and complete
+code/data instead sum the exact extents established by the gate: instruction spans plus any
+referenced literal-pool words for functions, and inventory extents (or exact materialized gap
+sizes) for data. `report.py` reads the NSO, `inventory.tsv`, and `inventory.gaps.tsv` directly
+without Ghidra; a missing or partition-inconsistent matched extent is an error, never a silent
+partition fallback. The same extent rule applies to top-level, category, unit, and item sizes.
 
 ## Constraints
 

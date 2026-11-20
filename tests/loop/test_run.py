@@ -67,7 +67,7 @@ def entry(addr="601a72e4", name=None, module="main", group=None,
           kind="function", verify="none") -> dict:
     name = name or f"func_{addr}"
     return {"module": module, "addr": addr, "name": name, "group": group or name,
-            "kind": kind, "verify": verify}
+            "kind": kind, "verify": verify, "size": "1368"}
 
 
 def layout(root: Path, work: Path | None = None) -> Layout:
@@ -122,19 +122,24 @@ class GroupIsSingleTests(unittest.TestCase):
 
 
 class GateBodyTests(unittest.TestCase):
-    """The extent asserted to the gate: a pool-reading body owns its literal pool."""
+    """The gate extent includes reference pool words and never falls back to a prefix."""
 
     def test_a_leaf_keeps_the_inventory_extent(self):
-        self.assertEqual(gate_body(b"\x1e\xff\x2f\xe1", 4), 4)
+        self.assertEqual(gate_body(b"\x1e\xff\x2f\xe1", 4, 1368), 4)
 
-    def test_a_pool_reader_drops_it_for_the_partition_rule(self):
-        # `ldr r0, [pc, #4]` — the compiler puts the pool inside the function's section, so the
-        # instruction-only inventory length would reject a correct candidate.
-        body = b"\x04\x00\x9f\xe5\x1e\xff\x2f\xe1\x00\x00\x00\x00"
-        self.assertIsNone(gate_body(body, 8))
+    def test_a_pool_reader_includes_padding_and_its_pool_word(self):
+        # `ldr r0, [pc, #4]` targets offset 12: four padding bytes, then one pool word.
+        body = b"\x04\x00\x9f\xe5\x1e\xff\x2f\xe1"
+        self.assertEqual(gate_body(body, 8, 16), 16)
 
-    def test_no_reference_bytes_keeps_the_extent(self):
-        self.assertEqual(gate_body(None, 8), 8)
+    def test_no_reference_bytes_fails_closed(self):
+        with self.assertRaises(ValueError):
+            gate_body(None, 8, 16)
+
+    def test_invalid_pool_target_fails_closed(self):
+        body = b"\x10\x00\x9f\xe5"
+        with self.assertRaises(ValueError):
+            gate_body(body, 4, 24)
 
 
 class GotReferencePromptTests(unittest.TestCase):
@@ -350,7 +355,7 @@ class ArgvTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--report") + 1], "/tmp/r.json")
 
     def test_gate_argv_omits_the_extent_when_it_is_unknown(self):
-        # A literal-pool body is gated on the partition rule instead of an asserted length.
+        # An unavailable extent is omitted only so the gate can fail closed as missing-body.
         argv = gate_argv(layout(Path("/r/src")), entry(), None)
         self.assertNotIn("--body", argv)
 
@@ -616,6 +621,10 @@ class ProcessTests(unittest.TestCase):
                           context=root / "ctx", src_root=root / "src",
                           build_config=Path("/bc"), toolchain=toolchain, work=root / "work")
         self.args = Namespace(body=None, rebuild=False, dry_run=False, force=False)
+        self._gate_body = mock.patch("run.gate_body",
+                                     side_effect=lambda _raw, body, _partition: body)
+        self._gate_body.start()
+        self.addCleanup(self._gate_body.stop)
         self.draft = self.lay.src_root / "main" / "func_601a72e4.cpp"
 
     def tearDown(self):
@@ -808,6 +817,10 @@ class ProcessRepairTests(unittest.TestCase):
         self.args = Namespace(body=None, rebuild=False, dry_run=False, force=False,
                               repair_rounds=4, repair_seeds={("main", "601a72e4"):
                                                              ("SEED", 7)})
+        self._gate_body = mock.patch("run.gate_body",
+                                     side_effect=lambda _raw, body, _partition: body)
+        self._gate_body.start()
+        self.addCleanup(self._gate_body.stop)
         self.draft = self.lay.src_root / "main" / "func_601a72e4.cpp"
 
     def tearDown(self):

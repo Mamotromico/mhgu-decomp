@@ -36,7 +36,7 @@ def report(diff: int, cand: int = 60, ref: int = 60, ok: bool | None = None,
     """A gate report with the fields the repair loop reads."""
     if status is None:
         status = "match" if (ok if ok is not None else diff == 0) else "mismatch"
-    return {"ok": status in ("match", "short-body"), "status": status,
+    return {"ok": status == "match", "status": status,
             "cand_len": cand, "ref_len": ref, "diff_count": diff}
 
 

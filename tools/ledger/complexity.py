@@ -121,15 +121,53 @@ def branches_out(body: bytes) -> bool:
     return False
 
 
-def has_pool_load(body: bytes) -> bool:
-    """Whether the body loads a literal pool word (A32 ``ldr rd, [pc, #±imm]``)."""
+def literal_pool_targets(body: bytes) -> list[tuple[int, int]]:
+    """Return ``(instruction offset, target offset)`` for A32 PC-relative word loads.
+
+    Offsets are relative to the function entry. Only the immediate ``ldr rd, [pc, #±imm]``
+    form decoded by :func:`has_pool_load` is returned; literal data is not scanned because
+    ``body`` must contain exactly the inventory's instruction extent.
+    """
+    targets: list[tuple[int, int]] = []
     for off in range(0, len(body) - 3, 4):
         word = int.from_bytes(body[off:off + 4], "little")
         if word & 0xF0000000 == 0xF0000000:
             continue
-        if word & 0x0FFF0000 in (0x059F0000, 0x051F0000):
-            return True
-    return False
+        if word & 0x0FFF0000 not in (0x059F0000, 0x051F0000):
+            continue
+        imm = word & 0xFFF
+        target = off + 8 + (imm if word & 0x00800000 else -imm)
+        targets.append((off, target))
+    return targets
+
+
+def has_pool_load(body: bytes) -> bool:
+    """Whether the body loads a literal pool word (A32 ``ldr rd, [pc, #±imm]``)."""
+    return bool(literal_pool_targets(body))
+
+
+def function_extent(body: bytes | None, partition: int) -> int:
+    """Validate and return the instruction-plus-literal-pool extent for a function.
+
+    ``body`` is exactly the reference instruction span from the inventory and ``partition``
+    is the ledger's upper bound. Every referenced pool word must be aligned and lie inside
+    that partition. The result covers all instructions, alignment bytes, and pool words;
+    it never depends on a candidate's length.
+    """
+    if body is None:
+        raise ValueError("reference instruction bytes are unavailable")
+    if not body or len(body) % 4:
+        raise ValueError(f"instruction extent must be a positive multiple of 4, got {len(body)}")
+    if partition <= 0 or len(body) > partition:
+        raise ValueError(f"instruction extent {len(body)} does not fit partition {partition}")
+    extent = len(body)
+    for insn, target in literal_pool_targets(body):
+        if target < 0 or target % 4 or target + 4 > partition:
+            raise ValueError(
+                f"literal load at +0x{insn:x} targets +0x{target:x}, outside the aligned "
+                f"0..0x{partition:x} function partition")
+        extent = max(extent, target + 4)
+    return extent
 
 
 def has_adr(body: bytes) -> bool:

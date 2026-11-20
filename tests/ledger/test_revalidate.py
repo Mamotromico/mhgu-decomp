@@ -59,7 +59,7 @@ class SelectTests(unittest.TestCase):
 class SummarizeTests(unittest.TestCase):
     def test_counts_match_by_ok_not_status(self):
         results = [{"ok": True, "status": "match"},
-                   {"ok": True, "status": "short-body"},
+                   {"ok": True, "status": None},
                    {"ok": False, "status": "mismatch"},
                    {"ok": False, "status": "mismatch"},
                    {"ok": False, "status": None}]
@@ -138,6 +138,35 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(lines[0], "addr\tname\tstatus\tdiff_count\trc")
         self.assertEqual(len(lines), 2)
         self.assertIn("mismatch", lines[1])
+
+
+class BodyForTests(unittest.TestCase):
+    def test_leaf_uses_inventory_instruction_extent(self):
+        warnings = []
+        body = revalidate.body_for(entry(size="1368"), {"60000000": 4},
+                                   b"\x1e\xff\x2f\xe1", warnings)
+        self.assertEqual(body, 4)
+        self.assertEqual(warnings, [])
+
+    def test_pool_reader_uses_instruction_plus_pool_extent(self):
+        warnings = []
+        body = revalidate.body_for(entry(size="16"), {"60000000": 8},
+                                   b"\x04\x00\x9f\xe5\x1e\xff\x2f\xe1", warnings)
+        self.assertEqual(body, 16)
+        self.assertEqual(warnings, [])
+
+    def test_missing_inventory_has_no_partition_fallback(self):
+        warnings = []
+        body = revalidate.body_for(entry(size="16"), {}, b"\x1e\xff\x2f\xe1", warnings)
+        self.assertIsNone(body)
+        self.assertIn("no gate extent", warnings[0])
+
+    def test_invalid_pool_target_has_no_partition_fallback(self):
+        warnings = []
+        body = revalidate.body_for(entry(size="24"), {"60000000": 4},
+                                   b"\x10\x00\x9f\xe5", warnings)
+        self.assertIsNone(body)
+        self.assertIn("literal load", warnings[0])
 
 
 class WriteRefBinTests(unittest.TestCase):

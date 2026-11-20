@@ -33,6 +33,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "ledger"))
 
 import complexity  # noqa: E402
+from ledgerlib import read_entries  # noqa: E402
 
 LOG = REPO / "baserom" / "work" / "attempts" / "log.jsonl"
 ATTEMPTS = REPO / "baserom" / "work" / "attempts"
@@ -154,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
     if text is None:
         raise SystemExit("could not read baserom/main.nso")
     by = load_entries()
+    ledger = {(e["module"], e["addr"]): e
+              for e in read_entries(REPO / "config" / "main" / "ledger.tsv")}
     ref_bin = find_ref_bin()
 
     targets = []
@@ -163,7 +166,8 @@ def main(argv: list[str] | None = None) -> int:
         size = recs[0]["body"]
         if only is not None and addr not in only:
             continue
-        cls = classify(complexity.body_of(text, addr, size))
+        raw = complexity.body_of(text, addr, size)
+        cls = classify(raw)
         if args.cls != "any" and cls != args.cls:
             continue
         cands = []
@@ -175,22 +179,30 @@ def main(argv: list[str] | None = None) -> int:
             continue
         if args.max_candidates:
             cands = cands[-args.max_candidates:]
-        targets.append((module, addr, size, cands))
+        try:
+            extent = complexity.function_extent(raw, int(ledger[(module, addr)]["size"]))
+        except (KeyError, ValueError) as e:
+            print(f"warning: {addr}: no valid gate extent ({e})", file=sys.stderr)
+            extent = None
+        targets.append((module, addr, size, extent, cands))
         if args.limit and len(targets) >= args.limit:
             break
 
     print(f"re-gating {len(targets)} entries of class {args.cls!r} "
-          f"({sum(len(t[3]) for t in targets)} candidates)", flush=True)
+          f"({sum(len(t[4]) for t in targets)} candidates)", flush=True)
 
     def work(item):
-        module, addr, size, cands = item
+        module, addr, size, extent, cands = item
+        if extent is None:
+            return {"addr": addr, "size": size, "status": "missing-body",
+                    "cand": cands[-1].name, "tried": 0}
         for i, cand in enumerate(reversed(cands), 1):    # newest first
-            res = gate_one(cand, module, addr, size, ref_bin, args.update,
+            res = gate_one(cand, module, addr, extent, ref_bin, args.update,
                            keep_on_match=args.update)
             if res.get("rc") == 0:
                 return {"addr": addr, "size": size, "status": "match",
                         "cand": str(cand.name), "tried": i}
-        res = gate_one(cands[-1], module, addr, size, ref_bin, False)
+        res = gate_one(cands[-1], module, addr, extent, ref_bin, False)
         return {"addr": addr, "size": size, "status": res.get("status", "error"),
                 "cand": cands[-1].name, "tried": len(cands)}
 

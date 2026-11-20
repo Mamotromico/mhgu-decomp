@@ -508,6 +508,12 @@ rebuilt.
 > relocations, so 4-byte tail-call thunks (`b <target>`) now match; earlier runs that
 > used a raw-byte gate produced false mismatches on every non-leaf. Re-gate stored
 > candidates before concluding a function is unmatchable.
+>
+> **Extent rule:** every comparison needs an authoritative instruction-plus-pool extent.
+> `complexity.function_extent` derives it from the inventory instruction bytes and their
+> PC-relative literal-load targets, including alignment bytes. The ledger partition and
+> reference block are bounds only. Missing/invalid extents and length mismatches fail closed;
+> a candidate-sized matching prefix is never accepted.
 
 > **Running clang:** the devcontainer ships the pinned compiler at `/opt/clang-4.0.1`
 > (on `PATH`, so `clang`/`clang++` resolve to it) with the `libtinfo.so.5` it needs;

@@ -19,6 +19,7 @@ from complexity import (
     any_pool_reference,
     body_of,
     branches_out,
+    function_extent,
     gateable,
     has_adr,
     has_call,
@@ -188,6 +189,44 @@ class LiteralPoolTests(unittest.TestCase):
 
     def test_mov_is_neither(self):
         self.assertFalse(has_literal_pool(word(0xE1A00000)))
+
+
+class FunctionExtentTests(unittest.TestCase):
+    def test_leaf_uses_its_instruction_extent_not_the_partition(self):
+        self.assertEqual(function_extent(word(0xE12FFF1E), 1368), 4)
+
+    def test_pool_extent_includes_alignment_padding_and_word(self):
+        instructions = word(0xE59F0004) + word(0xE12FFF1E)
+        self.assertEqual(function_extent(instructions, 16), 16)
+
+    def test_multiple_pool_references_use_the_furthest_word(self):
+        instructions = (word(0xE59F0018) + word(0xE59F1004)
+                        + word(0xE12FFF1E))
+        self.assertEqual(function_extent(instructions, 40), 36)
+
+    def test_interior_backward_pool_reference_does_not_extend_body(self):
+        instructions = (word(0xE1A00000) + word(0xE1A00000)
+                        + word(0xE51F0010))
+        self.assertEqual(function_extent(instructions, 20), 12)
+
+    def test_missing_or_malformed_instruction_extent_fails_closed(self):
+        for body, partition in ((None, 4), (b"", 4), (b"abc", 4),
+                                (word(0xE12FFF1E) * 2, 4)):
+            with self.subTest(body=body, partition=partition):
+                with self.assertRaises(ValueError):
+                    function_extent(body, partition)
+
+    def test_negative_pool_target_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "literal load"):
+            function_extent(word(0xE51F0010), 16)
+
+    def test_unaligned_pool_target_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "literal load"):
+            function_extent(word(0xE59F0002), 16)
+
+    def test_pool_word_outside_partition_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "literal load"):
+            function_extent(word(0xE59F0010), 24)
 
 
 class AnyPoolReferenceTests(unittest.TestCase):

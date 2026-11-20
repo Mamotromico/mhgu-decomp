@@ -15,10 +15,9 @@ directory.
 
 Faithfulness to how functions were originally matched
 ------------------------------------------------------
-The loop does not compare over the ledger partition: it asserts the *inventory
-body* and falls back to the partition only when the body reads a literal pool
-(``run.gate_body``). This tool reproduces that exactly, so a partition/padding
-difference is never reported as a false regression.
+The loop asserts the inventory instruction span extended through every referenced literal-pool
+word (``run.gate_body``). This tool derives the same extent from the reference bytes, so
+partition/padding differences are not false regressions and a matching prefix is never accepted.
 
 Reference bytes come straight from the NSO (``complexity.load_text``), written once
 as a ``.text_<start>.bin`` and handed to the gate via ``--ref-bin`` — no Ghidra run
@@ -268,22 +267,22 @@ def gate_one(entry: dict, *, toolchain: Path, src_root: Path, ledger: Path,
 
 def body_for(entry: dict, sizes: dict[str, int], text: bytes | None,
              warnings: list[str]) -> int | None:
-    """The extent to assert, mirroring ``run.gate_body``; ``None`` = partition rule.
+    """The validated instruction-plus-pool extent, or ``None`` to fail closed.
 
-    The inventory body is authoritative; a body that reads a literal pool owns the
-    pool (which the inventory does not count), so those fall back to the partition.
-    An entry absent from the inventory also falls back, with a warning, rather than
-    aborting the whole re-validation.
+    Missing inventory/reference data and invalid pool targets are reported as warnings;
+    the gate then returns ``missing-body`` rather than comparing a candidate-sized prefix.
     """
     try:
         body, _ = resolve_body(entry, sizes)
     except BundleError:
-        warnings.append(f"{entry['name']}: not in inventory; using partition")
+        warnings.append(f"{entry['name']}: not in inventory; no gate extent")
         return None
     raw = complexity.body_of(text, entry["addr"], body) if text is not None else None
-    if raw is not None and complexity.has_pool_load(raw):
+    try:
+        return complexity.function_extent(raw, int(entry["size"]))
+    except ValueError as e:
+        warnings.append(f"{entry['name']}: {e}; no gate extent")
         return None
-    return body
 
 
 def run(entries: list[dict], *, toolchain: Path, clang: str, src_root: Path,

@@ -25,17 +25,12 @@ routine the inventory missed, or an interior literal pool with no cut) sits betw
 function and the next cut. ``func_601a72e4`` (``new_b`` in the PoC) is the canonical case: a
 **60 B body in a 1368 B partition**, because the next cut point is 0x601a783c.
 
-The gate therefore compares the **compiled body** against the original, using the compiled
-length as the compared span, and treats ``size`` as an **upper bound**:
-``0 < len(body) <= size`` and ``body == original[addr : addr+len(body)]``. An entry whose
-partition over-covers is reported explicitly, never silently. ``--body N`` supplies an
-authoritative extent (the PoC regression fixtures use it); with it the compiled length must
-match ``N`` exactly instead of merely fitting the partition.
-
-Residual risk, documented rather than hidden: under the default rule a *truncated*
-reconstruction that happens to compile to the original's prefix would match. Disambiguating
-that needs a disassembly-derived function extent (a later milestone); ``--body`` is the escape
-hatch until it lands.
+The gate requires an **authoritative extent** and compares exactly that many bytes. The loop
+derives it from the inventory's instruction span and every reference PC-relative literal-load
+target, including intervening alignment bytes. ``--body N`` supplies that extent directly.
+The ledger partition and reference block are bounds only: a missing or out-of-bounds extent
+fails closed, and a candidate whose length differs is rejected. A matching prefix is never
+sufficient, whether the omitted suffix is code, padding, or a literal pool.
 
 Scope: the gate compares generated code against the original with **relocations resolved**
 (stage 2). A branch or call in an unlinked object encodes a target-independent placeholder
@@ -497,36 +492,31 @@ def diff_words(cand: bytes, ref: bytes, limit: int = DIFF_WORD_LIMIT) -> list[di
 
 def compare_body(cand: bytes, block: bytes, off: int, partition: int,
                  body: int | None) -> tuple[bool, bytes, str]:
-    """Compare a compiled function body against the original; return ``(ok, ref, status)``.
+    """Compare exactly ``body`` reference bytes; return ``(ok, ref, status)``.
 
-    ``partition`` is the ledger's ``size`` (an upper bound, not the body length). ``body`` is
-    the optional authoritative extent. ``ref`` is the original slice compared against, or a
-    best-effort slice for the diagnostics of a length failure.
+    ``body`` is the authoritative instruction-plus-pool extent. The ledger partition and
+    reference block are bounds, never comparison lengths. A missing or inconsistent extent
+    fails closed rather than accepting a candidate-sized prefix.
 
     Status values:
 
-    * ``match``       — the body matches the original over its length and fills the partition;
-    * ``short-body``  — matches, but the partition over-covers the body (still a match);
-    * ``empty-body``  — the object defined a zero-length function;
-    * ``too-long``    — the body is larger than its partition and cannot fit this slot;
-    * ``body-length`` — ``--body`` was given and the compiled length differs from it;
-    * ``mismatch``    — the lengths agree but the bytes differ.
+    * ``match``          — the complete body matches;
+    * ``missing-body``   — no authoritative extent was supplied;
+    * ``invalid-extent`` — the extent is outside the partition or reference block;
+    * ``empty-body``     — the object defined a zero-length function;
+    * ``body-length``    — the compiled length differs from the authoritative extent;
+    * ``mismatch``       — the lengths agree but the bytes differ.
     """
-    if body is not None:
-        ref = block[off:off + body]
-        if len(cand) != body:
-            return False, ref, "body-length"
-        return (cand == ref), ref, ("match" if cand == ref else "mismatch")
-
-    n = len(cand)
-    if n == 0:
-        return False, b"", "empty-body"
-    if n > partition:
-        return False, block[off:off + n], "too-long"
-    ref = block[off:off + n]
-    if cand != ref:
-        return False, ref, "mismatch"
-    return True, ref, ("short-body" if n < partition else "match")
+    if body is None:
+        return False, b"", "missing-body"
+    ref = block[off:off + body] if off >= 0 and body > 0 else b""
+    if body <= 0 or body > partition or off < 0 or off + body > len(block):
+        return False, ref, "invalid-extent"
+    if not cand:
+        return False, ref, "empty-body"
+    if len(cand) != body:
+        return False, ref, "body-length"
+    return (cand == ref), ref, ("match" if cand == ref else "mismatch")
 
 
 def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: bool,
@@ -559,12 +549,15 @@ def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: 
 def print_status(status: str, cand_len: int, partition: int,
                  body: int | None) -> None:
     """Explain a non-plain-mismatch status on its own line."""
-    if status == "empty-body":
+    if status == "missing-body":
+        print(f"  {RED}reason: no authoritative instruction-plus-pool extent was supplied; "
+              f"refusing to compare a candidate-sized prefix{RESET}")
+    elif status == "invalid-extent":
+        print(f"  {RED}reason: extent {body} B is outside the {partition} B partition or "
+              f"the reference block{RESET}")
+    elif status == "empty-body":
         print(f"  {RED}reason: compiled function is empty (0 B); the ledger entry is "
               f"{partition} B{RESET}")
-    elif status == "too-long":
-        print(f"  {RED}reason: compiled body {cand_len} B > partition {partition} B — "
-              f"cannot fit this slot (wrong function?){RESET}")
     elif status == "body-length":
         print(f"  {RED}reason: compiled body {cand_len} B != asserted --body {body} B{RESET}")
     elif status == "unverified-reloc":
@@ -721,9 +714,6 @@ def main(argv: list[str] | None = None) -> int:
     if ok:
         print(f"{GREEN}{BOLD}>>> MATCH{RESET}  {entry['name']}  "
               f"({len(cand)} B at {where})")
-        if status == "short-body":
-            print(f"  {YELLOW}note: body {len(cand)} B < partition {size} B — the entry "
-                  f"over-covers; compared over the body, not the partition{RESET}")
     else:
         print(f"{RED}{BOLD}>>> MISMATCH{RESET}  {entry['name']}  ({where})")
         print_status(status, len(cand), size, args.body)

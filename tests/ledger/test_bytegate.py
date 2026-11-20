@@ -3,8 +3,8 @@
 The rule this pins down is the fix for the partition-vs-body defect: the ledger's ``size``
 is the block *partition* (bytes to the next cut point), which over-covers a function whose
 trailing region was never cut (``func_601a72e4``/``new_b``: a 60 B body in a 1368 B
-partition). ``compare_body`` compares the compiled body over its own length, treats the
-partition as an upper bound, and exposes ``--body`` as an authoritative override.
+partition). ``compare_body`` requires the authoritative instruction-plus-pool extent, treats the
+partition and reference block as bounds, and rejects truncated or omitted-pool candidates.
 
 Pure-function tests only — no clang, no Ghidra, no ledger, no binary. Run with::
 
@@ -46,67 +46,88 @@ class CompareBodyTests(unittest.TestCase):
     def original(self, n: int) -> bytes:
         return self.BLOCK[self.OFF:self.OFF + n]
 
-    # --- the default rule: body length, partition as an upper bound -------------------
-
     def test_exact_body_filling_partition_matches(self):
         body = self.original(0x40)
-        ok, ref, status = compare_body(body, self.BLOCK, self.OFF, 0x40, None)
+        ok, ref, status = compare_body(body, self.BLOCK, self.OFF, 0x40, 0x40)
         self.assertTrue(ok)
         self.assertEqual(ref, body)
         self.assertEqual(status, "match")
 
-    def test_short_body_in_over_covering_partition_is_a_match(self):
+    def test_exact_body_in_over_covering_partition_matches(self):
         # new_b's shape: a 60 B body in a 1368 B partition.
-        body = self.original(60)
-        ok, ref, status = compare_body(body, self.BLOCK, self.OFF, 1368, None)
-        self.assertTrue(ok)
-        self.assertEqual(ref, body)
-        self.assertEqual(status, "short-body")
-
-    def test_short_body_with_wrong_bytes_is_a_mismatch(self):
-        body = bytearray(self.original(60))
-        body[10] ^= 0xFF
-        ok, ref, status = compare_body(bytes(body), self.BLOCK, self.OFF, 1368, None)
-        self.assertFalse(ok)
-        self.assertEqual(len(ref), 60)
-        self.assertEqual(status, "mismatch")
-
-    def test_candidate_longer_than_partition_is_too_long(self):
-        body = self.original(200)
-        ok, _ref, status = compare_body(body, self.BLOCK, self.OFF, 100, None)
-        self.assertFalse(ok)
-        self.assertEqual(status, "too-long")
-
-    def test_empty_candidate_is_rejected(self):
-        # The guard that stops a stub from matching by vacuous prefix equality.
-        ok, ref, status = compare_body(b"", self.BLOCK, self.OFF, 1368, None)
-        self.assertFalse(ok)
-        self.assertEqual(ref, b"")
-        self.assertEqual(status, "empty-body")
-
-    # --- the authoritative --body override --------------------------------------------
-
-    def test_body_override_exact_match(self):
         body = self.original(60)
         ok, ref, status = compare_body(body, self.BLOCK, self.OFF, 1368, 60)
         self.assertTrue(ok)
         self.assertEqual(ref, body)
         self.assertEqual(status, "match")
 
-    def test_body_override_rejects_a_truncated_body(self):
-        # Under the default rule a 40 B prefix would pass; with --body it must not.
+    def test_wrong_bytes_are_a_mismatch(self):
+        body = bytearray(self.original(60))
+        body[10] ^= 0xFF
+        ok, ref, status = compare_body(bytes(body), self.BLOCK, self.OFF, 1368, 60)
+        self.assertFalse(ok)
+        self.assertEqual(len(ref), 60)
+        self.assertEqual(status, "mismatch")
+
+    def test_candidate_longer_than_partition_is_a_length_mismatch(self):
+        body = self.original(200)
+        ok, _ref, status = compare_body(body, self.BLOCK, self.OFF, 100, 100)
+        self.assertFalse(ok)
+        self.assertEqual(status, "body-length")
+
+    def test_empty_candidate_is_rejected(self):
+        ok, ref, status = compare_body(b"", self.BLOCK, self.OFF, 1368, 60)
+        self.assertFalse(ok)
+        self.assertEqual(ref, self.original(60))
+        self.assertEqual(status, "empty-body")
+
+    def test_missing_extent_rejects_even_a_complete_match(self):
+        body = self.original(60)
+        ok, ref, status = compare_body(body, self.BLOCK, self.OFF, 1368, None)
+        self.assertFalse(ok)
+        self.assertEqual(ref, b"")
+        self.assertEqual(status, "missing-body")
+
+    def test_truncated_matching_prefix_is_rejected(self):
         body = self.original(40)
         ok, ref, status = compare_body(body, self.BLOCK, self.OFF, 1368, 60)
         self.assertFalse(ok)
         self.assertEqual(len(ref), 60)
         self.assertEqual(status, "body-length")
 
-    def test_body_override_wrong_bytes_is_a_mismatch(self):
-        body = bytearray(self.original(60))
-        body[0] ^= 0xFF
-        ok, _ref, status = compare_body(bytes(body), self.BLOCK, self.OFF, 1368, 60)
+    def test_extent_outside_partition_is_rejected(self):
+        body = self.original(80)
+        ok, _ref, status = compare_body(body, self.BLOCK, self.OFF, 60, 80)
         self.assertFalse(ok)
-        self.assertEqual(status, "mismatch")
+        self.assertEqual(status, "invalid-extent")
+
+    def test_extent_outside_reference_block_is_rejected(self):
+        block = self.original(60)
+        ok, _ref, status = compare_body(block, block, 0, 100, 80)
+        self.assertFalse(ok)
+        self.assertEqual(status, "invalid-extent")
+
+    def test_pool_instructions_padding_and_word_match(self):
+        from complexity import function_extent
+
+        instructions = struct.pack("<II", 0xE59F0004, 0xE12FFF1E)
+        original = instructions + bytes(4) + struct.pack("<I", 0x12345678)
+        extent = function_extent(instructions, len(original))
+        ok, ref, status = compare_body(original, original, 0, len(original), extent)
+        self.assertTrue(ok)
+        self.assertEqual(ref, original)
+        self.assertEqual(status, "match")
+
+    def test_omitted_pool_is_a_length_mismatch(self):
+        from complexity import function_extent
+
+        instructions = struct.pack("<II", 0xE59F0004, 0xE12FFF1E)
+        original = instructions + bytes(4) + struct.pack("<I", 0x12345678)
+        extent = function_extent(instructions, len(original))
+        ok, ref, status = compare_body(instructions, original, 0, len(original), extent)
+        self.assertFalse(ok)
+        self.assertEqual(ref, original)
+        self.assertEqual(status, "body-length")
 
 
 class GateResultTests(unittest.TestCase):

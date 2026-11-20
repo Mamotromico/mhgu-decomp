@@ -661,8 +661,8 @@ def gate_argv(layout: Layout, entry: dict, body: int | None,
               report: Path | None = None) -> list[str]:
     """The byte-gate invocation. Fixed argv: no model text ever reaches it.
 
-    ``body`` is the asserted extent, or ``None`` to let the gate use its partition rule (a
-    literal-pool body owns bytes the inventory does not count).
+    ``body`` is the validated instruction-plus-pool extent. ``None`` omits ``--body`` only
+    for an explicit fail-closed path; the gate then reports ``missing-body``.
     """
     argv = [sys.executable, str(BYTEGATE), entry["module"], entry["addr"],
             "--src-root", str(layout.src_root), "--ledger", str(layout.ledger),
@@ -1124,17 +1124,16 @@ def ask_model(entry: dict, layout: Layout, args, model, body: int,
     return model_client.strip_fences(completion.text), completion, prompt
 
 
-def gate_body(raw_body: bytes | None, body: int) -> int | None:
-    """The extent to assert to the gate, or ``None`` to use the partition rule.
+def gate_body(raw_body: bytes | None, body: int, partition: int) -> int:
+    """The validated instruction-plus-pool extent to assert to the gate.
 
-    The inventory's body is the *instructions*; a function that reads a literal pool owns the
-    pool too, and the compiler emits it inside the function's section. Asserting the
-    instruction length would then reject a correct candidate as ``body-length``, so those
-    entries fall back to the partition rule (the ledger's ``size`` covers the pool).
+    The inventory's body is the instruction span. Reference literal-load targets extend it
+    through alignment bytes and every pool word, without using the candidate's length.
+    Missing reference bytes or invalid targets are errors, never a partition fallback.
     """
-    if raw_body is not None and complexity.has_pool_load(raw_body):
-        return None
-    return body
+    if raw_body is None or len(raw_body) != body:
+        raise ValueError("reference instruction bytes are unavailable for the gate extent")
+    return complexity.function_extent(raw_body, partition)
 
 
 def write_and_gate(entry: dict, layout: Layout, body: int | None, draft: Path,
@@ -1306,7 +1305,7 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         return "error"
 
     # 3. write and verify (the gate is the only writer of verify=match).
-    assert_body = gate_body(raw_body, body)
+    assert_body = gate_body(raw_body, body, int(entry["size"]))
     outcome, report, rc, gate_out = write_and_gate(entry, layout, assert_body, draft, candidate)
 
     # 4. a template that missed falls through to the model, so the path never regresses.
@@ -1348,7 +1347,8 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         print(f">>> MATCH  {name}  ({stamp})  -> {draft}  (attempt {stored['id']})")
     else:
         if report is not None:
-            dist = nearmiss.closeness(report["diff_count"], report["cand_len"], body)
+            dist = nearmiss.closeness(report["diff_count"], report["cand_len"],
+                                      report["ref_len"])
             pin = nearmiss.eval_pin(layout.toolchain)
             result = nearmiss.record(bank_path(layout), module, addr, dist, pin,
                                      name=name, attempt_id=stored["id"],
@@ -1416,7 +1416,7 @@ def process_repair(entry: dict, entries: list[dict], layout: Layout, args, model
 
     bundle_text = build_bundle_text(layout, entry, args, body)
     raw_body = complexity.body_of(raw_text, addr, body) if raw_text is not None else None
-    assert_body = gate_body(raw_body, body)
+    assert_body = gate_body(raw_body, body, int(entry["size"]))
     if args.dry_run:
         print(f"--- repair prompt for {name} ({body} B, {extent_source}; "
               f"seed attempt {seed_id}) ---")
