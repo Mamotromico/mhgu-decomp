@@ -13,6 +13,12 @@ a status count plus the concrete regression list (with the differing instruction
 It never edits the ledger or ``src/``; it only compiles into a git-ignored work
 directory.
 
+The default run loads ``config/main/revalidate-known-residuals.tsv``: the reviewed
+clang 4.0.1 compiler residuals. Exact ``(addr, status, diff_count)`` failures are
+reported as accepted `known-residual`s; changed residuals, resolved residuals, missing
+baseline entries, and unexplained failures all fail the run. Pass
+``--known-residuals ""`` for a strict comparison with no accepted failures.
+
 Faithfulness to how functions were originally matched
 ------------------------------------------------------
 The loop asserts the inventory instruction span extended through every referenced literal-pool
@@ -40,8 +46,8 @@ Usage::
 
 Exit codes::
 
-    0  every matched entry still matches under the candidate profile
-    1  one or more regressions
+    0  every selected entry matches, or every failure exactly matches the known baseline
+    1  one or more regressions, changed/resolved residuals, or missing baseline entries
     2  usage / setup error (missing ledger, NSO, or compiler)
 """
 
@@ -75,6 +81,7 @@ DEFAULT_TOOLCHAIN = REPO / "config" / "toolchain.json"
 DEFAULT_NSO = REPO / "baserom" / "main.nso"
 DEFAULT_INVENTORY = REPO / "baserom" / "work" / "inventory" / "inventory.tsv"
 DEFAULT_BUILD_CONFIG = REPO / "config" / "build.json"
+DEFAULT_KNOWN_RESIDUALS = REPO / "config" / "main" / "revalidate-known-residuals.tsv"
 DEFAULT_WORK = REPO / "baserom" / "work" / "revalidate"
 REF_BASE = 0x60000000
 
@@ -96,10 +103,12 @@ def selected(entries: list[dict], *, module: str | None = None,
 
 
 def summarize(results: list[dict]) -> dict[str, int]:
-    """Count results by status (``match`` when the gate accepted the candidate)."""
+    """Count results, honouring the explicit residual classification when present."""
     counts: dict[str, int] = {}
     for r in results:
-        key = "match" if r.get("ok") else str(r.get("status") or "error")
+        key = r.get("classification")
+        if key is None:
+            key = "match" if r.get("ok") else str(r.get("status") or "error")
         counts[key] = counts.get(key, 0) + 1
     return counts
 
@@ -123,6 +132,100 @@ def regressions(results: list[dict]) -> list[dict]:
     return out
 
 
+def read_known_residuals(path: Path) -> dict[tuple[str, str], dict]:
+    """Parse the reviewed known-residual baseline.
+
+    The baseline pins each accepted compiler residual to the gate ``status`` and
+    ``diff_count`` observed under the accepted compiler profile. It deliberately
+    stores no instruction bytes. A same-address failure with a different status or
+    divergence count is *not* accepted: that is a new regression, not evidence that
+    the old residual remains unchanged.
+    """
+    text = Path(path).read_text()
+    baseline: dict[tuple[str, str], dict] = {}
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        fields = line.split("\t")
+        where = f"{path}:{lineno}"
+        if [f.strip() for f in fields] == ["module", "addr", "status", "diff_count"]:
+            continue
+        if len(fields) != 4:
+            raise ValueError(f"{where}: expected module, addr, status, diff_count")
+        module, addr, status, diff_count = (f.strip() for f in fields)
+        try:
+            addr = f"{int(addr, 16):08x}"
+        except ValueError as e:
+            raise ValueError(f"{where}: addr must be a hexadecimal ledger address") from e
+        if not module or not status:
+            raise ValueError(f"{where}: module and status are required")
+        try:
+            diff_count = int(diff_count)
+        except ValueError as e:
+            raise ValueError(f"{where}: diff_count must be an integer") from e
+        if diff_count < 0:
+            raise ValueError(f"{where}: diff_count must be >= 0")
+        key = (module, addr)
+        if key in baseline:
+            raise ValueError(f"{where}: duplicate residual {key}")
+        baseline[key] = {"status": status, "diff_count": diff_count}
+    return baseline
+
+
+def classify_residuals(results: list[dict],
+                       baseline: dict[tuple[str, str], dict] | None) -> dict:
+    """Split gate results into matches, accepted residuals, and unexplained failures.
+
+    ``known-residual`` requires an exact key, status, and divergence-count match.
+    A residual that now matches is reported as ``resolved`` (a stale baseline, so the
+    caller must update it deliberately); a baseline entry absent from the selected
+    results is also stale. Anything else is a ``regression``.
+    """
+    classified: list[dict] = []
+    regressions: list[dict] = []
+    known: list[dict] = []
+    resolved: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    for result in results:
+        key = (result.get("module"), result.get("addr"))
+        seen.add(key)
+        if result.get("ok"):
+            row = {**result, "classification": "match"}
+            if baseline is not None and key in baseline:
+                row["classification"] = "resolved-residual"
+                resolved.append(row)
+            classified.append(row)
+            continue
+
+        expected = baseline.get(key) if baseline is not None else None
+        exact = (expected is not None
+                 and result.get("status") == expected["status"]
+                 and result.get("diff_count") == expected["diff_count"])
+        if exact:
+            row = {**result, "classification": "known-residual"}
+            known.append(row)
+        else:
+            row = {**result, "classification": "regression"}
+            if expected is not None:
+                row["expected"] = expected
+            regressions.append(row)
+        classified.append(row)
+
+    missing = []
+    if baseline is not None:
+        for module, addr in sorted(baseline):
+            if (module, addr) not in seen:
+                missing.append({"module": module, "addr": addr,
+                                "status": "missing", "diff_count": None,
+                                "classification": "missing-residual"})
+
+    return {"results": classified, "regressions": regressions,
+            "known_residuals": known, "resolved_residuals": resolved,
+            "missing_residuals": missing}
+
+
 def result_from_report(entry: dict, report: dict | None, rc: int,
                        output: str = "") -> dict:
     """Normalize a gate report (or its absence) into one result record.
@@ -142,9 +245,10 @@ def result_from_report(entry: dict, report: dict | None, rc: int,
 
 
 def build_report(toolchain: str, clang: str, clang_version: str,
-                 results: list[dict]) -> dict:
+                 results: list[dict],
+                 baseline: dict[tuple[str, str], dict] | None = None) -> dict:
     """The machine-readable summary written by ``--report``."""
-    return {
+    report = {
         "toolchain": toolchain,
         "clang": clang,
         "clang_version": clang_version,
@@ -152,6 +256,14 @@ def build_report(toolchain: str, clang: str, clang_version: str,
         "counts": summarize(results),
         "regressions": regressions(results),
     }
+    if baseline is not None:
+        classified = classify_residuals(results, baseline)
+        report["counts"] = summarize(classified["results"])
+        report["regressions"] = classified["regressions"]
+        report["known_residuals"] = classified["known_residuals"]
+        report["resolved_residuals"] = classified["resolved_residuals"]
+        report["missing_residuals"] = classified["missing_residuals"]
+    return report
 
 
 def format_counts(counts: dict[str, int]) -> str:
@@ -329,9 +441,10 @@ def run(entries: list[dict], *, toolchain: Path, clang: str, src_root: Path,
 
 
 def write_tsv(path: Path, results: list[dict]) -> None:
+    """One unexplained regression per line; matches and accepted residuals are omitted."""
     lines = ["addr\tname\tstatus\tdiff_count\trc"]
     for r in results:
-        if r.get("ok"):
+        if r.get("ok") or r.get("classification") == "known-residual":
             continue
         lines.append(f"{r['addr']}\t{r['name']}\t{r.get('status') or 'error'}\t"
                      f"{'' if r.get('diff_count') is None else r['diff_count']}\t{r.get('rc')}")
@@ -360,9 +473,22 @@ def main(argv: list[str] | None = None) -> int:
                     help="write the machine-readable summary here (JSON)")
     ap.add_argument("--tsv", type=Path, default=None,
                     help="write one regression per line as TSV here")
+    ap.add_argument("--known-residuals", default=str(DEFAULT_KNOWN_RESIDUALS),
+                    metavar="FILE",
+                    help="reviewed compiler-residual baseline (default); pass an empty "
+                         "string to require every selected function to match")
     ap.add_argument("--show-diffs", type=int, default=10, metavar="N",
                     help="print the first N regressions with their differing words")
     args = ap.parse_args(argv)
+
+    baseline = None
+    baseline_path = Path(args.known_residuals) if args.known_residuals else None
+    if baseline_path is not None:
+        try:
+            baseline = read_known_residuals(baseline_path)
+        except (OSError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
 
     if not args.ledger.exists():
         print(f"error: missing ledger {args.ledger}", file=sys.stderr)
@@ -377,6 +503,11 @@ def main(argv: list[str] | None = None) -> int:
     if not entries:
         print("error: no matched functions selected", file=sys.stderr)
         return 2
+    if baseline is not None:
+        # A module/limit subset is judged only against the residuals in that subset;
+        # baseline entries outside it are not "missing".
+        selected_keys = {(e["module"], e["addr"]) for e in entries}
+        baseline = {k: v for k, v in baseline.items() if k in selected_keys}
 
     args.work.mkdir(parents=True, exist_ok=True)
     try:
@@ -401,9 +532,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
-    counts = summarize(results)
-    regs = regressions(results)
+    if baseline is not None:
+        classified = classify_residuals(results, baseline)
+        summary_results = classified["results"]
+        regs = classified["regressions"]
+        resolved = classified["resolved_residuals"]
+        missing = classified["missing_residuals"]
+    else:
+        summary_results = results
+        regs = regressions(results)
+        resolved = []
+        missing = []
+
+    counts = summarize(summary_results)
     print(f"result: {format_counts(counts)}")
+    if baseline is not None:
+        known_count = counts.get("known-residual", 0)
+        print(f"known residuals: {known_count} accepted; "
+              f"resolved={len(resolved)} missing={len(missing)}")
     print(f"regressions: {len(regs)}/{len(results)}")
 
     shown = regs[:max(0, args.show_diffs)]
@@ -420,14 +566,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(
-            build_report(str(args.toolchain), clang, version, results),
+            build_report(str(args.toolchain), clang, version, results,
+                         baseline=baseline),
             indent=2, sort_keys=True) + "\n")
         print(f"report: {args.report}")
     if args.tsv is not None:
-        write_tsv(args.tsv, results)
+        write_tsv(args.tsv, summary_results)
         print(f"tsv:    {args.tsv}")
 
-    return 1 if regs else 0
+    return 1 if regs or resolved or missing else 0
 
 
 if __name__ == "__main__":

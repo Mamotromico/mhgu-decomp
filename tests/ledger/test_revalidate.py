@@ -140,6 +140,115 @@ class ReportTests(unittest.TestCase):
         self.assertIn("mismatch", lines[1])
 
 
+class KnownResidualTests(unittest.TestCase):
+    def test_read_valid_baseline(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "known.tsv"
+            p.write_text("# evidence lives in the compiler investigation\n"
+                         "module\taddr\tstatus\tdiff_count\n"
+                         "main\t60000001\tmismatch\t2\n\n"
+                         "other\t0x60000002\tbody-length\t0\n")
+            got = revalidate.read_known_residuals(p)
+        self.assertEqual(got, {
+            ("main", "60000001"): {"status": "mismatch", "diff_count": 2},
+            ("other", "60000002"): {"status": "body-length", "diff_count": 0},
+        })
+
+    def test_bad_row_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "known.tsv"
+            p.write_text("main\t60000001\tmismatch\n")
+            with self.assertRaises(ValueError):
+                revalidate.read_known_residuals(p)
+
+    def test_duplicate_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "known.tsv"
+            p.write_text("main\t60000001\tmismatch\t1\n"
+                         "main\t60000001\tbody-length\t1\n")
+            with self.assertRaises(ValueError):
+                revalidate.read_known_residuals(p)
+
+
+class ClassifyResidualTests(unittest.TestCase):
+    def results(self):
+        return [
+            {"module": "main", "addr": "60000000", "name": "match", "ok": True,
+             "status": "match", "diff_count": 0},
+            {"module": "main", "addr": "60000004", "name": "known", "ok": False,
+             "status": "mismatch", "diff_count": 2},
+            {"module": "main", "addr": "60000008", "name": "changed", "ok": False,
+             "status": "mismatch", "diff_count": 2},
+            {"module": "main", "addr": "6000000c", "name": "resolved", "ok": True,
+             "status": "match", "diff_count": 0},
+            {"module": "main", "addr": "60000010", "name": "new", "ok": False,
+             "status": "body-length", "diff_count": None},
+        ]
+
+    def baseline(self):
+        return {
+            ("main", "60000004"): {"status": "mismatch", "diff_count": 2},
+            ("main", "60000008"): {"status": "mismatch", "diff_count": 4},
+            ("main", "6000000c"): {"status": "body-length", "diff_count": 1},
+            ("main", "60000014"): {"status": "mismatch", "diff_count": 3},
+        }
+
+    def test_exact_known_residuals_are_accepted(self):
+        got = revalidate.classify_residuals(self.results(), self.baseline())
+        self.assertEqual([r["classification"] for r in got["results"]],
+                         ["match", "known-residual", "regression",
+                          "resolved-residual", "regression"])
+        self.assertEqual([r["addr"] for r in got["known_residuals"]], ["60000004"])
+        self.assertEqual([r["addr"] for r in got["regressions"]],
+                         ["60000008", "60000010"])
+        self.assertEqual([r["addr"] for r in got["resolved_residuals"]],
+                         ["6000000c"])
+        self.assertEqual([r["addr"] for r in got["missing_residuals"]],
+                         ["60000014"])
+
+    def test_changed_known_residual_is_a_regression_with_expected_detail(self):
+        got = revalidate.classify_residuals(self.results(), self.baseline())
+        changed = got["regressions"][0]
+        self.assertEqual(changed["addr"], "60000008")
+        self.assertEqual(changed["expected"],
+                         {"status": "mismatch", "diff_count": 4})
+
+    def test_report_with_baseline_separates_statuses(self):
+        rep = revalidate.build_report("profile", "clang", "version",
+                                      self.results(), baseline=self.baseline())
+        self.assertEqual(rep["counts"],
+                         {"match": 1, "known-residual": 1, "regression": 2,
+                          "resolved-residual": 1})
+        self.assertEqual(len(rep["known_residuals"]), 1)
+        self.assertEqual(len(rep["resolved_residuals"]), 1)
+        self.assertEqual(len(rep["missing_residuals"]), 1)
+
+    def test_report_without_baseline_preserves_old_shape(self):
+        results = self.results()[:2]
+        rep = revalidate.build_report("profile", "clang", "version", results)
+        self.assertEqual(rep["counts"], {"match": 1, "mismatch": 1})
+        self.assertEqual(len(rep["regressions"]), 1)
+        self.assertNotIn("known_residuals", rep)
+
+
+class WriteTsvKnownResidualTests(unittest.TestCase):
+    def test_accepts_are_omitted_from_regression_tsv(self):
+        results = [
+            {"addr": "60000000", "name": "a", "ok": True, "status": "match",
+             "rc": 0, "diff_count": 0},
+            {"addr": "60000004", "name": "b", "ok": False, "status": "mismatch",
+             "rc": 1, "diff_count": 2, "classification": "known-residual"},
+            {"addr": "60000008", "name": "c", "ok": False, "status": "body-length",
+             "rc": 1, "diff_count": None, "classification": "regression"},
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "r.tsv"
+            revalidate.write_tsv(p, results)
+            lines = p.read_text().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("60000008", lines[1])
+
+
 class BodyForTests(unittest.TestCase):
     def test_leaf_uses_inventory_instruction_extent(self):
         warnings = []

@@ -1,0 +1,27 @@
+# Accepted clang 4.0.1 compiler residuals for matched-source revalidation.
+# A row accepts an exact (module, address, gate status, diff_count) only; any
+# other failure at the address is a new regression. Update deliberately after a
+# reviewed source-shape or toolchain change; do not store instruction bytes here.
+module	addr	status	diff_count
+main	6003bb78	mismatch	34
+main	6013fe3c	mismatch	4
+main	601ac4d8	body-length	27
+main	601cb7e8	body-length	64
+main	60260440	body-length	19
+main	602aa498	mismatch	12
+main	602aa814	mismatch	12
+main	604f8b78	mismatch	4
+main	605089e4	body-length	41
+main	6050c964	mismatch	8
+main	6050f78c	mismatch	4
+main	605bc604	body-length	16
+main	60627aac	body-length	16
+main	6069d9e8	mismatch	4
+main	6069ddfc	mismatch	4
+main	6069eb18	mismatch	4
+main	60876a94	mismatch	8
+main	60c17abc	body-length	17
+main	610b0960	body-length	48
+main	610e897c	mismatch	6
+main	61122598	body-length	16
+main	613720ec	body-length	16

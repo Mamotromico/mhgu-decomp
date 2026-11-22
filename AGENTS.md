@@ -499,10 +499,14 @@ tuning flags.
 `tools/ledger/revalidate.py` is the gate for a pin change: it selects every
 `verify=match` function, recompiles its existing `src/` file with a chosen profile,
 re-runs the byte gate (faithfully resolving the inventory body vs. the partition, and
-branch/pool relocations), and reports the exact regressions. It writes JSON/TSV
-reports and exits non-zero when anything regresses, so it can gate a pin flip in CI.
-Run it with `--clang PATH` to try an extracted tarball before the devcontainer is
-rebuilt.
+branch/pool relocations), and reports the exact regressions. The default run loads
+`config/main/revalidate-known-residuals.tsv`, which pins the 22 accepted clang 4.0.1
+compiler residuals by address, gate status, and divergence count (never by committed
+instruction bytes). Exact rows are reported as `known-residual`; changed residuals,
+new regressions, resolved residuals, or missing baseline entries all exit non-zero.
+It writes JSON/TSV reports and exits non-zero for any of those conditions, so it can
+gate a pin flip in CI. Run it with `--clang PATH` to try an extracted tarball before the
+devcontainer is rebuilt.
 
 > **Note (gate):** the byte gate already resolves branch/call and literal-pool
 > relocations, so 4-byte tail-call thunks (`b <target>`) now match; earlier runs that

@@ -172,6 +172,23 @@ linked a `bl` to — the gate therefore resolves `bl <import>` against the stub 
 refusing it. 7,085 pending functions call an import. The same names are merged into the bundle's
 name table, so a candidate is shown `; -> sqrtf` rather than `; -> plt_613efd58`.
 
+### Matched-corpus regression baseline
+
+`tools/ledger/revalidate.py` re-runs the byte gate over every `verify=match` source. It
+does not edit the ledger; its purpose is to expose regressions in already-banked source.
+The 22 clang 4.0.1 compiler residuals documented in `AGENTS.md` are therefore represented
+explicitly in `config/main/revalidate-known-residuals.tsv`, rather than being folded into
+an unexplained failure count.
+
+A baseline row pins only `(module, addr, gate status, diff_count)` — no instruction bytes
+are committed. Exact rows classify as `known-residual`; any other failure, a baseline
+entry that now matches (`resolved-residual`), or a baseline address absent from the
+selected results is reported separately and makes revalidation exit non-zero. A
+module/limit run checks only baseline entries selected by that subset. Passing
+`--known-residuals ""` restores the strict no-accepted-failures mode for experiments
+that intentionally use a different profile. Thus an accepted residual remains visible,
+but a changed residual cannot hide a new regression.
+
 ### Import stubs are link output
 
 The same 12-byte stubs are also **symbols in `.text`** — one per import, 674 of them at the end
@@ -422,6 +439,11 @@ never hand-maintained.
   generated, so a merge never produces a hand-edited CMake/Ninja diff. With
   `-ffunction-sections -fdata-sections` the linker places — and byte-substitutes — per
   function, so TU grouping affects only codegen, never what the link emits.
+- **`src/` is matched-only.** A candidate that misses the current gate is not a build input:
+  it is appended to the attempt log, upserted into the near-miss bank under its eval pin,
+  and removed from `src/`. Re-gating such a banked candidate can still promote it later,
+  because only the gate writes `verify=match`. A source with no ledger row has no authoritative
+  gate extent and is archived as an orphan, not presented as reconstructed code.
 - **One reconciler is the sole writer**, moving/merging files and regenerating the build
   inputs idempotently; CI runs it `--check` and fails on drift.
 - **Generated ≠ reviewed is ledger state, not a folder.** A folder-per-state split was
