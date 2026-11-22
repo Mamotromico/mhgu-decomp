@@ -878,8 +878,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model-config", type=Path, default=Layout.model_config)
     ap.add_argument("--toolchain", type=Path, default=Layout.toolchain,
                     help="compiler profile for the byte gate (default: config/toolchain.json — "
-                         "clang 4.0.1). config/toolchain-5.0.1.json remains available for "
-                         "A/B runs and the few functions only 5.0.1 matches.")
+                         "clang 4.0.1, the only supported pin)")
     ap.add_argument("--base-url", default=None)
     ap.add_argument("--endpoint", default=None)
     ap.add_argument("--model-name", default=None)

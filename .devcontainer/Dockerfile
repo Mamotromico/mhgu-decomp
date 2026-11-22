@@ -40,19 +40,12 @@ ARG SWITCH_LOADER_SHA256=0bc6374c11cb7a1275a0eda22184b9b2efe5a9a7e415cc29361c334
 ARG LIBTINFO5_DEB_URL=http://archive.ubuntu.com/ubuntu/pool/main/n/ncurses/libtinfo5_6.1-1ubuntu1.18.04.1_amd64.deb
 ARG LIBTINFO5_SHA256=f7a59966bba0f997dd1bee0994c43cd563026a81e791cacc6540a2a8c9a49e53
 
-# Clang 5.0.1 — the de facto pin (see AGENTS.md, "Compiler & runtime"). This is
-# the upstream prebuilt tarball from releases.llvm.org, NOT the NintendoSDK
-# toolchain (which is unobtainable). Clang release assets are not published under
-# the llvm/llvm-project GitHub releases, so the releases.llvm.org URL is used.
-ARG CLANG_VERSION=5.0.1
-ARG CLANG_TARBALL=clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-16.04.tar.xz
-ARG CLANG_URL=https://releases.llvm.org/${CLANG_VERSION}/${CLANG_TARBALL}
-ARG CLANG_SHA256=005f21861cd2953138df7cf511f1552ef7041bafb7cfc4b172264b7ff5fe09b4
-
 # Clang 4.0.1 — the compiler pin (see AGENTS.md, "Compiler pin revision"). This
-# is the project default (config/toolchain.json); 5.0.1 is kept alongside for A/B
-# runs and the few functions only it matches. The release ships this variant as
-# clang+llvm-<v>-x86_64-linux-gnu-debian8.
+# is the project default (config/toolchain.json). This is the upstream prebuilt
+# tarball from releases.llvm.org, NOT the NintendoSDK toolchain (which is
+# unobtainable). Clang release assets are not published under the llvm/llvm-project
+# GitHub releases, so the releases.llvm.org URL is used. The release ships this
+# variant as clang+llvm-<v>-x86_64-linux-gnu-debian8.
 ARG CLANG401_VERSION=4.0.1
 ARG CLANG401_TARBALL=clang+llvm-${CLANG401_VERSION}-x86_64-linux-gnu-debian8.tar.xz
 ARG CLANG401_URL=https://releases.llvm.org/${CLANG401_VERSION}/${CLANG401_TARBALL}
@@ -105,7 +98,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ---------------------------------------------------------------------------
 # libtinfo.so.5 (required by the pinned clang)
 # ---------------------------------------------------------------------------
-# The prebuilt clang 5.0.1 binaries link against the ncurses 5 ABI
+# The prebuilt clang 4.0.1 binaries link against the ncurses 5 ABI
 # (libtinfo.so.5). Ubuntu 24.04 ships only ncurses 6 (libtinfo.so.6), whose
 # versioned symbols are NOT compatible, so the binaries fail to load. Install the
 # real libtinfo5 from the Ubuntu 18.04 archive; it is self-contained (Depends:
@@ -117,24 +110,11 @@ RUN set -eux; \
     rm /tmp/libtinfo5.deb
 
 # ---------------------------------------------------------------------------
-# clang 5.0.1 (secondary — for A/B runs and the few 5.0.1-only functions)
-# ---------------------------------------------------------------------------
-# Installed to /opt/clang-5.0.1 and NOT put on PATH (4.0.1 is the default); it is
-# selected explicitly via config/toolchain-5.0.1.json. This is the *bare*
-# compiler; target flags are applied by the build, not baked in here.
-RUN set -eux; \
-    curl -fL --retry 3 -o /tmp/clang.tar.xz "${CLANG_URL}"; \
-    echo "${CLANG_SHA256}  /tmp/clang.tar.xz" | sha256sum -c -; \
-    mkdir -p /tmp/clang.extract; \
-    tar -xJf /tmp/clang.tar.xz -C /tmp/clang.extract; \
-    mv /tmp/clang.extract/clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-16.04 /opt/clang-5.0.1; \
-    rm -rf /tmp/clang.tar.xz /tmp/clang.extract
-
-# ---------------------------------------------------------------------------
 # clang 4.0.1 (the pinned cross-compiler)
 # ---------------------------------------------------------------------------
 # Extracted to /opt/clang-4.0.1 and put on PATH so `clang`/`clang++` resolve to
-# it (config/toolchain.json). Same libtinfo5 and picolibc dependencies as 5.0.1.
+# it (config/toolchain.json). Needs the libtinfo5 and picolibc-arm-none-eabi
+# packages installed above.
 # See AGENTS.md -> "Compiler pin revision".
 ENV CLANG_HOME=/opt/clang-4.0.1
 ENV PATH=/opt/clang-4.0.1/bin:${PATH}

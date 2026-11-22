@@ -154,8 +154,8 @@ The analysis environment is reproducible via the devcontainer in `.devcontainer/
 
 >🤖
 > - **clang 4.0.1** (the compiler pin) at `/opt/clang-4.0.1`, on `PATH` — the
->   cross-compiler for Phase 2 — together with the `libtinfo5` it needs. clang 5.0.1 is
->   kept at `/opt/clang-5.0.1` as a secondary for A/B runs (`config/toolchain-5.0.1.json`).
+>   cross-compiler for Phase 2 — together with the `libtinfo5` it needs. It is the only
+>   supported compiler; the former clang 5.0.1 secondary was retired (plan step 0.5).
 >
 > Only the *bare* compiler is installed; the project's target flags are applied by the
 > build (see [AGENTS.md](AGENTS.md) for the authoritative list). The compiler is a

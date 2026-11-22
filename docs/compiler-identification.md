@@ -1,5 +1,15 @@
 # Compiler & runtime identification (Phase 1)
 
+> **Current pin (2026-11): clang 4.0.1 + `-mllvm -pre-RA-sched=source`** — see AGENTS.md,
+> "Compiler pin revision: clang 4.0.1 + `-pre-RA-sched=source` (evidence)". The clang 5.0.1
+> investigation recorded below is **historical evidence**: it is how the FP/NEON feature set,
+> the hardfp ABI, C++17, and the two `-mllvm` knobs were established, and it is retained so
+> the identification reasoning stays auditable. clang 5.0.1 is **retired** — it is no longer
+> installed or selectable (`config/toolchain-5.0.1.json` and the `/opt/clang-5.0.1` image
+> step were removed in step 0.5). For the record, the retired tarball was
+> `clang+llvm-5.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz`
+> (SHA-256 `005f21861cd2953138df7cf511f1552ef7041bafb7cfc4b172264b7ff5fe09b4`).
+
 How the toolchain behind `baserom/main.nso` was identified, and the working result. The
 binary is truth; treat everything here as evidence toward the *working* pin, not a claim
 about the vendor's true toolchain (a NintendoSDK build, and not obtainable).
@@ -14,7 +24,7 @@ about the vendor's true toolchain (a NintendoSDK build, and not obtainable).
 | Target SoC | Tegra X1 (T210, "Erista"), `4×Cortex-A57 + 4×Cortex-A53`; **A57 cluster only** | Wikipedia *Tegra* (Switch `ODNX02-A2`) |
 | Float | ARMv8-A FP + NEON (Cortex-A57 feature set); **hardfp** ABI (`-mfloat-abi=hard`) | A2/A3, A4, *Correction* |
 
-## Compiler — de facto pin: clang 5.0.1 + two backend knobs
+## Compiler — de facto pin: clang 5.0.1 + two backend knobs *(historical; superseded by clang 4.0.1 — see the note above)*
 
 **No stock clang reproduces the build**, but one configuration reproduces all seven probe
 functions byte-for-byte, so the project adopts it as the **de facto pin** until proven otherwise by failing to match future reconstructions, which might then warrant a new investigation to find a better matching setting:

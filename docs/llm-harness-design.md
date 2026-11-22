@@ -366,7 +366,7 @@ with the new comparison rule.
 for want of reasoning: candidates called builtins that do not exist (`__builtin_arm_bfc`,
 `__builtin_arm_ubfx`, `__builtin_arm_sbfx`), used a two-argument `__builtin_arm_rbit`, or wrote
 padding that computed to a negative size. Each spelling in the prompt section was therefore
-**probed against the pinned clang 5.0.1** before being written down: `rbit` is
+**probed against clang 5.0.1** (the pin at the time; clang 4.0.1 since — same spellings) before being written down: `rbit` is
 `__builtin_arm_rbit(x)` (one argument), `ubfx`/`sbfx` are shift-and-mask forms, `bfi` is a
 mask-merge or a bitfield store, `bfc` only comes from a bitfield store of 0 (a clear whose mask
 fits a `bic` immediate lowers to `bic` instead), `rev16` needs a 16-bit value, and `revsh` is

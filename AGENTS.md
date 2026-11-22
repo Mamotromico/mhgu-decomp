@@ -97,7 +97,6 @@ Byte-matching (and the prebuilt loader) depend on exact versions.
 | Loader SHA-256 | `0bc6374c11cb7a1275a0eda22184b9b2efe5a9a7e415cc29361c334966c1f477` | Verified in the Dockerfile. |
 | clang | `4.0.1` | The compiler pin (reproduction stand-in); installed at `/opt/clang-4.0.1`, on `PATH`. |
 | clang tarball SHA-256 | `ca48a4def4cbc9dd6af3f46ce1dc2bd903d26c7ad51387f57884ad1eaa58e42f` | Verified in the Dockerfile. |
-| clang (secondary) | `5.0.1` | Kept at `/opt/clang-5.0.1` (not on `PATH`) for A/B runs and the few 5.0.1-only functions; `config/toolchain-5.0.1.json`. |
 | libtinfo5 | `6.1-1ubuntu1.18.04.1` | ncurses-5 ABI the pinned clang links against; from the Ubuntu 18.04 archive. |
 | Base image | `ubuntu:24.04` | Chosen for batteries-included apt; size is not a concern for a dev image. |
 
@@ -132,7 +131,7 @@ The loader also processes the ELF dynamic relocation metadata (`.rel.dyn` at
 `0x13F206C`, `.rel.plt`, `.init_array`, and a constructed `got` from `0x1838AE8` to
 `0x1848900`), which is the basis for the Phase 3 relocation/link check.
 
-### Compiler & runtime (Phase 1 — resolved, de facto pin)
+### Compiler & runtime (Phase 1 — resolved, de facto pin: clang 4.0.1)
 
 The toolchain is settled to a **de facto pin**, not the vendor's true toolchain (that is a
 NintendoSDK build and is not obtainable):
@@ -141,18 +140,18 @@ NintendoSDK build and is not obtainable):
 Architecture:  AArch32 (32-bit ARM) — confirmed, ARM:LE:32:v8, base 0x60000000
 Language std:  C++17 (-std=c++1z) — confirmed (see below)
 Runtime/libc:  NintendoSDK 4.4.x (nn:: C++ API), libc++ (-stdlib=libc++)
-Compiler:      clang 5.0.1 — DE FACTO pin (reproduction stand-in) + two hidden
-               backend flags; no stock configuration matches all probes (best 6/7)
+Compiler:      clang 4.0.1 — the pin (reproduction stand-in) + one hidden backend
+               flag; no stock configuration matches all probes
 Float:         ARMv8-A FP + NEON (Cortex-A57 feature set) — hardfp ABI
 ```
 
-**Build flags (the de facto pin):**
+**Build flags (the pin):**
 
 ```text
 clang -target armv8a-none-eabi -mfpu=neon-fp-armv8 -mfloat-abi=hard \
       -O2 -fomit-frame-pointer -fPIC -fno-exceptions -fno-rtti \
       -ffreestanding -std=c++1z \
-      -mllvm -pre-RA-sched=source -mllvm -hoist-cheap-insts=true
+      -mllvm -pre-RA-sched=source
 ```
 
 **C++ is the target language.** Imports are the `nn::` C++ API in Itanium mangling, and
@@ -166,7 +165,8 @@ against stock Clang from `releases.llvm.org` (`OdysseyDecomp` and
 upstream Clang. Only some SDK *internals* are known to resist stock Clang
 (`sbergeron42/ssbu-decomp`).
 
-**Compiler: clang 5.0.1 — de facto pin.** Six of the seven reconstructed probes byte-match
+**Initial pin: clang 5.0.1 + two backend knobs (historical — superseded by 4.0.1 below;
+5.0.1 retired in plan step 0.5).** Six of the seven reconstructed probes byte-match
 under **5.0.1 with no `-mcpu`**, the ARMv8-A FP/NEON feature set, and two hidden backend
 flags; the seventh (the 28-byte struct copy) is a known residual. **No stock config matches
 all seven** — the best stock configuration reaches 6/7. The residual gap is two independent
@@ -182,8 +182,9 @@ A stock compiler that differs from *every* stock configuration in **two** separa
 scheduling heuristics is positive evidence for a **non-stock/fork AArch32 backend** (the
 SSBU precedent). Both `-mllvm` flags are **hidden diagnostics, not real build settings**;
 they make our build emit what the original emitted. Because the real NintendoSDK toolchain
-is unobtainable, the project adopts **5.0.1 + both knobs** as a **de facto pin** until
-proven otherwise.
+is unobtainable, **5.0.1 + both knobs** was adopted as the **de facto pin** — later
+**superseded by clang 4.0.1** (see "Compiler pin revision" below), which is the only
+supported pin now that 5.0.1 is retired.
 
 **No `-mcpu`.** `-mcpu=cortex-a57` was copied from the AArch64 reference projects and is
 **wrong** for this 32-bit target. `-mtune` is inert in clang 5.0.1's ARM32 backend. Target
@@ -241,9 +242,11 @@ it dropped to **2,220 / 2,376 (93.4%)**, 156 regressions, 108 of them that guard
 five PoC fixtures are therefore a misleading sample; the four real probes are the
 honest evidence. `-hoist-cheap-insts=true` is not needed on 4.0.1.
 
-The profile is `config/toolchain.json` (the default); 5.0.1 remains selectable via
-`config/toolchain-5.0.1.json`. The Dockerfile installs 4.0.1 to `/opt/clang-4.0.1` on
-`PATH`, with 5.0.1 kept alongside at `/opt/clang-5.0.1`.
+The profile is `config/toolchain.json` — clang 4.0.1 is the **only** supported pin. The
+Dockerfile installs it to `/opt/clang-4.0.1` on `PATH`. The former secondary clang 5.0.1
+(`/opt/clang-5.0.1`, `config/toolchain-5.0.1.json`) was retired in plan step 0.5; its
+tarball identity and the investigation that produced it are preserved as historical
+evidence in [`docs/compiler-identification.md`](docs/compiler-identification.md).
 
 **Status: now the default.** 4.0.1 is the pin (the devcontainer ships `/opt/clang-4.0.1`).
 Source shapes were re-derived under 4.0.1, taking the corpus from 27 to **22 remaining
@@ -520,8 +523,7 @@ devcontainer is rebuilt.
 > a candidate-sized matching prefix is never accepted.
 
 > **Running clang:** the devcontainer ships the pinned compiler at `/opt/clang-4.0.1`
-> (on `PATH`, so `clang`/`clang++` resolve to it) with the `libtinfo.so.5` it needs;
-> `/opt/clang-5.0.1` is kept as a secondary (see `config/toolchain-5.0.1.json`).
+> (on `PATH`, so `clang`/`clang++` resolve to it) with the `libtinfo.so.5` it needs.
 > Note `llvm-objdump` 3.9.1 mis-decodes some instructions and emits a byte-shifted
 > stream: **read code with `clang -S` or Ghidra.**
 
@@ -557,10 +559,11 @@ codebase (≈81% byte overlap), so the compiler gives no reason to prefer base. 
   approval; byte-matching depends on exact versions.
 - The **compiler is installed**: the Dockerfile downloads the pinned clang 4.0.1
   tarball (SHA-256 verified) to `/opt/clang-4.0.1` on `PATH`, with the `libtinfo5` it
-  needs (5.0.1 is kept at `/opt/clang-5.0.1` as a secondary). It ships the *bare*
+  needs. It ships the *bare*
   compiler; the project's target flags are applied by the
   build (see [Compiler & runtime](#compiler--runtime-phase-1--resolved-de-facto-pin)).
-  Do not add a guessed toolchain or a third clang.
+  clang 4.0.1 is the only supported compiler — the former 5.0.1 secondary was retired
+  (step 0.5). Do not add a guessed toolchain or a third clang.
 
 ---
 

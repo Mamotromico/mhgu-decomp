@@ -19,7 +19,7 @@ disposition toward it so far) and an **action tag** (how the idea would transfer
 
 | Tag | Meaning |
 | --- | --- |
-| **adopt** | Idea transfers essentially as-is to our AArch32 / clang-5.0.1 / MHGU setting. |
+| **adopt** | Idea transfers essentially as-is to our AArch32 / clang-4.0.1 / MHGU setting. |
 | **adapt** | Right idea, but needs rework for our target, language, or workflow. |
 | **study** | Design reference only — do not expect to lift the code. |
 | **skip** | Explicitly *not* worth importing; recorded so we don't re-litigate it. |
