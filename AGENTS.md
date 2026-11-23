@@ -285,7 +285,11 @@ itself stays image-free — the retype is a post-seed step, documented in
 
 `baserom/work/attempts/log.jsonl` is **append-only history**, not current state: a
 record's `MISMATCH` was issued by *whatever gate existed then*, and entries that later
-matched keep their old failure rows. Two measured consequences:
+matched keep their old failure rows. (Per-entry lookups — counts, latest attempt, id →
+record — go through the derived `index.json` maintained by `tools/loop/attempts.py`;
+the log stays the sole authority and the index rebuilds from it on any fingerprint
+mismatch. Never compute state from a raw scan when the index helpers exist.) Two measured
+consequences:
 
 - **Never compute a match rate from the log.** It reports stale failures and
   understates the result (log: 9,363 attempts / 2,238 matches on "plain" entries;

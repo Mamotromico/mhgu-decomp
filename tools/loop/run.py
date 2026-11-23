@@ -679,19 +679,15 @@ def attempted_counts(layout: Layout) -> dict[tuple[str, str], int]:
     """How many attempts each entry already has in the log, across every run.
 
     ``--attempts`` is per invocation, so without this an entry that never matches stays at the
-    front of the queue and is re-attempted on every run. A corrupt log is a warning, not a
-    failure: the filter is a convenience, not a correctness gate.
+    front of the queue and is re-attempted on every run. Served from the attempt index rather
+    than a full log scan. A corrupt log is a warning, not a failure: the filter is a
+    convenience, not a correctness gate.
     """
-    counts: dict[tuple[str, str], int] = {}
     try:
-        records = attempts.read_attempts(attempt_store(layout) / "log.jsonl")
+        return attempts.attempt_counts(attempt_store(layout))
     except attempts.AttemptError as e:
         print(f"warning: {e}; --skip-attempted ignored", file=sys.stderr)
         return {}
-    for record in records:
-        key = (record.get("module"), record.get("addr"))
-        counts[key] = counts.get(key, 0) + 1
-    return counts
 
 
 def bank_priorities(layout: Layout) -> dict[tuple[str, str], list[int]]:
@@ -734,12 +730,13 @@ def bank_seeds(layout: Layout) -> dict[tuple[str, str], tuple[str, str | None]]:
         print(f"warning: {e}; --repair ignored", file=sys.stderr)
         return {}
     store = attempt_store(layout)
+    wanted = [r.get("attempt_id") for r in bank.get("records", {}).values()
+              if r.get("pin") == pin and r.get("attempt_id") is not None]
     try:
-        records = attempts.read_attempts(store / "log.jsonl")
+        by_id = attempts.records_by_id(store, wanted)
     except attempts.AttemptError as e:
         print(f"warning: {e}; --repair ignored", file=sys.stderr)
         return {}
-    by_id = {r.get("id"): r for r in records}
     seeds: dict[tuple[str, str], tuple[str, str | None]] = {}
     for record in bank.get("records", {}).values():
         if record.get("pin") != pin:
