@@ -563,8 +563,10 @@ Curated prior art (study for conventions; do not copy blindly):
 - [x] **Model C gate rig** → `tools/ledger/bytegate.py` (compile one function,
       byte-diff vs. the original), `tools/ledger/validate.py` (ledger invariants, the
       CI gate), `tools/ledger/ledgerlib.py` (schema + the one shared matched
-      predicate), reference bytes from `tools/ghidra/dump_blocks.sh`, and the compiler
-      pin in `config/toolchain.json`.
+      predicate), the reference cache `tools/ledger/refcache.py` (cached direct
+      `.text` extraction keyed by NSO identity; `dump_blocks.sh` is the fallback for
+      non-`.text` blocks and `refcache --check` verifies byte equivalence), and the
+      compiler pin in `config/toolchain.json`.
 - [ ] Verify ARM32 support in `reccmp` / `asm-differ` / `splat`; decide whether to port
       `nx-decomp-tools` or build on `asm-differ`.
 - [ ] Decide how much of the sm64ds automation stack (templates, near-miss bank,

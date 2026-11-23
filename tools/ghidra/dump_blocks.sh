@@ -6,7 +6,10 @@
 # builds the memory map at import; no analysis is needed to read blocks) and runs
 # DumpMemoryBlocks.java, writing one <block>_<startHex>.bin per initialized block.
 #
-# This is the reference-byte source for tools/ledger/bytegate.py; it is called per check.
+# This is the reference-byte fallback for tools/ledger/bytegate.py: the gate serves
+# .text from the cached direct extraction (tools/ledger/refcache.py) and only calls
+# this script for blocks the cache cannot serve, on --ghidra-ref, or via
+# `refcache --check` (byte-equivalence verification against the cached extraction).
 # A fresh throwaway project every run keeps it lock-free and deterministic.
 #
 # Usage:

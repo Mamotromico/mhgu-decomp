@@ -22,7 +22,9 @@ from unittest import mock
 # The ledger tools are plain scripts (no package), so put their directory on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "ledger"))
 
+import bytegate
 import gotmap
+import refcache
 from bytegate import (
     branch_addresses,
     compare_body,
@@ -33,6 +35,7 @@ from bytegate import (
     resolve_branches,
     resolve_pools,
     resolve_relocations,
+    resolve_ref_bin,
     should_color,
 )
 
@@ -419,6 +422,84 @@ class BranchAddressesTests(unittest.TestCase):
             _addresses, via = branch_addresses([{"symbol": "func_60000000"}],
                                                self.ENTRIES, Path("/nso"), None)
         self.assertEqual(via, 0)
+
+
+class ResolveRefBinTests(unittest.TestCase):
+    """Reference-source selection: cached direct extraction, with the Ghidra dump as
+    the explicit fallback (uncacheable block, cache failure, or --ghidra-ref)."""
+
+    NSO = Path("/nso/main.nso")
+    REF_DIR = Path("/ref")
+    CACHE = Path("/cache")
+    TEXT_BIN = CACHE / ".text_60000000.bin"
+
+    def resolve(self, block, **kwargs):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            with contextlib.redirect_stdout(io.StringIO()):
+                path, src = resolve_ref_bin(self.NSO, block, self.REF_DIR, self.CACHE,
+                                            **kwargs)
+        return path, src, err.getvalue()
+
+    def test_a_text_block_is_served_from_the_cache(self):
+        with mock.patch.object(refcache, "ref_bin_for_block",
+                               return_value=self.TEXT_BIN) as cache:
+            with mock.patch.object(bytegate, "dump_blocks_ref",
+                                   side_effect=AssertionError("no dump wanted")):
+                path, src, _ = self.resolve(".text")
+        self.assertEqual((path, src), (self.TEXT_BIN, "cache"))
+        cache.assert_called_once_with(self.NSO, ".text", self.CACHE, refresh=False)
+
+    def test_an_uncacheable_block_falls_back_to_the_dump(self):
+        with mock.patch.object(refcache, "ref_bin_for_block", return_value=None):
+            with mock.patch.object(bytegate, "dump_blocks_ref") as dump:
+                with mock.patch.object(bytegate, "block_bin",
+                                       return_value=self.REF_DIR / ".data_6172f000.bin"
+                                       ) as block_bin:
+                    path, src, _ = self.resolve(".data")
+        self.assertEqual((path, src),
+                         (self.REF_DIR / ".data_6172f000.bin", "ghidra"))
+        dump.assert_called_once_with(self.NSO, self.REF_DIR)
+        block_bin.assert_called_once_with(self.REF_DIR, ".data")
+
+    def test_a_cache_failure_falls_back_to_the_dump_with_a_warning(self):
+        with mock.patch.object(refcache, "ref_bin_for_block",
+                               side_effect=refcache.RefError("no image")):
+            with mock.patch.object(bytegate, "dump_blocks_ref"):
+                with mock.patch.object(bytegate, "block_bin",
+                                       return_value=self.TEXT_BIN):
+                    _path, src, err = self.resolve(".text")
+        self.assertEqual(src, "ghidra")
+        self.assertIn("falling back to Ghidra", err)
+
+    def test_force_ghidra_skips_the_cache(self):
+        with mock.patch.object(refcache, "ref_bin_for_block",
+                               side_effect=AssertionError("cache must not be touched")):
+            with mock.patch.object(bytegate, "dump_blocks_ref") as dump:
+                with mock.patch.object(bytegate, "block_bin",
+                                       return_value=self.TEXT_BIN):
+                    _path, src, _ = self.resolve(".text", force_ghidra=True)
+        self.assertEqual(src, "ghidra")
+        dump.assert_called_once()
+
+    def test_refresh_is_passed_through_to_the_cache(self):
+        with mock.patch.object(refcache, "ref_bin_for_block",
+                               return_value=self.TEXT_BIN) as cache:
+            with mock.patch.object(bytegate, "dump_blocks_ref",
+                                   side_effect=AssertionError("no dump wanted")):
+                self.resolve(".text", refresh=True)
+        cache.assert_called_once_with(self.NSO, ".text", self.CACHE, refresh=True)
+
+    def test_a_dump_failure_propagates_to_the_caller(self):
+        # The pre-cache behaviour is preserved: no block file at all is a setup error,
+        # not a silently skipped comparison.
+        with mock.patch.object(refcache, "ref_bin_for_block", return_value=None):
+            with mock.patch.object(bytegate, "dump_blocks_ref",
+                                   side_effect=FileNotFoundError("no ghidra")):
+                with self.assertRaises(FileNotFoundError):
+                    self.resolve(".data")
 
 
 if __name__ == "__main__":

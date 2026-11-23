@@ -33,11 +33,11 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "ledger"))
 
 import complexity  # noqa: E402
+import refcache  # noqa: E402
 from ledgerlib import read_entries  # noqa: E402
 
 LOG = REPO / "baserom" / "work" / "attempts" / "log.jsonl"
 ATTEMPTS = REPO / "baserom" / "work" / "attempts"
-REF_DIR = REPO / "baserom" / "work" / "bytegate" / "ref"
 GATE = REPO / "tools" / "ledger" / "bytegate.py"
 
 
@@ -81,10 +81,11 @@ def load_entries() -> dict[tuple[str, str], list[dict]]:
 
 
 def find_ref_bin() -> Path:
-    hits = sorted(REF_DIR.glob(".text_*.bin"))
-    if len(hits) != 1:
-        raise SystemExit(f"expected one .text dump in {REF_DIR}, found {len(hits)}")
-    return hits[0]
+    """The cached reference ``.text`` block (extracted directly from the NSO)."""
+    try:
+        return refcache.load_or_build(REPO / "baserom" / "main.nso")
+    except refcache.RefError as e:
+        raise SystemExit(f"error: {e}") from e
 
 
 def gate_one(cand: Path, module: str, addr: str, size: int, ref_bin: Path,

@@ -12,8 +12,10 @@ Pipeline
    and ``-ffunction-sections``, so the function has its own section.
 3. Extract that function's bytes from the ELF32 object (by its defined ``FUNC`` symbol),
    together with the relocations applied to its own section.
-4. Dump the original memory blocks (``tools/ghidra/dump_blocks.sh``) and compare the compiled
-   function body against the original at its offset within its block.
+4. Compare the compiled function body against the original bytes. The reference comes
+   from the cached direct ``.text`` extraction (``tools/ledger/refcache.py``) — a pure
+   NSO slice, no Ghidra; blocks the cache cannot serve fall back to a fresh
+   ``tools/ghidra/dump_blocks.sh`` dump.
 5. Optionally ``--update`` the ledger's ``verify`` axis on a match, together with the
    ``gate`` provenance of that verdict (``raw`` while the comparison is byte-for-byte).
 
@@ -67,7 +69,10 @@ Options:
     --ledger FILE   committed ledger (default config/main/ledger.tsv)
     --src-root DIR  source root (default <repo>/src)
     --build-config FILE  build layout incl. include dirs (default config/build.json)
-    --ref-bin FILE  a block .bin to compare against (skips the Ghidra dump)
+    --ref-bin FILE  a block .bin to compare against (skips the cache and the dump)
+    --ref-cache DIR cached reference blocks (default baserom/work/bytegate/refcache)
+    --refresh-ref   rebuild the reference cache from the NSO before gating
+    --ghidra-ref    dump reference blocks with Ghidra instead of the cache
     --ref-dir DIR   where to dump blocks (default baserom/work/bytegate/ref)
     --nso FILE      NSO to dump (default baserom/main.nso)
     --body N        authoritative body length; requires an exact length match
@@ -96,6 +101,7 @@ from pathlib import Path
 
 from ledgerlib import read_entries, set_fields
 import gotmap
+import refcache
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_LEDGER = REPO / "config" / "main" / "ledger.tsv"
@@ -445,6 +451,33 @@ def dump_blocks_ref(nso: Path, ref_dir: Path) -> None:
     subprocess.run(["bash", str(script), str(nso), str(ref_dir)], check=True)
 
 
+def resolve_ref_bin(nso: Path, block: str, ref_dir: Path,
+                    cache_dir: Path | None = None, *, refresh: bool = False,
+                    force_ghidra: bool = False) -> tuple[Path, str]:
+    """The reference block .bin for ``block``; returns ``(path, source)``.
+
+    ``source`` is ``"cache"`` (the direct NSO extraction, served by
+    :mod:`refcache`) or ``"ghidra"`` (a fresh ``dump_blocks.sh`` dump). Only
+    ``.text`` is cached — every gateable function lives there, and only ``.text`` is
+    a byte-exact slice of the NSO; any other block, ``force_ghidra``, or a cache
+    failure falls back to the dump. A failure *there* raises, and the caller reports
+    it as a setup error exactly as before.
+    """
+    if not force_ghidra:
+        try:
+            cached = refcache.ref_bin_for_block(nso, block, cache_dir, refresh=refresh)
+        except refcache.RefError as e:
+            print(f"warning: reference cache unavailable ({e}); falling back to Ghidra",
+                  file=sys.stderr)
+        else:
+            if cached is not None:
+                print(f"reference: {cached} (cached direct extraction)")
+                return cached, "cache"
+    print(f"reference: dumping blocks via Ghidra -> {ref_dir}")
+    dump_blocks_ref(nso, ref_dir)
+    return block_bin(ref_dir, block), "ghidra"
+
+
 # --- diff -----------------------------------------------------------------------------
 
 def print_diff(cand: bytes, ref: bytes, show: bool) -> None:
@@ -575,6 +608,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     ap.add_argument("--src-root", type=Path, default=DEFAULT_SRC_ROOT)
     ap.add_argument("--ref-bin", type=Path, default=None)
+    ap.add_argument("--ref-cache", type=Path, default=refcache.DEFAULT_CACHE_DIR,
+                    help="cached reference blocks (default under baserom/work; built "
+                         "from the NSO on first use)")
+    ap.add_argument("--refresh-ref", action="store_true",
+                    help="rebuild the reference cache from the NSO before gating")
+    ap.add_argument("--ghidra-ref", action="store_true",
+                    help="dump reference blocks with Ghidra instead of the cache")
     ap.add_argument("--ref-dir", type=Path, default=REPO / "baserom" / "work" / "bytegate" / "ref")
     ap.add_argument("--nso", type=Path, default=REPO / "baserom" / "main.nso")
     ap.add_argument("--toolchain", type=Path, default=DEFAULT_TOOLCHAIN)
@@ -678,10 +718,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.ref_bin is not None:
         ref_bin = args.ref_bin
     else:
-        print(f"reference: dumping blocks -> {args.ref_dir}")
         try:
-            dump_blocks_ref(args.nso, args.ref_dir)
-            ref_bin = block_bin(args.ref_dir, entry["block"])
+            ref_bin, _src = resolve_ref_bin(args.nso, entry["block"], args.ref_dir,
+                                            args.ref_cache, refresh=args.refresh_ref,
+                                            force_ghidra=args.ghidra_ref)
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"error: could not obtain reference blocks from {args.nso}: {e}",
                   file=sys.stderr)
