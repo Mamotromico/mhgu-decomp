@@ -26,6 +26,15 @@ the draft is moved out of ``src/`` so it holds matched code only — never disca
 (``AGENTS.md``): every attempt is appended to the parent-linked log (``attempts.py``), and the
 strictly-improving near-miss bank (``nearmiss.py``, under the eval pin) keeps the closest so far.
 
+Every new attempt record carries an **experiment fingerprint** alongside the outcome (plan
+step 1.3): the attempt ``kind`` (``plain``/``retry``/``repair``) and its ``parent``, the
+provider/requested/server-reported model names and the server revision fingerprint, the exact
+decoding parameters, hashes of the rendered prompt and of the retrieval (bundle) text, the
+toolchain profile hash and the gate's comparison-rule version, plus latency, token counts,
+finish reason, and ``cost_usd`` when a pricing table is configured. The fields record what
+this attempt actually used, so a benchmark result can be reproduced or compared from the log
+alone; records written before the fingerprint existed simply lack the fields.
+
 Usage::
 
     python3 tools/loop/run.py                         # one entry (next pending, easiest first)
@@ -863,6 +872,58 @@ def prompt_fingerprint(prompt: str) -> str:
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:16]
 
 
+def file_sha256(path: Path | None) -> str | None:
+    """The content fingerprint of a config file, or ``None`` when it cannot be read.
+
+    Records carry the toolchain profile's hash (never its path, which varies by checkout)
+    so a benchmark result can be tied to the exact compiler pin that produced it.
+    """
+    if path is None:
+        return None
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16]
+    except OSError:
+        return None
+
+
+_DECODE_PARAMS = ("temperature", "max_tokens", "seed", "reasoning_effort")
+
+
+def decoding_params(model) -> dict:
+    """The sampling parameters the client will actually send, for the attempt record.
+
+    Only set parameters are recorded (a missing key means "the server/preset default was
+    in force"), so the record reflects the exact decoding configuration of this attempt.
+    """
+    return {name: getattr(model, name, None) for name in _DECODE_PARAMS
+            if getattr(model, name, None) is not None}
+
+
+def completion_fields(model, prompt_tokens, completion_tokens, finish_reason="",
+                      system_fingerprint="") -> dict:
+    """The experiment-fingerprint fields describing *how the model was asked*.
+
+    Shared by a plain attempt and a repair round. ``provider``/``requested_model`` are the
+    configured endpoint and model name; ``model`` on the record itself stays the
+    server-reported name from the completion, so a router that silently served a different
+    revision is visible. ``cost_usd`` appears only when a pricing table is configured and
+    the usage counts are present — absent means "not recorded", never "free".
+    """
+    fields = {
+        "provider": getattr(model, "endpoint", None),
+        "requested_model": getattr(model, "model", None),
+        "decoding": decoding_params(model),
+        "finish_reason": finish_reason or None,
+    }
+    cost = model_client.completion_cost(prompt_tokens, completion_tokens,
+                                        getattr(model, "pricing", None))
+    if cost is not None:
+        fields["cost_usd"] = cost
+    if system_fingerprint:
+        fields["system_fingerprint"] = system_fingerprint
+    return fields
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1110,14 +1171,20 @@ def build_bundle_text(layout: Layout, entry: dict, args, body: int) -> str:
 
 def ask_model(entry: dict, layout: Layout, args, model, body: int,
               feedback: "Feedback | None" = None):
-    """Bundle, prompt, and call the model. Returns ``(candidate, completion, prompt)``."""
-    prompt = build_prompt(entry, build_bundle_text(layout, entry, args, body), feedback)
+    """Bundle, prompt, and call the model.
+
+    Returns ``(candidate, completion, prompt, bundle_text)`` — the bundle text comes back
+    with the prompt so the attempt record can fingerprint the retrieval output separately
+    from the retry feedback that changes the prompt around it.
+    """
+    bundle_text = build_bundle_text(layout, entry, args, body)
+    prompt = build_prompt(entry, bundle_text, feedback)
     print(f"    asking {getattr(model, 'model', 'model')} …", file=sys.stderr, flush=True)
     with heartbeat(entry["name"]):
         completion = model.complete(prompt, system=SYSTEM)
     print(f"    reply in {completion.latency_s:.0f}s ({completion.completion_tokens} tok)",
           file=sys.stderr, flush=True)
-    return model_client.strip_fences(completion.text), completion, prompt
+    return model_client.strip_fences(completion.text), completion, prompt, bundle_text
 
 
 def gate_body(raw_body: bytes | None, body: int, partition: int) -> int:
@@ -1278,9 +1345,10 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         return "dry-run"
 
     # 2. model — only when no template fired.
-    completion = prompt = None
+    completion = prompt = bundle_text = None
     if candidate is None:
-        candidate, completion, prompt = ask_model(entry, layout, args, model, body, feedback)
+        candidate, completion, prompt, bundle_text = ask_model(entry, layout, args, model,
+                                                               body, feedback)
         if not candidate.strip():
             print(f"{name}: empty candidate from the model "
                   f"(finish_reason={completion.finish_reason or '?'}, "
@@ -1306,11 +1374,13 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
 
     # 4. a template that missed falls through to the model, so the path never regresses.
     if outcome != "match" and source == "template":
-        candidate2, completion2, prompt2 = ask_model(entry, layout, args, model, body, feedback)
+        candidate2, completion2, prompt2, bundle2 = ask_model(entry, layout, args, model,
+                                                              body, feedback)
         if candidate2.strip() and asm_violation(candidate2) is None:
             candidate, source = candidate2, "model"
             hit = None                     # the rule missed; this is a model attempt now
             completion, prompt = completion2, prompt2
+            bundle_text = bundle2
             outcome, report, rc, gate_out = write_and_gate(entry, layout, assert_body, draft,
                                                             candidate)
 
@@ -1318,14 +1388,23 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
     record = {
         "module": module, "addr": addr, "name": name, "body": body,
         "extent_source": extent_source, "outcome": outcome, "gate_rc": rc, "source": source,
+        "kind": "retry" if feedback is not None else "plain",
         "model": completion.model if completion else "template",
         "prompt_tokens": completion.prompt_tokens if completion else None,
         "completion_tokens": completion.completion_tokens if completion else None,
         "reasoning_tokens": completion.reasoning_tokens if completion else None,
         "latency_s": completion.latency_s if completion else 0.0,
         "prompt_sha256": prompt_fingerprint(prompt or ""),
+        "bundle_sha256": (prompt_fingerprint(bundle_text)
+                          if bundle_text is not None else None),
+        "toolchain_sha256": file_sha256(layout.toolchain),
         "gate_output": gate_out.strip()[-4000:],
     }
+    if completion is not None:
+        record.update(completion_fields(model, completion.prompt_tokens,
+                                        completion.completion_tokens,
+                                        completion.finish_reason,
+                                        completion.system_fingerprint))
     if feedback is not None:
         record["feedback_used"] = True
     if hit is not None:
@@ -1335,6 +1414,7 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         record["diff_count"] = report["diff_count"]
         record["diff_words"] = report.get("diff_words", [])
         record["gate"] = report.get("gate")
+        record["gate_version"] = report.get("gate_version")
     stored = attempts.append(attempt_store(layout), record, candidate_text=candidate)
 
     # 6. bank a near miss (strictly-improving), and keep src/ matched-only.
@@ -1434,20 +1514,27 @@ def process_repair(entry: dict, entries: list[dict], layout: Layout, args, model
         record = {
             "module": module, "addr": addr, "name": name, "body": body,
             "extent_source": extent_source, "outcome": outcome, "gate_rc": rc,
-            "source": "repair", "repair_seed": seed_id,
+            "source": "repair", "kind": "repair", "repair_seed": seed_id,
             "model": meta.get("model", "seed"),
             "prompt_tokens": meta.get("prompt_tokens"),
             "completion_tokens": meta.get("completion_tokens"),
             "reasoning_tokens": meta.get("reasoning_tokens"),
             "latency_s": meta.get("latency_s", 0.0),
             "prompt_sha256": prompt_fingerprint(meta.get("prompt", "")),
+            "bundle_sha256": prompt_fingerprint(bundle_text),
+            "toolchain_sha256": file_sha256(layout.toolchain),
             "gate_output": gate_out.strip()[-4000:],
         }
+        record.update(completion_fields(model, meta.get("prompt_tokens"),
+                                        meta.get("completion_tokens"),
+                                        meta.get("finish_reason") or "",
+                                        meta.get("system_fingerprint") or ""))
         if report is not None:
             record["gate_status"] = report["status"]
             record["diff_count"] = report["diff_count"]
             record["diff_words"] = report.get("diff_words", [])
             record["gate"] = report.get("gate")
+            record["gate_version"] = report.get("gate_version")
         stored = attempts.append(attempt_store(layout), record, candidate_text=source)
         if report is not None and outcome != "match":
             try:
@@ -1470,7 +1557,9 @@ def process_repair(entry: dict, entries: list[dict], layout: Layout, args, model
         meta.update(model=completion.model, prompt_tokens=completion.prompt_tokens,
                     completion_tokens=completion.completion_tokens,
                     reasoning_tokens=completion.reasoning_tokens,
-                    latency_s=completion.latency_s, prompt=prompt)
+                    latency_s=completion.latency_s, prompt=prompt,
+                    finish_reason=completion.finish_reason or None,
+                    system_fingerprint=completion.system_fingerprint or None)
         return model_client.strip_fences(completion.text)
 
     try:

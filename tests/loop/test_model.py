@@ -29,6 +29,7 @@ from model import (
     ModelError,
     build_payload,
     chat_endpoint,
+    completion_cost,
     from_config,
     parse_response,
     proxy_handler,
@@ -134,6 +135,38 @@ class ParseResponseTests(unittest.TestCase):
                                       "completion_tokens_details": {"reasoning_tokens": 11990}}},
                            0.0)
         self.assertEqual((c.completion_tokens, c.reasoning_tokens), (12000, 11990))
+
+    def test_system_fingerprint_is_surfaced(self):
+        c = parse_response({"choices": [{"message": {"content": "ok"}}],
+                            "system_fingerprint": "fp_44709d6e01"}, 0.0)
+        self.assertEqual(c.system_fingerprint, "fp_44709d6e01")
+
+    def test_no_system_fingerprint_is_empty(self):
+        c = parse_response({"choices": [{"message": {"content": "ok"}}]}, 0.0)
+        self.assertEqual(c.system_fingerprint, "")
+
+
+class CompletionCostTests(unittest.TestCase):
+    """``cost_usd`` accounting: priced when a table and usage exist, absent otherwise."""
+
+    PRICING = {"input_per_mtok": 2.0, "output_per_mtok": 10.0}
+
+    def test_priced_from_token_counts(self):
+        self.assertEqual(completion_cost(1_000_000, 500_000, self.PRICING),
+                         2.0 + 5.0)
+        self.assertAlmostEqual(completion_cost(1, 2, self.PRICING), 22.0 / 1_000_000)
+
+    def test_missing_pricing_is_not_available(self):
+        self.assertIsNone(completion_cost(100, 100, None))
+
+    def test_missing_usage_is_not_available(self):
+        self.assertIsNone(completion_cost(None, 100, self.PRICING))
+        self.assertIsNone(completion_cost(100, None, self.PRICING))
+
+    def test_a_local_endpoint_prices_nothing(self):
+        # The default config carries no pricing table: a local run records no cost,
+        # which must read as "not available", never as a fabricated zero.
+        self.assertIsNone(completion_cost(100, 100, None))
 
 
 class StripFencesTests(unittest.TestCase):
@@ -325,6 +358,22 @@ class FromConfigTests(unittest.TestCase):
         self.assertEqual(from_config(path, override_reasoning_effort="none").reasoning_effort,
                          "none")
         self.assertIsNone(from_config(self.write({"base_url": "http://h:8080"})).reasoning_effort)
+
+    def test_pricing_table_is_loaded(self):
+        path = self.write({"base_url": "http://h:8080",
+                           "pricing": {"input_per_mtok": 2.0, "output_per_mtok": 10.0}})
+        m = from_config(path)
+        self.assertEqual(m.pricing, {"input_per_mtok": 2.0, "output_per_mtok": 10.0})
+        self.assertIsNone(from_config(self.write({"base_url": "http://h:8080"})).pricing)
+
+    def test_malformed_pricing_is_rejected(self):
+        bad = [{"pricing": "cheap"},
+               {"pricing": {"input_per_mtok": 2.0}},
+               {"pricing": {"input_per_mtok": "2", "output_per_mtok": 10.0}}]
+        for cfg in bad:
+            path = self.write({"base_url": "http://h:8080", **cfg})
+            with self.assertRaises(ValueError):
+                from_config(path)
 
 
 if __name__ == "__main__":

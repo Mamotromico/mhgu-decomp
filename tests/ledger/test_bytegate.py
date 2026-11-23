@@ -164,6 +164,12 @@ class GateResultTests(unittest.TestCase):
                             True, "match", 60, 1368, has_reloc=True, gate="reloc")
         self.assertEqual(reloc["gate"], "reloc")
 
+    def test_the_comparison_rule_version_is_reported(self):
+        # Every report names the gate rule that judged it, so an attempt record can say
+        # exactly which comparison produced its verdict (bump GATE_VERSION with the rule).
+        r = self.result(b"abcd", b"abcd")
+        self.assertEqual(r["gate_version"], "bytegate/v4")
+
     def test_carries_status_and_identity(self):
         r = self.result(b"abcd", b"abce", ok=False, status="mismatch")
         self.assertFalse(r["ok"])

@@ -10,6 +10,7 @@ write, gate, log, bank, move — without clang, Ghidra, or a model. Run with::
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import struct
@@ -546,21 +547,37 @@ class PromptFingerprintTests(unittest.TestCase):
 
 
 class _FakeModel:
-    """Stands in for the HTTP client: returns a fixed candidate."""
+    """Stands in for the HTTP client: returns a fixed candidate.
+
+    Carries the same client-side attributes ``run`` fingerprints (endpoint, requested
+    model name, decoding parameters, pricing) so the record fields can be asserted.
+    """
 
     def __init__(self, text='extern "C" int func_601a72e4() { return 0; }',
-                 finish_reason=""):
+                 finish_reason="", *, model="fake-model", endpoint="http://fake.local:1/v1",
+                 temperature=None, max_tokens=None, seed=None, reasoning_effort=None,
+                 pricing=None, system_fingerprint=""):
         self.text = text
         self.finish_reason = finish_reason
+        self.model = model
+        self.endpoint = endpoint
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.seed = seed
+        self.reasoning_effort = reasoning_effort
+        self.pricing = pricing
+        self.system_fingerprint = system_fingerprint
 
     def complete(self, prompt, *, system=None):
         return Namespace(text=self.text, model="fake", prompt_tokens=1,
                          completion_tokens=2, latency_s=0.0,
                          finish_reason=self.finish_reason, reasoning="",
-                         reasoning_tokens=None)
+                         reasoning_tokens=None,
+                         system_fingerprint=self.system_fingerprint)
 
 
-def fake_gate(rc: int, status: str, diff_count: int, cand_len: int, diff_words=None):
+def fake_gate(rc: int, status: str, diff_count: int, cand_len: int, diff_words=None,
+              gate_version="bytegate/test"):
     """A ``run_subprocess`` stand-in that writes the gate's ``--report`` file."""
     def _run(argv):
         report = None
@@ -572,7 +589,7 @@ def fake_gate(rc: int, status: str, diff_count: int, cand_len: int, diff_words=N
                 "ok": rc == 0, "status": status, "body": 60, "partition": 1368,
                 "cand_len": cand_len, "ref_len": 60, "diff_count": diff_count,
                 "first_diff": 0 if diff_count else None, "diff_words": diff_words or [],
-                "has_reloc": False}))
+                "has_reloc": False, "gate_version": gate_version}))
         return rc, f">>> {status.upper()}"
     return _run
 
@@ -731,6 +748,59 @@ class ProcessTests(unittest.TestCase):
             process(entry(), [entry()], self.lay, self.args, _FakeModel())
         self.assertNotIn("feedback_used", self.log()[0])
 
+    def test_attempt_records_the_experiment_fingerprint(self):
+        # Everything a benchmark needs to reproduce or compare this attempt, straight from
+        # the record: who answered, how it was asked, what judged it, what it cost.
+        model = _FakeModel(temperature=0.2, seed=7, max_tokens=12000,
+                           pricing={"input_per_mtok": 2.0, "output_per_mtok": 10.0},
+                           system_fingerprint="fp_test123")
+        with mock.patch("run.run_subprocess", new=fake_gate(1, "mismatch", 3, 58)):
+            process(entry(), [entry()], self.lay, self.args, model)
+        record = self.log()[0]
+        self.assertEqual(record["kind"], "plain")
+        self.assertEqual(record["provider"], "http://fake.local:1/v1")
+        self.assertEqual(record["requested_model"], "fake-model")
+        self.assertEqual(record["model"], "fake")            # the server-reported name
+        self.assertEqual(record["system_fingerprint"], "fp_test123")
+        self.assertEqual(record["decoding"], {"temperature": 0.2, "seed": 7,
+                                              "max_tokens": 12000})
+        self.assertIsNone(record["finish_reason"])          # the fake server reports none
+        # 1 prompt tok @ $2/M + 2 completion tok @ $10/M
+        self.assertAlmostEqual(record["cost_usd"], 22.0 / 1_000_000)
+        self.assertEqual(record["bundle_sha256"],
+                         prompt_fingerprint("# bundle: func_601a72e4\n"))
+        want_tc = hashlib.sha256(b'{"clang": "clang"}').hexdigest()[:16]
+        self.assertEqual(record["toolchain_sha256"], want_tc)
+        self.assertEqual(record["gate_version"], "bytegate/test")
+
+    def test_no_cost_is_recorded_without_a_pricing_table(self):
+        with mock.patch("run.run_subprocess", new=fake_gate(1, "mismatch", 3, 58)):
+            process(entry(), [entry()], self.lay, self.args, _FakeModel())
+        self.assertNotIn("cost_usd", self.log()[0])
+
+    def test_retry_records_kind_retry(self):
+        words = [{"offset": 0, "got": "5c1080e5", "want": "170a80ed"}]
+        fb = Feedback("mismatch", status="mismatch", diff_count=3, diff_words=words)
+        with mock.patch("run.run_subprocess", new=fake_gate(1, "mismatch", 3, 58)):
+            process(entry(), [entry()], self.lay, self.args, _FakeModel(), feedback=fb)
+        self.assertEqual(self.log()[0]["kind"], "retry")
+
+    def test_template_attempt_records_no_model_fingerprint(self):
+        # A template hit makes no model call and builds no bundle: the model-side fields
+        # stay absent, while the toolchain/gate identity of the judging rule is recorded.
+        self.args.body = 4
+        with mock.patch("run.run_subprocess", new=fake_gate(0, "match", 0, 4)):
+            outcome = process(entry(), [entry()], self.lay, self.args, None,
+                              raw_text=self._template_text())
+        self.assertEqual(outcome, "match")
+        record = self.log()[0]
+        self.assertEqual(record["kind"], "plain")
+        self.assertEqual(record["model"], "template")
+        for field in ("provider", "requested_model", "decoding", "finish_reason"):
+            self.assertNotIn(field, record)
+        self.assertIsNone(record["bundle_sha256"])
+        self.assertEqual(record["gate_version"], "bytegate/test")
+
 
 class RepairPromptTests(unittest.TestCase):
     """Repair mode's prompt: the usual task plus a minimal-edit instruction and the
@@ -770,13 +840,21 @@ class _SeqModel:
     def __init__(self, replies: list[str]):
         self.replies = list(replies)
         self.prompts: list[str] = []
+        # Client-side attributes the record fingerprints (as the real HttpModel has).
+        self.model = "fake-model"
+        self.endpoint = "http://fake.local:1/v1"
+        self.temperature = None
+        self.max_tokens = None
+        self.seed = None
+        self.reasoning_effort = None
+        self.pricing = None
 
     def complete(self, prompt, *, system=None):
         self.prompts.append(prompt)
         text = self.replies.pop(0) if self.replies else ""
         return Namespace(text=text, model="fake", prompt_tokens=1, completion_tokens=2,
                          latency_s=0.0, finish_reason="stop", reasoning="",
-                         reasoning_tokens=None)
+                         reasoning_tokens=None, system_fingerprint="")
 
 
 def fake_gate_seq(verdicts):
@@ -792,7 +870,7 @@ def fake_gate_seq(verdicts):
             "ok": rc == 0, "status": status, "body": 60, "partition": 1368,
             "cand_len": cand_len, "ref_len": 60, "diff_count": diff_count,
             "first_diff": 0 if diff_count else None, "diff_words": [],
-            "has_reloc": False}))
+            "has_reloc": False, "gate_version": "bytegate/test"}))
         return rc, f">>> {status.upper()}"
 
     return _run
@@ -842,6 +920,24 @@ class ProcessRepairTests(unittest.TestCase):
         self.assertEqual(self.draft.read_text(), "SEED")
         self.assertEqual(self.log()[0]["source"], "repair")
         self.assertIsNone(self.bank_best())
+
+    def test_repair_records_carry_the_fingerprint(self):
+        # Even the seed's gate round (no model call yet) is a recorded attempt: kind and
+        # judging identity are known, the model-side usage fields are not.
+        model = _SeqModel([])
+        with mock.patch("run.run_subprocess", new=fake_gate_seq([(0, "match", 0, 60)])):
+            process_repair(entry(), [entry()], self.lay, self.args, model)
+        record = self.log()[0]
+        self.assertEqual(record["kind"], "repair")
+        self.assertEqual(record["repair_seed"], 7)
+        self.assertEqual(record["gate_version"], "bytegate/test")
+        self.assertEqual(record["bundle_sha256"],
+                         prompt_fingerprint("# bundle: func_601a72e4\n"))
+        want_tc = hashlib.sha256(b'{"clang": "clang"}').hexdigest()[:16]
+        self.assertEqual(record["toolchain_sha256"], want_tc)
+        self.assertEqual(record["model"], "seed")           # gated before any model call
+        self.assertIsNone(record["finish_reason"])
+        self.assertNotIn("cost_usd", record)
 
     def test_a_closing_round_banks_the_match_and_keeps_it_in_src(self):
         model = _SeqModel(["MID", "WIN"])

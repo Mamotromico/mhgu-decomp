@@ -15,7 +15,9 @@ No secret is hardcoded: an API key, if one is needed, is read from the environme
 named by ``api_key_env`` in the config. Routing is never decided implicitly — the ``proxy``
 setting is ``none`` (direct, the default), ``env`` (honor ``http_proxy``/``https_proxy``), or
 an explicit ``http(s)://`` URL — so a stray environment proxy cannot silently reroute a
-request (and its key).
+request (and its key). An optional ``pricing`` table
+(``{"input_per_mtok": x, "output_per_mtok": y}``, USD per million tokens) lets the harness
+record ``cost_usd`` per attempt; it is client-side accounting only, never sent in a request.
 
 Usage::
 
@@ -63,6 +65,7 @@ class Completion:
     finish_reason: str = ""
     reasoning: str = ""
     reasoning_tokens: int | None = None
+    system_fingerprint: str = ""
 
 
 class Model(Protocol):
@@ -153,7 +156,22 @@ def parse_response(data: dict, latency_s: float) -> Completion:
         finish_reason=finish_reason,
         reasoning=reasoning,
         reasoning_tokens=details.get("reasoning_tokens"),
+        system_fingerprint=data.get("system_fingerprint") or "",
     )
+
+
+def completion_cost(prompt_tokens, completion_tokens, pricing) -> float | None:
+    """The USD cost of one completion under ``pricing``, or ``None`` when it cannot be priced.
+
+    ``pricing`` is ``{"input_per_mtok": x, "output_per_mtok": y}`` — USD per **million**
+    tokens, the quoting unit providers publish. A missing table or missing token counts
+    mean "not available" — never a guessed zero: cost is instrumentation, and a fabricated
+    zero would read as "free" in a benchmark report.
+    """
+    if not pricing or prompt_tokens is None or completion_tokens is None:
+        return None
+    return (prompt_tokens * float(pricing["input_per_mtok"])
+            + completion_tokens * float(pricing["output_per_mtok"])) / 1_000_000
 
 
 def strip_fences(text: str) -> str:
@@ -192,7 +210,7 @@ class HttpModel:
                  api_key: str | None = None, proxy: str = "none", timeout_s: float = 120.0,
                  temperature: float | None = None, max_tokens: int | None = None,
                  seed: int | None = None, reasoning_effort: str | None = None,
-                 system: str = SYSTEM_PROMPT):
+                 pricing: dict | None = None, system: str = SYSTEM_PROMPT):
         if endpoint:
             self.endpoint = endpoint
         elif base_url:
@@ -211,6 +229,9 @@ class HttpModel:
         self.max_tokens = max_tokens
         self.seed = seed
         self.reasoning_effort = reasoning_effort
+        # Never sent in the request — client-side accounting only, so the loop can record
+        # ``cost_usd`` per attempt when a price table is configured.
+        self.pricing = pricing
         self.system = system
 
     def complete(self, prompt: str, *, system: str | None = None) -> Completion:
@@ -280,6 +301,14 @@ def from_config(path: Path, *, override_base_url: str | None = None,
     temperature = (override_temperature if override_temperature is not None
                    else cfg.get("temperature"))
     seed = override_seed if override_seed is not None else cfg.get("seed")
+    pricing = cfg.get("pricing")
+    if pricing is not None:
+        if not isinstance(pricing, dict):
+            raise ValueError("pricing must be an object with input_per_mtok/output_per_mtok "
+                             "(USD per million tokens), or null")
+        for key in ("input_per_mtok", "output_per_mtok"):
+            if not isinstance(pricing.get(key), (int, float)):
+                raise ValueError(f"pricing.{key} must be a number (USD per million tokens)")
     return HttpModel(
         base_url=base_url, model=model, endpoint=endpoint, api_key=api_key, proxy=proxy,
         timeout_s=float(override_timeout if override_timeout is not None
@@ -290,6 +319,7 @@ def from_config(path: Path, *, override_base_url: str | None = None,
         reasoning_effort=(override_reasoning_effort if override_reasoning_effort is not None
                           else cfg.get("reasoning_effort")),
         seed=None if seed is None else int(seed),
+        pricing=pricing,
     )
 
 

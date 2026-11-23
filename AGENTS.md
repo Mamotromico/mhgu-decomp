@@ -294,6 +294,14 @@ consequences:
 - **Never compute a match rate from the log.** It reports stale failures and
   understates the result (log: 9,363 attempts / 2,238 matches on "plain" entries;
   ledger: 2,311 of 3,530 such entries matched).
+- **New records carry an experiment fingerprint (plan step 1.3).** Since 2026-11 each
+  attempt logs `kind` (`plain`/`retry`/`repair`) and its `parent`, the provider /
+  requested / server-reported model names and `system_fingerprint`, the `decoding`
+  parameters, `prompt_sha256` + `bundle_sha256` (the retrieval output), the toolchain
+  profile hash and the gate's `gate_version` (`bytegate.GATE_VERSION`, bumped with
+  `nearmiss.METRIC`), plus latency, token counts, `finish_reason`, and `cost_usd` when a
+  `pricing` table is configured in `config/model.json`. Records written before this lack
+  the fields — absent means "not recorded", never "not applied".
 - **A stored candidate may already match.** `tools/ledger/regate_candidates.py`
   recompiles the blobs under `baserom/work/attempts/main/<addr>/<id>.cpp` with the
   *current* pin and gate — free, no model calls; on the "plain" backlog it converted

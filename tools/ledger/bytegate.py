@@ -110,6 +110,13 @@ DEFAULT_TOOLCHAIN = REPO / "config" / "toolchain.json"
 DEFAULT_BUILD_CONFIG = REPO / "config" / "build.json"
 DEFAULT_STUB_CACHE = gotmap.DEFAULT_CACHE
 
+# The comparison-rule version this gate implements, echoed into every ``--report`` so an
+# attempt record can say which rule judged it. Bump when what counts as a divergence
+# changes — in lockstep with ``nearmiss.METRIC`` (v3 resolved branch/call relocations,
+# v4 added literal-pool/GOT resolution): the bank's closeness numbers and the gate's
+# verdicts must version together.
+GATE_VERSION = "bytegate/v4"
+
 
 def include_dirs(build_config: Path) -> list[str]:
     """Include dirs from the shared build layout, so the gate and the build agree."""
@@ -562,7 +569,8 @@ def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: 
     compared span, and ``body`` is the authoritative extent when one was asserted. ``diff_words``
     carries the differing instructions themselves (see :func:`diff_words`) so a caller can act on
     a mismatch without re-deriving the comparison. ``gate`` is the provenance a match was
-    recorded with, and ``relocs`` the counts/reasons behind it.
+    recorded with, ``gate_version`` the comparison-rule version that judged it (see
+    :data:`GATE_VERSION`), and ``relocs`` the counts/reasons behind it.
     """
     span = min(len(cand), len(ref))
     diff_count = sum(1 for i in range(span) if cand[i] != ref[i])
@@ -575,6 +583,7 @@ def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: 
         "diff_count": diff_count, "first_diff": first_diff,
         "diff_words": diff_words(cand, ref),
         "has_reloc": has_reloc, "gate": gate,
+        "gate_version": GATE_VERSION,
         "relocs": relocs or {"total": 0, "unresolved": []},
     }
 
