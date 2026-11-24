@@ -508,5 +508,50 @@ class ResolveRefBinTests(unittest.TestCase):
                     self.resolve(".data")
 
 
+class AttachDisasmTests(unittest.TestCase):
+    """The plan-3.1 decoration: a mismatch report gains the decoded feedback block."""
+
+    DECODED = {"available": True, "tool": "fake",
+               "sites": {"0": {"got": "addcc r0, r0, #1", "want": "addls r0, r0, #1"}},
+               "cand": {"insns": 5, "cond_br": 1, "br": 0, "calls": 0, "pool_loads": 0,
+                        "branches": [], "pool_words": 0},
+               "ref": {"insns": 5, "cond_br": 2, "br": 0, "calls": 0, "pool_loads": 0,
+                       "branches": [], "pool_words": 0}}
+
+    def mismatch_report(self) -> dict:
+        return gate_result("main", "60000000", "f", b"\x01\x00\xa0\x03", b"\x01\x00\xa0\x91",
+                           False, "mismatch", 4, 0x100, False)
+
+    def test_the_decode_block_is_added_from_the_diff_words(self):
+        result = self.mismatch_report()
+        with mock.patch.object(bytegate.disasm, "compare",
+                               return_value=self.DECODED) as compare:
+            bytegate.attach_disasm(result, b"\x01\x00\xa0\x03", b"\x01\x00\xa0\x91")
+        compare.assert_called_once_with(b"\x01\x00\xa0\x03", b"\x01\x00\xa0\x91", [0])
+        self.assertEqual(result["disasm"], self.DECODED)
+
+    def test_an_unavailable_decode_is_recorded_not_raised(self):
+        result = self.mismatch_report()
+        with mock.patch.object(bytegate.disasm, "compare",
+                               return_value={"available": False, "reason": "no tool"}):
+            bytegate.attach_disasm(result, b"a", b"b")
+        self.assertFalse(result["disasm"]["available"])
+
+    def test_a_decode_failure_never_reaches_the_caller(self):
+        result = self.mismatch_report()
+        with mock.patch.object(bytegate.disasm, "compare",
+                               side_effect=RuntimeError("bang")):
+            bytegate.attach_disasm(result, b"a", b"b")   # must not raise
+        self.assertFalse(result["disasm"]["available"])
+        self.assertIn("RuntimeError", result["disasm"]["reason"])
+
+    def test_gate_result_itself_stays_undecorated(self):
+        # The pure comparison rule is unchanged: no disasm key, match or not.
+        match = gate_result("main", "60000000", "f", b"\x01\x00\xa0\x03",
+                            b"\x01\x00\xa0\x03", True, "match", 4, 0x100, False)
+        self.assertNotIn("disasm", match)
+        self.assertNotIn("disasm", self.mismatch_report())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

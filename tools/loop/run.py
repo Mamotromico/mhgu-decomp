@@ -298,6 +298,8 @@ class Feedback:
     Built from the attempt log (:func:`feedback_from_record`), so it reflects what the gate
     actually said, never a re-derivation. ``candidate`` is the previous translation unit (for
     the model to edit); ``diff_words``/``compile_error`` are the actionable divergence.
+    ``disasm`` is the report's decoded block (plan 3.1): diff sites decoded to instructions
+    plus per-side body structure, enabling the aligned rendering.
     """
 
     outcome: str
@@ -308,6 +310,7 @@ class Feedback:
     compile_error: str | None = None
     compiled_body: int | None = None
     expected_body: int | None = None
+    disasm: dict | None = None
 
 
 def parse_reference_instructions(bundle_text: str, base_addr: str) -> dict[int, str]:
@@ -396,13 +399,63 @@ def describe_word_diff(got: str, want: str) -> str:
     return ""
 
 
+def _aligned_site_rows(diff_words: list, disasm_block: dict) -> list[str]:
+    """One aligned YOURS-vs-ORIGINAL block per diff site (decoded mnemonics beside the hex).
+
+    A site the decoder could not produce falls back to the legacy single line for that site
+    alone.
+    """
+    sites = disasm_block.get("sites") or {}
+    rows = []
+    for w in diff_words:
+        site = sites.get(str(w["offset"]))
+        hint = describe_word_diff(w["got"], w["want"])
+        if site and (site.get("got") or site.get("want")):
+            rows.append(f"    +0x{w['offset']:x}\n"
+                        f"      yours:    {site.get('got') or '<undecodable>'}"
+                        f"\t({w['got']})\n"
+                        f"      original: {site.get('want') or '<undecodable>'}"
+                        f"\t({w['want']})"
+                        + (f"\n      hint: {hint}" if hint else ""))
+        else:
+            rows.append(f"    +0x{w['offset']:x}  got {w['got']}  want {w['want']}"
+                        + (f"   <- {hint}" if hint else ""))
+    return rows
+
+
+def _structure_note(disasm_block: dict) -> str:
+    """The compact body-structure comparison for a ``body-length`` verdict (plan 3.1).
+
+    Counts only — plus the branch lists when the branch counts differ — so a surplus
+    instruction or a different control-flow shape is visible without pasting either body.
+    """
+    def fmt(s: dict) -> str:
+        return (f"{s['insns']} insns / {s['cond_br']} cond branches / {s['br']} b / "
+                f"{s['calls']} calls / {s['pool_loads']} pool loads")
+    cand_s, ref_s = disasm_block["cand"], disasm_block["ref"]
+    note = ("Body structure (instructions / conditional branches / unconditional b / "
+            "calls / literal-pool loads):\n"
+            f"  original: {fmt(ref_s)}\n  yours:    {fmt(cand_s)}")
+    if ref_s["cond_br"] != cand_s["cond_br"] or ref_s["br"] != cand_s["br"]:
+        note += ("\nbranches:\n  original: " + "; ".join(ref_s["branches"])
+                 + "\n  yours:    " + "; ".join(cand_s["branches"]))
+    return note
+
+
 def feedback_section(entry: dict, bundle_text: str,
-                     feedback: "Feedback | None", repair_pass: bool = False) -> str:
+                     feedback: "Feedback | None", repair_pass: bool = False,
+                     aligned: bool = False) -> str:
     """Render the retry guidance appended to the prompt; empty when there is no feedback.
 
     A mismatch names the exact instructions that differ (offset, candidate bytes, reference
     bytes, and the reference mnemonic when the bundle carries it); a compile error quotes the
-    compiler. The previous translation unit is included so the model edits rather than regenerates.
+    compiler. The previous translation unit is included so the model edits rather than
+    regenerates.
+
+    With ``aligned`` (the plan-3.1 variant) a decoded block on the feedback turns each diff
+    site into an aligned YOURS-vs-ORIGINAL instruction pair and adds a body-structure
+    comparison for ``body-length`` verdicts; without it (the A/B control) the legacy
+    hex-only rows render unchanged.
 
     ``repair_pass`` appends the repair-mode instruction (a minimal edit, or ``UNREACHABLE`` for
     a register-allocation-only difference) *after* the previous translation unit, so it is the
@@ -410,6 +463,8 @@ def feedback_section(entry: dict, bundle_text: str,
     """
     if feedback is None:
         return ""
+    use_aligned = aligned and feedback.disasm is not None \
+        and bool(feedback.disasm.get("available"))
     if feedback.compile_error:
         body = (
             "## Previous attempt did not compile\n\n"
@@ -417,14 +472,17 @@ def feedback_section(entry: dict, bundle_text: str,
             "```\n" + feedback.compile_error.strip()[-1200:] + "\n```\n\n"
             "Return a corrected translation unit that compiles.")
     else:
-        ref = parse_reference_instructions(bundle_text, entry["addr"])
-        rows = []
-        for w in feedback.diff_words:
-            insn = ref.get(w["offset"])
-            hint = describe_word_diff(w["got"], w["want"])
-            rows.append(f"    +0x{w['offset']:x}  got {w['got']}  want {w['want']}"
-                        + (f"   ; original: {insn}" if insn else "")
-                        + (f"   <- {hint}" if hint else ""))
+        if use_aligned:
+            rows = _aligned_site_rows(feedback.diff_words, feedback.disasm)
+        else:
+            ref = parse_reference_instructions(bundle_text, entry["addr"])
+            rows = []
+            for w in feedback.diff_words:
+                insn = ref.get(w["offset"])
+                hint = describe_word_diff(w["got"], w["want"])
+                rows.append(f"    +0x{w['offset']:x}  got {w['got']}  want {w['want']}"
+                            + (f"   ; original: {insn}" if insn else "")
+                            + (f"   <- {hint}" if hint else ""))
         if not rows:
             rows.append(f"    (compiled body {feedback.status}; see the disassembly above)")
         size_note = ""
@@ -443,6 +501,8 @@ def feedback_section(entry: dict, bundle_text: str,
                              f"original body is {feedback.expected_body} B — "
                              f"{-delta} BYTE(S) TOO SHORT; the compiler collapsed an operation "
                              "you wrote as several steps.\n\n")
+            if use_aligned:
+                size_note += _structure_note(feedback.disasm) + "\n\n"
         body = (
             size_note
             + "## Previous attempt did not match\n\n"
@@ -485,7 +545,8 @@ def feedback_from_record(record: dict | None, store_dir: Path) -> Feedback | Non
     return Feedback("mismatch", status=record.get("gate_status"),
                     diff_count=record.get("diff_count"),
                     diff_words=record.get("diff_words") or [], candidate=candidate,
-                    compiled_body=compiled, expected_body=expected)
+                    compiled_body=compiled, expected_body=expected,
+                    disasm=record.get("disasm"))
 
 
 _BODY_SIZES = re.compile(r"compiled (\d+) B, original (\d+) B")
@@ -561,7 +622,7 @@ def group_is_single(entries: list[dict], module: str, group: str) -> bool:
 
 
 def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = None,
-                 repair_pass: bool = False) -> str:
+                 repair_pass: bool = False, aligned: bool = False) -> str:
     """The user prompt: the required symbol plus the whole context bundle.
 
     The instructions are load-bearing: an early pilot had the model reproduce the disassembly
@@ -629,18 +690,19 @@ def build_prompt(entry: dict, bundle_text: str, feedback: "Feedback | None" = No
         f"{symbol}\n"
         f"Reply with the translation unit only — no prose, no Markdown fences.\n\n"
         f"{bundle_text}\n"
-        f"{feedback_section(entry, bundle_text, feedback, repair_pass)}"
+        f"{feedback_section(entry, bundle_text, feedback, repair_pass, aligned)}"
     )
 
 
 def repair_prompt(entry: dict, bundle_text: str, source: str, report: dict | None,
-                  gate_output: str = "") -> str:
+                  gate_output: str = "", aligned: bool = False) -> str:
     """The repair-mode prompt for the current best candidate.
 
     It is the ordinary task prompt plus a :class:`Feedback` describing this candidate's
     divergence — which reuses the tested diff rows, the reference mnemonics and the
-    ``describe_word_diff`` hints — plus the repair instruction. ``report`` is ``None`` when the
-    candidate did not compile; the compiler's message is then the feedback instead.
+    ``describe_word_diff`` hints — plus the repair instruction. ``report`` is ``None`` when
+    the candidate did not compile; the compiler's message is then the feedback instead.
+    ``aligned`` selects the plan-3.1 decoded rendering, exactly as in the retry path.
     """
     if report is None and not gate_output:
         # A dry run has not compiled the seed, so there is no divergence to report yet; show
@@ -655,8 +717,9 @@ def repair_prompt(entry: dict, bundle_text: str, source: str, report: dict | Non
                             diff_count=report.get("diff_count"),
                             diff_words=report.get("diff_words") or [], candidate=source,
                             compiled_body=report.get("cand_len"),
-                            expected_body=report.get("ref_len"))
-    return build_prompt(entry, bundle_text, feedback, repair_pass=True)
+                            expected_body=report.get("ref_len"),
+                            disasm=report.get("disasm"))
+    return build_prompt(entry, bundle_text, feedback, repair_pass=True, aligned=aligned)
 
 
 def bundle_argv(layout: Layout, entry: dict, body: int) -> list[str]:
@@ -1053,6 +1116,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--budget-cost", type=float, default=None, metavar="USD",
                     help="with --experiment: stop once $X cumulative recorded cost is reached "
                          "(requires pricing in config/model.json)")
+    ap.add_argument("--aligned-feedback", action="store_true",
+                    help="plan-3.1 variant: render retry/repair feedback as aligned "
+                         "yours-vs-original decoded instructions plus a body-structure "
+                         "comparison (A/B the flag against the legacy hex-only rows)")
     args = ap.parse_args(argv)
 
     if args.entry and args.from_bank:
@@ -1247,7 +1314,8 @@ def ask_model(entry: dict, layout: Layout, args, model, body: int,
     from the retry feedback that changes the prompt around it.
     """
     bundle_text = build_bundle_text(layout, entry, args, body)
-    prompt = build_prompt(entry, bundle_text, feedback)
+    prompt = build_prompt(entry, bundle_text, feedback,
+                          aligned=getattr(args, "aligned_feedback", False))
     print(f"    asking {getattr(model, 'model', 'model')} …", file=sys.stderr, flush=True)
     with heartbeat(entry["name"]):
         completion = model.complete(prompt, system=SYSTEM)
@@ -1410,7 +1478,8 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
             print(candidate)
         else:
             print(f"--- prompt for {name} ({body} B, {extent_source}) ---")
-            print(build_prompt(entry, build_bundle_text(layout, entry, args, body), feedback))
+            print(build_prompt(entry, build_bundle_text(layout, entry, args, body), feedback,
+                               aligned=getattr(args, "aligned_feedback", False)))
         return "dry-run"
 
     # 2. model — only when no template fired.
@@ -1485,6 +1554,8 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         record["diff_words"] = report.get("diff_words", [])
         record["gate"] = report.get("gate")
         record["gate_version"] = report.get("gate_version")
+        if report.get("disasm"):
+            record["disasm"] = report["disasm"]
     stored = attempts.append(attempt_store(layout), record, candidate_text=candidate)
 
     # 6. bank a near miss (strictly-improving), and keep src/ matched-only.
@@ -1606,6 +1677,8 @@ def process_repair(entry: dict, entries: list[dict], layout: Layout, args, model
             record["diff_words"] = report.get("diff_words", [])
             record["gate"] = report.get("gate")
             record["gate_version"] = report.get("gate_version")
+            if report.get("disasm"):
+                record["disasm"] = report["disasm"]
         stored = attempts.append(attempt_store(layout), record, candidate_text=source)
         if report is not None and outcome != "match":
             try:
@@ -1637,7 +1710,10 @@ def process_repair(entry: dict, entries: list[dict], layout: Layout, args, model
         result = repair.repair(
             seed_source, gate=gate, ask=ask,
             prompt_for=lambda source, report, out: repair_prompt(entry, bundle_text, source,
-                                                                 report, out),
+                                                                 report, out,
+                                                                 aligned=getattr(
+                                                                     args, "aligned_feedback",
+                                                                     False)),
             rounds=getattr(args, "repair_rounds", 4),
             log=lambda msg: print(msg, file=sys.stderr))
     except BaseException:

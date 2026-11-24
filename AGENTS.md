@@ -358,6 +358,28 @@ never compare match rates derived from the raw attempt log (above).
    variant. A mixture of toolchain/gate/provider identities under one variant name is
    flagged; the control variant is the current pin + gate, changed one variable at a time.
 
+### Aligned feedback (plan 3.1, `--aligned-feedback`)
+
+The gate's non-match `--report` carries a decoded `disasm` block (best-effort; the verdict
+never depends on it): each diff site as an aligned got/want instruction pair and a per-side
+body structure (insns / cond branches / b / calls / pool loads + capped branch list, pool
+words excluded via their PC-relative load targets). `run.py --aligned-feedback` renders
+retry/repair feedback from it — YOURS vs ORIGINAL pairs with the existing divergence hints,
+plus a structure comparison on `body-length` verdicts; without the flag the legacy hex rows
+render unchanged (the A/B control).
+
+- **Decoder pin:** devkitARM `arm-none-eabi-objdump` (binutils 2.42), raw-binary mode with
+  `-M reg-names-std`. It decodes the ARMv8-A FP/NEON encodings in this image; the pinned
+  `llvm-objdump` **cannot** be used (byte-shifted ARM streams — same caveat as reading
+  code), and Ubuntu's host objdump has no ARM target. Missing tool → `{"available": false}`
+  → legacy rendering.
+- **A/B procedure** (same discipline as Batch 2): `benchmark.py addrs --name <bench>
+  --split dev > dev.txt`; control run `run.py --entries-file dev.txt --experiment 31-control
+  --budget-attempts N [--repair …]`; treatment run identical + `--aligned-feedback` as
+  `31-aligned`; `experiment.py --name <bench> --compare 31-control,31-aligned` for
+  conversion/cost attribution. Hold out the holdout split for the final evaluation. One
+  prompt variable changes per variant; `--seed` is recorded on the records.
+
 ### The inline-assembly rule (enforced)
 
 Translated source must let the compiler choose every opcode: hand-written instructions

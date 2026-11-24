@@ -578,19 +578,22 @@ class _FakeModel:
 
 
 def fake_gate(rc: int, status: str, diff_count: int, cand_len: int, diff_words=None,
-              gate_version="bytegate/test"):
+              gate_version="bytegate/test", disasm=None):
     """A ``run_subprocess`` stand-in that writes the gate's ``--report`` file."""
     def _run(argv):
         report = None
         if "--report" in argv:
             report = Path(argv[argv.index("--report") + 1])
             report.parent.mkdir(parents=True, exist_ok=True)
-            report.write_text(json.dumps({
+            payload = {
                 "module": "main", "addr": "601a72e4", "name": "func_601a72e4",
                 "ok": rc == 0, "status": status, "body": 60, "partition": 1368,
                 "cand_len": cand_len, "ref_len": 60, "diff_count": diff_count,
                 "first_diff": 0 if diff_count else None, "diff_words": diff_words or [],
-                "has_reloc": False, "gate_version": gate_version}))
+                "has_reloc": False, "gate_version": gate_version}
+            if disasm is not None:
+                payload["disasm"] = disasm
+            report.write_text(json.dumps(payload))
         return rc, f">>> {status.upper()}"
     return _run
 
@@ -678,7 +681,17 @@ class ProcessTests(unittest.TestCase):
         self.assertEqual(outcome, "match")
         self.assertTrue(self.draft.exists())
         self.assertEqual(self.log()[0]["outcome"], "match")
+        self.assertNotIn("disasm", self.log()[0])   # only non-match reports carry the decode
         self.assertIsNone(self.bank_best())
+
+    def test_mismatch_records_the_decoded_block_for_feedback(self):
+        decoded = {"available": True,
+                   "sites": {"0": {"got": "addcc r0, r0, #1", "want": "addls r0, r0, #1"}}}
+        with mock.patch("run.run_subprocess",
+                        new=fake_gate(1, "mismatch", 3, 58, disasm=decoded)):
+            outcome = process(entry(), [entry()], self.lay, self.args, _FakeModel())
+        self.assertEqual(outcome, "mismatch")
+        self.assertEqual(self.log()[0]["disasm"], decoded)
 
     def test_mismatch_removes_draft_logs_and_banks_closeness(self):
         with mock.patch("run.run_subprocess", new=fake_gate(1, "mismatch", 3, 58)):
@@ -1250,6 +1263,112 @@ class FeedbackFromRecordTests(unittest.TestCase):
         self.assertEqual(fb.outcome, "error")
         self.assertEqual(fb.compile_error, "error: boom")
         self.assertIsNone(fb.candidate)
+
+    def test_mismatch_carries_the_decoded_block(self):
+        # plan 3.1: the gate report's disasm block rides the record into the feedback.
+        decoded = {"available": True, "sites": {}}
+        rec = {"outcome": "mismatch", "gate_status": "mismatch", "diff_count": 3,
+               "diff_words": [], "disasm": decoded}
+        fb = feedback_from_record(rec, self.root)
+        self.assertEqual(fb.disasm, decoded)
+
+    def test_records_without_a_decoded_block_stay_legacy(self):
+        rec = {"outcome": "mismatch", "gate_status": "mismatch", "diff_count": 3,
+               "diff_words": []}
+        self.assertIsNone(feedback_from_record(rec, self.root).disasm)
+
+
+DISASM_BLOCK = {
+    "available": True,
+    "tool": "fake objdump",
+    "sites": {"0": {"got": "addcc r0, r0, #1", "want": "addls r0, r0, #1"}},
+    "cand": {"insns": 15, "cond_br": 2, "br": 1, "calls": 0, "pool_loads": 1,
+             "branches": ["+0x10  beq 0x20", "+0x14  b 0x30"], "pool_words": 0},
+    "ref": {"insns": 14, "cond_br": 3, "br": 1, "calls": 0, "pool_loads": 1,
+            "branches": ["+0x10  beq 0x1c", "+0x18  bgt 0x28", "+0x24  ble 0x34"],
+            "pool_words": 0},
+}
+
+
+class AlignedFeedbackTests(unittest.TestCase):
+    """The plan-3.1 variant: decoded site pairs and a body-structure comparison."""
+
+    BUNDLE = ("## disassembly\n\n"
+              "    601a72e4  5c1080e5  str r1, [r0, #92]\n"
+              "    601a72e8  1eff2fe1  bx lr\n")
+
+    def fb(self, **kw):
+        base = {"outcome": "mismatch", "status": "mismatch", "diff_count": 4,
+                "diff_words": [{"offset": 0, "got": "0100a031", "want": "0100a091"}],
+                "disasm": DISASM_BLOCK}
+        base.update(kw)
+        return Feedback(**base)
+
+    def test_control_rendering_ignores_the_decode_block(self):
+        # Without the flag the legacy hex-only rows render, unchanged.
+        out = feedback_section(entry(), self.BUNDLE, self.fb())
+        self.assertIn("got 0100a031  want 0100a091", out)
+        self.assertIn("original: str r1, [r0, #92]", out)
+        self.assertNotIn("yours:", out)
+        self.assertNotIn("Body structure", out)
+
+    def test_aligned_rendering_pairs_the_decoded_instructions(self):
+        out = feedback_section(entry(), self.BUNDLE, self.fb(), aligned=True)
+        self.assertIn("yours:    addcc r0, r0, #1\t(0100a031)", out)
+        self.assertIn("original: addls r0, r0, #1\t(0100a091)", out)
+        self.assertIn("hint: condition code differs", out)
+        self.assertNotIn("got 0100a031  want 0100a091", out)
+
+    def test_a_site_missing_from_the_decode_falls_back_per_line(self):
+        fb = self.fb(diff_words=[{"offset": 4, "got": "0100a031", "want": "0100a091"}])
+        out = feedback_section(entry(), self.BUNDLE, fb, aligned=True)
+        self.assertIn("+0x4  got 0100a031  want 0100a091", out)
+        self.assertNotIn("yours:", out)
+
+    def test_an_unavailable_decode_falls_back_to_legacy_rows(self):
+        fb = self.fb(disasm={"available": False, "reason": "no tool"})
+        out = feedback_section(entry(), self.BUNDLE, fb, aligned=True)
+        self.assertIn("got 0100a031  want 0100a091", out)
+
+    def test_body_length_gets_the_structure_comparison(self):
+        fb = self.fb(status="body-length", diff_count=0, diff_words=[],
+                     compiled_body=20, expected_body=16)
+        out = feedback_section(entry(), self.BUNDLE, fb, aligned=True)
+        self.assertIn("Body structure", out)
+        self.assertIn("original: 14 insns / 3 cond branches / 1 b / 0 calls / 1 pool loads",
+                      out)
+        self.assertIn("yours:    15 insns / 2 cond branches / 1 b / 0 calls / 1 pool loads",
+                      out)
+        # branch counts differ -> both branch lists are shown
+        self.assertIn("beq 0x1c", out)
+        self.assertIn("beq 0x20", out)
+
+    def test_body_length_control_has_no_structure_note(self):
+        fb = self.fb(status="body-length", diff_count=0, diff_words=[],
+                     compiled_body=20, expected_body=16)
+        out = feedback_section(entry(), self.BUNDLE, fb)
+        self.assertNotIn("Body structure", out)
+
+    def test_the_compile_error_path_is_unaffected(self):
+        fb = Feedback("error", compile_error="x.cpp:1: error: boom", disasm=DISASM_BLOCK)
+        out = feedback_section(entry(), self.BUNDLE, fb, aligned=True)
+        self.assertIn("did not compile", out)
+        self.assertNotIn("yours:", out)
+
+    def test_build_prompt_threads_the_flag(self):
+        on = build_prompt(entry(), self.BUNDLE, self.fb(), aligned=True)
+        self.assertIn("yours:    addcc r0, r0, #1", on)
+        off = build_prompt(entry(), self.BUNDLE, self.fb())
+        self.assertNotIn("yours:", off)
+
+    def test_repair_prompt_renders_aligned(self):
+        report = {"status": "mismatch", "diff_count": 4,
+                  "diff_words": [{"offset": 0, "got": "0100a031", "want": "0100a091"}],
+                  "disasm": DISASM_BLOCK}
+        out = repair_prompt(entry(), self.BUNDLE, "int f(void) { return 1; }", report,
+                            aligned=True)
+        self.assertIn("yours:    addcc r0, r0, #1", out)
+        self.assertIn("int f(void) { return 1; }", out)
 
 
 class BuildPromptFeedbackTests(unittest.TestCase):

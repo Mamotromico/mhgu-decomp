@@ -79,7 +79,8 @@ Options:
     --show          print the full byte diff on mismatch
     --update        set verify=match in the ledger when the function matches
     --no-color      disable ANSI colour (also honours NO_COLOR and non-TTY output)
-    --report FILE   write a machine-readable JSON result (closeness input; see gate_result)
+    --report FILE   write a machine-readable JSON result (closeness input; see gate_result);
+                    non-match reports also carry a decoded "disasm" block for prompt feedback
 
 Exit codes:
     0  match
@@ -100,6 +101,7 @@ import sys
 from pathlib import Path
 
 from ledgerlib import read_entries, set_fields
+import disasm
 import gotmap
 import refcache
 
@@ -559,6 +561,22 @@ def compare_body(cand: bytes, block: bytes, off: int, partition: int,
     return (cand == ref), ref, ("match" if cand == ref else "mismatch")
 
 
+def attach_disasm(result: dict, cand: bytes, ref: bytes) -> None:
+    """Best-effort A32 decode of both compared bodies, for aligned retry feedback (plan 3.1).
+
+    Adds a ``disasm`` block to a non-match report: each diff site's instructions decoded
+    (``sites[off] = {"got", "want"}``) plus a per-side body structure summary (instruction
+    and branch counts, branch list, pool-load count). The gate's verdict never depends on
+    this — a missing objdump yields ``{"available": false}`` and callers keep the legacy
+    hex-only rendering.
+    """
+    try:
+        result["disasm"] = disasm.compare(cand, ref,
+                                          [w["offset"] for w in result["diff_words"]])
+    except Exception as e:  # decoration must never fail the gate
+        result["disasm"] = {"available": False, "reason": f"{type(e).__name__}: {e}"}
+
+
 def gate_result(module: str, addr: str, name: str, cand: bytes, ref: bytes, ok: bool,
                 status: str, body: int | None, partition: int,
                 has_reloc: bool, gate: str = "raw",
@@ -755,6 +773,8 @@ def main(argv: list[str] | None = None) -> int:
                              {"total": len(relocs), "via_stub": via_stub,
                               "via_pool": via_pool,
                               "unresolved": [why for _off, why in unresolved]})
+        if not ok:
+            attach_disasm(result, patched, ref)
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
 
