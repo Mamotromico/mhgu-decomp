@@ -796,11 +796,14 @@ def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
                 bank_max_len_delta: int | None = None,
                 bank_max_divergences: int | None = None,
                 tier_key=None, max_tier: int | None = None,
-                matchable=None) -> dict | None:
+                matchable=None, only: set[str] | None = None) -> dict | None:
     """The next pending function not already handled this run.
 
     ``key`` is the optional difficulty ordering (``complexity.make_key``); ``None`` keeps the
     ledger's own ``(module, addr)`` order. Both stay deterministic, so a resume is unaffected.
+
+    ``only`` (``--entries-file``) restricts the queue to the named addresses — a benchmark
+    slice — accepting either the bare ``addr`` or ``module/addr`` form.
 
     ``skip_attempted`` drops entries that already drew that many attempts across *previous*
     runs (``attempted`` is the per-entry count from the log), so a run advances through the
@@ -818,6 +821,9 @@ def select_next(entries: list[dict], layout: Layout, *, skip_existing: bool,
     difficulty ranking, not a verdict.
     """
     queue = worklist.select(entries, kind="function", verify="none", key=key)
+    if only is not None:
+        queue = [e for e in queue
+                 if e["addr"] in only or f"{e['module']}/{e['addr']}" in only]
     if max_tier is not None and tier_key is not None:
         queue = [e for e in queue if tier_key(e)[0] <= max_tier]
     if matchable is not None:
@@ -853,6 +859,28 @@ def complexity_key(layout: Layout, text: bytes | None):
 def resolve_entry(entries: list[dict], module: str, addr: str) -> dict:
     """Find the ``--entry`` target; ``addr`` is normalized, ``module`` defaults to main."""
     return bundle.find_entry(entries, module, addr.lower().removeprefix("0x").zfill(8))
+
+
+def load_addr_file(path: Path) -> set[str]:
+    """The ``--entries-file`` address filter: one ``addr`` or ``module/addr`` per line.
+
+    Addresses are normalized (``0x``/case/zero-padding tolerated) so the file can come from
+    any tool; comments (``#``) and blank lines are ignored. An empty file is an error — a
+    benchmark slice that matches nothing should fail loudly, not select freely.
+    """
+    tokens: set[str] = set()
+    for line in Path(path).read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "/" in line:
+            module, _, addr = line.partition("/")
+            tokens.add(f"{module}/{addr.lower().removeprefix('0x').zfill(8)}")
+        else:
+            tokens.add(line.lower().removeprefix("0x").zfill(8))
+    if not tokens:
+        raise ValueError(f"{path}: no addresses")
+    return tokens
 
 
 # --- impure steps ---------------------------------------------------------------------
@@ -1009,11 +1037,39 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rebuild", action="store_true", help="regenerate the bundle (Ghidra)")
     ap.add_argument("--dry-run", action="store_true",
                     help="select, bundle and print the prompt; do not call the model")
+    ap.add_argument("--entries-file", type=Path, default=None, metavar="PATH",
+                    help="restrict auto-selection to these ledger addresses, one per line "
+                         "('addr' or 'module/addr') — e.g. a benchmark slice from "
+                         "`python3 tools/loop/benchmark.py addrs`")
+    ap.add_argument("--experiment", default=None, metavar="NAME",
+                    help="the experiment/variant name, stamped on every attempt record so a "
+                         "run can be attributed and reported; requires an explicit budget")
+    ap.add_argument("--budget-attempts", type=int, default=None, metavar="N",
+                    help="with --experiment: stop the run once N attempts were made "
+                         "(template passes count as attempts but spend no model budget)")
+    ap.add_argument("--budget-tokens", type=int, default=None, metavar="N",
+                    help="with --experiment: stop once N total tokens (prompt+completion"
+                         "+reasoning) were recorded")
+    ap.add_argument("--budget-cost", type=float, default=None, metavar="USD",
+                    help="with --experiment: stop once $X cumulative recorded cost is reached "
+                         "(requires pricing in config/model.json)")
     args = ap.parse_args(argv)
 
     if args.entry and args.from_bank:
         print("error: --from-bank selects its own targets; drop --entry", file=sys.stderr)
         return 2
+    if args.experiment and args.budget_attempts is None \
+            and args.budget_tokens is None and args.budget_cost is None:
+        print("error: --experiment requires an explicit budget (--budget-attempts, "
+              "--budget-tokens, or --budget-cost)", file=sys.stderr)
+        return 2
+    only: set[str] | None = None
+    if args.entries_file is not None:
+        try:
+            only = load_addr_file(args.entries_file)
+        except (OSError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
 
     layout = Layout(ledger=args.ledger, inventory=args.inventory, nso=args.nso,
                     context=args.context, src_root=args.src_root, work=args.work,
@@ -1072,7 +1128,7 @@ def main(argv: list[str] | None = None) -> int:
                               bank_max_len_delta=args.bank_max_len_delta,
                               bank_max_divergences=args.bank_max_divergences,
                               tier_key=tier_key, max_tier=args.max_tier,
-                              matchable=matchable)
+                              matchable=matchable, only=only)
             if nxt is None:
                 break
             done.add(entry_key(nxt))
@@ -1111,6 +1167,19 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, json.JSONDecodeError) as e:
             print(f"error: bad model config: {e}", file=sys.stderr)
             return 2
+        if args.budget_cost is not None and getattr(model, "pricing", None) is None:
+            print("error: --budget-cost requires pricing in config/model.json "
+                  "({\"input_per_mtok\": …, \"output_per_mtok\": …})", file=sys.stderr)
+            return 2
+
+    if args.experiment:
+        identity = {"provider": getattr(model, "endpoint", None),
+                    "model": getattr(model, "model", None)}
+        if model is not None:
+            identity["decoding"] = decoding_params(model)
+        print(f"experiment {args.experiment}: {identity} "
+              f"budgets(attempts={args.budget_attempts}, tokens={args.budget_tokens}, "
+              f"cost={args.budget_cost})", file=sys.stderr)
 
     matched = 0
     attempts_run = 0
@@ -1389,6 +1458,7 @@ def process(entry: dict, entries: list[dict], layout: Layout, args, model,
         "module": module, "addr": addr, "name": name, "body": body,
         "extent_source": extent_source, "outcome": outcome, "gate_rc": rc, "source": source,
         "kind": "retry" if feedback is not None else "plain",
+        "experiment": getattr(args, "experiment", None),
         "model": completion.model if completion else "template",
         "prompt_tokens": completion.prompt_tokens if completion else None,
         "completion_tokens": completion.completion_tokens if completion else None,
@@ -1515,6 +1585,7 @@ def process_repair(entry: dict, entries: list[dict], layout: Layout, args, model
             "module": module, "addr": addr, "name": name, "body": body,
             "extent_source": extent_source, "outcome": outcome, "gate_rc": rc,
             "source": "repair", "kind": "repair", "repair_seed": seed_id,
+            "experiment": getattr(args, "experiment", None),
             "model": meta.get("model", "seed"),
             "prompt_tokens": meta.get("prompt_tokens"),
             "completion_tokens": meta.get("completion_tokens"),
@@ -1603,6 +1674,12 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
     counted against its own, usually smaller budget (``--compile-attempts``): once this many
     attempts were rejected by clang, the entry is abandoned instead of burning every match
     attempt on code that never gets as far as the byte comparison.
+
+    The experiment budgets (``--budget-*``, which ``--experiment`` requires) stop the loop once
+    the recorded usage crosses them: attempts count every loop iteration (a template pass is an
+    attempt but spends no tokens), tokens/cost accumulate from the fresh attempt record's usage
+    fields, so only what the log can prove is charged. A single attempt may overshoot the
+    threshold; the budget is a run-level stop, not a pre-charge.
     """
     outcome = "error"
     used = 0
@@ -1613,7 +1690,24 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
     compile_budget = max(0, getattr(args, "compile_attempts", 2))
     compile_failures = 0
     last_id = None
+    budget_attempts = getattr(args, "budget_attempts", None)
+    budget_tokens = getattr(args, "budget_tokens", None)
+    budget_cost = getattr(args, "budget_cost", None)
+    used_tokens = 0
+    used_cost = 0.0
     for _ in range(max(1, args.attempts)):
+        if budget_attempts is not None and used >= budget_attempts:
+            print(f"    stop: attempt budget exhausted ({used}/{budget_attempts})",
+                  file=sys.stderr)
+            break
+        if budget_tokens is not None and used_tokens >= budget_tokens:
+            print(f"    stop: token budget exhausted ({used_tokens}/{budget_tokens})",
+                  file=sys.stderr)
+            break
+        if budget_cost is not None and used_cost >= budget_cost:
+            print(f"    stop: cost budget exhausted (${used_cost:.4f}/${budget_cost:.4f})",
+                  file=sys.stderr)
+            break
         try:
             outcome = one(entry, entries, layout, args, model, raw_text, feedback)
         except (attempts.AttemptError, bundle.BundleError, model_client.ModelError,
@@ -1638,6 +1732,10 @@ def attempt_entry(entry: dict, entries: list[dict], layout: Layout, args, model,
         # A compile failure is ``error`` with a gate exit of 3; it draws on its own budget.
         if record is not None and record.get("id") != last_id:
             last_id = record.get("id")
+            used_tokens += (int(record.get("prompt_tokens") or 0)
+                            + int(record.get("completion_tokens") or 0)
+                            + int(record.get("reasoning_tokens") or 0))
+            used_cost += float(record.get("cost_usd") or 0.0)
             if record.get("outcome") == "error" and record.get("gate_rc") == 3:
                 compile_failures += 1
                 if compile_failures >= compile_budget:

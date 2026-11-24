@@ -51,6 +51,7 @@ from run import (
     has_guarded_return,
     has_mask_for_address,
     has_nonstack_block_move,
+    load_addr_file,
     parse_reference_instructions,
     process,
     bank_seeds,
@@ -1403,6 +1404,123 @@ class AttemptEntryCompileBudgetTests(unittest.TestCase):
         outcome, used = attempt_entry(entry(), [], self.lay, args, None, one=one)
         self.assertEqual((outcome, used), ("error", 4))
         self.assertEqual(len(calls), 4)
+
+
+class LoadAddrFileTests(unittest.TestCase):
+    def test_accepts_bare_and_qualified_addresses(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "addrs"
+            path.write_text("# a comment\n60000000\n0X60000004\nmain/60000008\n\n")
+            self.assertEqual(load_addr_file(path),
+                             {"60000000", "60000004", "main/60000008"})
+
+    def test_an_empty_file_is_an_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "addrs"
+            path.write_text("# nothing\n")
+            with self.assertRaises(ValueError):
+                load_addr_file(path)
+
+
+class SelectNextOnlyTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.lay = layout(Path(self.tmp.name) / "src")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_only_keeps_listed_entries(self):
+        entries = [entry("60000000"), entry("60000004"), entry("60000008")]
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
+                          only={"60000008"})
+        self.assertEqual(nxt["addr"], "60000008")
+
+    def test_only_accepts_the_module_qualified_form(self):
+        entries = [entry("60000000"), entry("60000004")]
+        nxt = select_next(entries, self.lay, skip_existing=True, done=set(),
+                          only={"main/60000004"})
+        self.assertEqual(nxt["addr"], "60000004")
+
+    def test_only_exhausts_to_none(self):
+        entries = [entry("60000000")]
+        self.assertIsNone(select_next(entries, self.lay, skip_existing=True, done=set(),
+                                      only={"ffffff00"}))
+
+
+class AttemptEntryBudgetTests(unittest.TestCase):
+    """The experiment budgets (--budget-*): accounted from fresh attempt records."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.lay = layout(root / "src", work=root / "work")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _one_appending(self, outcome="mismatch", tokens=4, cost=None):
+        def one(*_):
+            rec = {"module": "main", "addr": "601a72e4", "outcome": outcome,
+                   "gate_rc": 0, "prompt_tokens": tokens, "completion_tokens": 0,
+                   "reasoning_tokens": 0, "latency_s": 0.1}
+            if cost is not None:
+                rec["cost_usd"] = cost
+            attempts.append(attempt_store(self.lay), rec, candidate_text="int f() {}")
+            return outcome
+        return one
+
+    def test_the_attempt_budget_stops_the_loop(self):
+        args = Namespace(attempts=9, compile_attempts=2, budget_attempts=3)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None,
+                                      one=self._one_appending())
+        self.assertEqual((outcome, used), ("mismatch", 3))
+
+    def test_the_token_budget_is_accounted_from_records(self):
+        args = Namespace(attempts=9, compile_attempts=2, budget_tokens=8)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None,
+                                      one=self._one_appending(tokens=4))
+        # 4 then 8 tokens: a single attempt may overshoot, the next loop stops.
+        self.assertEqual((outcome, used), ("mismatch", 2))
+
+    def test_the_cost_budget_is_accounted_from_records(self):
+        args = Namespace(attempts=9, compile_attempts=2, budget_cost=0.01)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None,
+                                      one=self._one_appending(cost=0.004))
+        self.assertEqual((outcome, used), ("mismatch", 3))
+
+    def test_a_match_still_stops_before_the_budget(self):
+        args = Namespace(attempts=9, compile_attempts=2, budget_attempts=100)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None,
+                                      one=self._one_appending(outcome="match"))
+        self.assertEqual((outcome, used), ("match", 1))
+
+    def test_attempts_without_records_only_count_against_the_attempt_budget(self):
+        # A transport error appends no record: it cannot draw the token/cost budgets.
+        def one(*_):
+            raise model.ModelError("boom")
+        args = Namespace(attempts=9, compile_attempts=9, budget_tokens=1)
+        outcome, used = attempt_entry(entry(), [], self.lay, args, None, one=one)
+        self.assertEqual((outcome, used), ("error", 9))
+
+
+class ExperimentGuardTests(unittest.TestCase):
+    def test_experiment_requires_an_explicit_budget(self):
+        import run
+        with tempfile.TemporaryDirectory() as td:
+            missing = str(Path(td) / "no-such-ledger.tsv")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                # No budget named -> the guard rejects the run before touching the layout.
+                self.assertEqual(
+                    run.main(["--experiment", "control", "--ledger", missing]), 2)
+            self.assertIn("requires an explicit budget", err.getvalue())
+            with contextlib.redirect_stderr(err := io.StringIO()):
+                # A budget named -> the guard passes; the scratch ledger then fails closed.
+                self.assertEqual(
+                    run.main(["--experiment", "control", "--budget-attempts", "5",
+                              "--ledger", missing]), 2)
+            self.assertIn("missing ledger", err.getvalue())
 
 
 if __name__ == "__main__":

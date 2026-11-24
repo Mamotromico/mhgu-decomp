@@ -335,6 +335,29 @@ to be told which instructions are wrong. `--repair` seeds the loop from the entr
 cap set to the repair budget; `--repair-rounds` (default 4) caps edits per entry. It is
 a *conversion* mechanism for the near-miss band, not a substitute for a fresh pass.
 
+### Benchmark experiments (plan Batch 2)
+
+The fixed evaluation set and the report are the only sanctioned way to compare runs —
+never compare match rates derived from the raw attempt log (above).
+
+1. **Create/inspect the benchmark** (git-ignored under `baserom/work/benchmark/`):
+   `python3 tools/loop/benchmark.py create --name v1 --total 400`, then `show` (digest
+   integrity + input freshness: a stale toolchain/gate/pin is flagged before use) and
+   `addrs --name v1 --split dev > dev.txt`.
+2. **Free conversions first**: `python3 tools/ledger/regate_candidates.py --addr-file
+   dev.txt --update`, then templates fire automatically inside `process()` before any
+   model call.
+3. **Run a variant**: `python3 tools/loop/run.py --entries-file dev.txt --experiment
+   <name> --budget-attempts N` (a budget is required; token/cost budgets also exist).
+   The run stamps every record with the experiment name and the 1.3 fingerprint.
+4. **Report/compare**: `python3 tools/loop/experiment.py --name v1 --variant <name>`
+   (unique matches by entry, compile failures, exact-length near misses, repairs,
+   time/tokens/cost, cohort + dev/holdout breakdowns) or `--compare a,b` (matched-set
+   attribution by earliest matching attempt id). Ledger matches with no variant record
+   count as *outside the experiment* — re-gate/template wins are never credited to the
+   variant. A mixture of toolchain/gate/provider identities under one variant name is
+   flagged; the control variant is the current pin + gate, changed one variable at a time.
+
 ### The inline-assembly rule (enforced)
 
 Translated source must let the compiler choose every opcode: hand-written instructions
