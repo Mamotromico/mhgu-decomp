@@ -20493,13 +20493,13 @@ main	6057a7e0	function	func_6057a7e0	.text	func_6057a7e0	796	generated		0	none		
 main	6057aafc	function	func_6057aafc	.text	func_6057aafc	652	generated		0	none		generated	rombytes
 main	6057ad88	function	func_6057ad88	.text	func_6057ad88	520	generated		0	none		generated	rombytes
 main	6057af90	function	func_6057af90	.text	func_6057af90	364	generated		0	none		generated	rombytes
-main	6057b0fc	function	func_6057b0fc	.text	func_6057b0fc	84	generated		0	none		generated	rombytes
-main	6057b150	function	func_6057b150	.text	func_6057b150	116	generated		0	none		generated	rombytes
+main	6057b0fc	function	func_6057b0fc	.text	func_6057b0fc	84	generated		0	match	reloc	generated	rombytes
+main	6057b150	function	func_6057b150	.text	func_6057b150	116	generated		0	match	reloc	generated	rombytes
 main	6057b1c4	data	D_6057b1c4	.text	D_6057b1c4	60	generated		0	none		generated	rombytes
 main	6057b200	function	func_6057b200	.text	func_6057b200	552	generated		0	none		generated	rombytes
 main	6057b428	data	D_6057b428	.text	D_6057b428	4	generated		0	none		generated	rombytes
-main	6057b42c	function	func_6057b42c	.text	func_6057b42c	56	generated		0	none		generated	rombytes
-main	6057b464	function	func_6057b464	.text	func_6057b464	24	generated		0	none		generated	rombytes
+main	6057b42c	function	func_6057b42c	.text	func_6057b42c	56	generated		0	match	reloc	generated	rombytes
+main	6057b464	function	func_6057b464	.text	func_6057b464	24	generated		0	match	reloc	generated	rombytes
 main	6057b47c	function	func_6057b47c	.text	func_6057b47c	1552	generated		0	none		generated	rombytes
 main	6057ba8c	function	func_6057ba8c	.text	func_6057ba8c	188	generated		0	none		generated	rombytes
 main	6057bb48	function	func_6057bb48	.text	func_6057bb48	992	generated		0	none		generated	rombytes
